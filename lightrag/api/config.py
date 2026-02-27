@@ -456,6 +456,12 @@ def parse_args() -> argparse.Namespace:
         "MAX_UPLOAD_SIZE", 104857600, int, special_none=True
     )
 
+    # Context Graph configuration
+    # When USE_CONTEXT_GRAPH=true the server uses ContextGraph instead of LightRAG,
+    # enabling contextual quadruple extraction (h,r,t,rc) and the CGR3 query paradigm.
+    args.use_context_graph = get_env_value("USE_CONTEXT_GRAPH", False, bool)
+    args.cgr3_max_iterations = get_env_value("CGR3_MAX_ITERATIONS", 3, int)
+
     ollama_server_infos.LIGHTRAG_NAME = args.simulated_model_name
     ollama_server_infos.LIGHTRAG_TAG = args.simulated_model_tag
 

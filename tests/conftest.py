@@ -9,6 +9,14 @@ import pytest
 
 def pytest_configure(config):
     """Register custom markers for LightRAG tests."""
+    import sys
+
+    # Ensure sys.argv looks like a lightrag-server invocation so that
+    # lightrag.api.config.parse_args() doesn't choke on pytest's argv when
+    # API modules are imported during test collection.
+    if not sys.argv or not sys.argv[0].endswith("lightrag-server"):
+        sys.argv = ["lightrag-server"]
+
     config.addinivalue_line(
         "markers", "offline: marks tests as offline (no external dependencies)"
     )

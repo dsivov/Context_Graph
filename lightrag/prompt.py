@@ -430,3 +430,171 @@ Output:
 
 """,
 ]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Context Graph (CG) prompts — extend LightRAG with contextual quadruples
+# (h, r, t, rc) where rc is the Relation Context capturing the "why".
+# ─────────────────────────────────────────────────────────────────────────────
+
+PROMPTS["cg_entity_extraction_system_prompt"] = """---Role---
+You are a Context Graph Specialist responsible for extracting entities and contextual relationships from the input text. Your goal is to capture not just *what* relationships exist, but *why* they exist — the decisions, evidence, temporal validity, and source provenance behind each link.
+
+---Instructions---
+1.  **Entity Extraction & Output:**
+    *   Identify clearly defined and meaningful entities in the input text.
+    *   For each entity, extract:
+        *   `entity_name`: Name of the entity (title-case if case-insensitive; consistent naming throughout).
+        *   `entity_type`: One of `{entity_types}`, or `Other` if none apply.
+        *   `entity_description`: Concise, objective, third-person description based *solely* on the text.
+    *   **Output Format — Entities:** 4 fields delimited by `{tuple_delimiter}`, first field must be literal `entity`:
+        *   `entity{tuple_delimiter}entity_name{tuple_delimiter}entity_type{tuple_delimiter}entity_description`
+
+2.  **Relationship Extraction with Relation Context (rc):**
+    *   Identify direct, clearly stated relationships between extracted entities.
+    *   For each relationship, extract the standard fields PLUS a compact JSON **Relation Context** as the 6th field.
+    *   **Standard fields (1–5):**
+        *   `source_entity`: Name of source entity (consistent with entity extraction).
+        *   `target_entity`: Name of target entity (consistent with entity extraction).
+        *   `relationship_keywords`: Comma-separated high-level keywords (no `{tuple_delimiter}` inside this field).
+        *   `relationship_description`: Concise explanation of the relationship.
+    *   **6th field — Relation Context JSON:**
+        *   A **single-line, compact JSON object** (no newlines or pretty-printing) with these keys:
+            *   `"supporting_sentences"`: Array of up to 3 direct verbatim quotes from the text that support this relationship. Use `[]` if none.
+            *   `"temporal_info"`: Validity period or timestamp (e.g., `"Q4 2026"`, `"since 2020"`), or `null`.
+            *   `"quantitative_data"`: Numerical data (amounts, percentages, counts), or `null`.
+            *   `"decision_trace"`: The rationale, exception, or approval behind this relationship (the "why"), or `null`.
+            *   `"approved_by"`: Name of the person or team who approved this decision (e.g., `"VP_Smith"`, `"Finance_Team"`), or `null` if not mentioned.
+            *   `"approved_via"`: Channel through which approval was given — one of `"slack"`, `"zoom"`, `"email"`, `"in_person"`, `"jira"`, `"system"` — or `null` if not mentioned.
+            *   `"valid_from"`: ISO-8601 date (`"YYYY-MM-DD"`) when this decision became effective, or `null` if not stated.
+            *   `"valid_until"`: ISO-8601 date (`"YYYY-MM-DD"`) when this decision expires, or `null` if not stated.
+            *   `"policy_ref"`: Name or ID of the policy this decision follows or overrides (e.g., `"DiscountPolicy_Standard"`), or `null` if not mentioned.
+            *   `"provenance"`: Source reference (speaker name, document section, timestamp), or `null`.
+            *   `"confidence_score"`: Float 0.0–1.0 indicating extraction confidence based on text clarity.
+        *   Fill `approved_by`/`approved_via` when the text mentions who approved something and how. Fill `valid_from`/`valid_until` when explicit dates are given. Fill `policy_ref` when a policy name or ID is referenced.
+        *   The JSON must NOT contain `{tuple_delimiter}` characters.
+    *   **Output Format — Relationships:** 6 fields delimited by `{tuple_delimiter}`, first field must be literal `relation`:
+        *   `relation{tuple_delimiter}source_entity{tuple_delimiter}target_entity{tuple_delimiter}relationship_keywords{tuple_delimiter}relationship_description{tuple_delimiter}RELATION_CONTEXT_JSON`
+
+3.  **Delimiter Usage Protocol:**
+    *   `{tuple_delimiter}` is an atomic field separator — never use it *inside* a field value.
+    *   The RELATION_CONTEXT_JSON field must be a single JSON object on the same line.
+
+4.  **Relationship Direction & Duplication:**
+    *   Treat all relationships as undirected unless stated otherwise.
+    *   Avoid duplicate relationships.
+
+5.  **Output Order:** All entities first, then all relationships (most significant first).
+
+6.  **Context & Objectivity:** Third-person perspective; no pronouns; explicit entity names.
+
+7.  **Language & Proper Nouns:** Output in `{language}`; keep proper nouns in original language.
+
+8.  **Completion Signal:** Output `{completion_delimiter}` after all extraction is complete.
+
+---Examples---
+{examples}
+"""
+
+PROMPTS["cg_entity_extraction_examples"] = [
+    """<Entity_types>
+["Person","Organization","Location","Event","Concept","Artifact"]
+
+<Input Text>
+```
+During the Q3 2024 business review, Sarah Chen (VP of Sales) approved a 20% discount for MegaCorp's enterprise deal, citing their five-year relationship and a competing offer from Salesforce. The discount was valid until December 31, 2024. This was discussed in the Slack channel #deals-review on August 14, 2024.
+```
+
+<Output>
+entity{tuple_delimiter}Sarah Chen{tuple_delimiter}person{tuple_delimiter}Sarah Chen is the VP of Sales who approved a 20% discount for MegaCorp's enterprise deal during the Q3 2024 business review.
+entity{tuple_delimiter}MegaCorp{tuple_delimiter}organization{tuple_delimiter}MegaCorp is an enterprise client that received a 20% discount on a deal, citing a long-standing relationship and competitive pressure from Salesforce.
+entity{tuple_delimiter}Salesforce{tuple_delimiter}organization{tuple_delimiter}Salesforce is a competitor that made a competing offer to MegaCorp, influencing the discount approval.
+entity{tuple_delimiter}Q3 2024 Business Review{tuple_delimiter}event{tuple_delimiter}The Q3 2024 Business Review is an internal meeting during which the discount for MegaCorp was approved by Sarah Chen.
+relation{tuple_delimiter}Sarah Chen{tuple_delimiter}MegaCorp{tuple_delimiter}discount approval, deal negotiation{tuple_delimiter}Sarah Chen approved a 20% discount for MegaCorp's enterprise deal during the Q3 2024 business review.{tuple_delimiter}{{"supporting_sentences": ["Sarah Chen (VP of Sales) approved a 20% discount for MegaCorp's enterprise deal"], "temporal_info": "Valid until December 31, 2024", "quantitative_data": "20% discount", "decision_trace": "Approved citing five-year relationship and competing offer from Salesforce", "approved_by": "Sarah Chen", "approved_via": "in_person", "valid_from": null, "valid_until": "2024-12-31", "policy_ref": null, "provenance": "Slack #deals-review, August 14, 2024", "confidence_score": 0.97}}
+relation{tuple_delimiter}MegaCorp{tuple_delimiter}Salesforce{tuple_delimiter}competitive pressure, market competition{tuple_delimiter}Salesforce made a competing offer to MegaCorp that influenced the discount negotiation.{tuple_delimiter}{{"supporting_sentences": ["a competing offer from Salesforce"], "temporal_info": "Q3 2024", "quantitative_data": null, "decision_trace": "Competing offer used as justification for discount approval", "approved_by": null, "approved_via": null, "valid_from": null, "valid_until": null, "policy_ref": null, "provenance": "Q3 2024 Business Review", "confidence_score": 0.88}}
+{completion_delimiter}
+
+""",
+    """<Entity_types>
+["Person","Organization","Location","Event","Concept","Artifact"]
+
+<Input Text>
+```
+Barack Obama served as the 44th President of the United States from January 20, 2009 to January 20, 2017. His administration passed the Affordable Care Act in 2010, expanding health insurance coverage to millions of Americans.
+```
+
+<Output>
+entity{tuple_delimiter}Barack Obama{tuple_delimiter}person{tuple_delimiter}Barack Obama is the 44th President of the United States who served from 2009 to 2017 and oversaw the passage of the Affordable Care Act.
+entity{tuple_delimiter}United States{tuple_delimiter}location{tuple_delimiter}The United States is the country led by Barack Obama during his presidency from 2009 to 2017.
+entity{tuple_delimiter}Affordable Care Act{tuple_delimiter}concept{tuple_delimiter}The Affordable Care Act is landmark healthcare legislation passed in 2010 that expanded health insurance coverage to millions of Americans.
+relation{tuple_delimiter}Barack Obama{tuple_delimiter}United States{tuple_delimiter}political leadership, presidency{tuple_delimiter}Barack Obama served as the 44th President of the United States.{tuple_delimiter}{{"supporting_sentences": ["Barack Obama served as the 44th President of the United States from January 20, 2009 to January 20, 2017"], "temporal_info": "January 20, 2009 – January 20, 2017", "quantitative_data": "44th President", "decision_trace": null, "provenance": null, "confidence_score": 0.99}}
+relation{tuple_delimiter}Barack Obama{tuple_delimiter}Affordable Care Act{tuple_delimiter}legislation, policy achievement{tuple_delimiter}Barack Obama's administration passed the Affordable Care Act in 2010, expanding healthcare coverage.{tuple_delimiter}{{"supporting_sentences": ["His administration passed the Affordable Care Act in 2010, expanding health insurance coverage to millions of Americans"], "temporal_info": "2010", "quantitative_data": "millions of Americans covered", "decision_trace": "Policy goal to expand healthcare access", "provenance": null, "confidence_score": 0.98}}
+{completion_delimiter}
+
+""",
+]
+
+PROMPTS["cg_entity_continue_extraction_user_prompt"] = """---Task---
+Based on the last extraction task, identify and extract any **missed or incorrectly formatted** entities and relationships from the input text.
+
+---Instructions---
+1.  **Strict Adherence to System Format:** Follow all format requirements from the system prompt, including the 6-field relation format with compact JSON Relation Context.
+2.  **Focus on Corrections/Additions:**
+    *   **Do NOT** re-output entities and relationships that were correctly extracted.
+    *   If an entity or relationship was missed, extract it now.
+    *   If a relation was extracted without Relation Context (only 5 fields), re-output it with a 6th field JSON.
+3.  **Output Format — Entities:** 4 fields: `entity{tuple_delimiter}name{tuple_delimiter}type{tuple_delimiter}description`
+4.  **Output Format — Relationships:** 6 fields: `relation{tuple_delimiter}src{tuple_delimiter}tgt{tuple_delimiter}keywords{tuple_delimiter}description{tuple_delimiter}RELATION_CONTEXT_JSON`
+5.  **Output Content Only:** No introductory or concluding remarks.
+6.  **Completion Signal:** Output `{completion_delimiter}` as the final line.
+7.  **Output Language:** {language}. Proper nouns in original language.
+
+<Output>
+"""
+
+PROMPTS["cgr3_rank_prompt"] = """---Role---
+You are a Context Graph Reasoning Specialist performing the **Rank** step of the CGR3 paradigm.
+
+---Task---
+Given a user query and a list of candidate entities/relationships with their contexts, rank the candidates by relevance to the query. Return a JSON array of candidate IDs ordered from most to least relevant.
+
+---Query---
+{query}
+
+---Candidates---
+{candidates}
+
+---Instructions---
+1. Evaluate each candidate based on:
+   - Semantic relevance to the query
+   - Quality and specificity of Relation Context (supporting_sentences, decision_trace)
+   - Temporal applicability (temporal_info relative to query context)
+   - Confidence score
+2. Return ONLY a valid JSON array of candidate IDs, ordered most-relevant first.
+3. Example output: ["id_3", "id_1", "id_5", "id_2", "id_4"]
+
+---Output---
+"""
+
+PROMPTS["cgr3_reason_prompt"] = """---Role---
+You are a Context Graph Reasoning Specialist performing the **Reason** step of the CGR3 paradigm.
+
+---Task---
+Determine whether the retrieved context is sufficient to answer the user query. If sufficient, provide the answer. If not, identify what additional information is needed.
+
+---Query---
+{query}
+
+---Retrieved Context---
+{context}
+
+---Instructions---
+1. Assess whether the context contains enough information to fully answer the query.
+2. Return a JSON object with:
+   - `"is_sufficient"`: true if context is sufficient, false if more retrieval is needed
+   - `"answer"`: The answer to the query (if is_sufficient is true), or null
+   - `"missing_info"`: Description of what information is still needed (if is_sufficient is false), or null
+   - `"follow_up_entities"`: List of entity names to use as seeds for next retrieval iteration (if is_sufficient is false), or []
+3. Output ONLY valid JSON, nothing else.
+
+---Output---
+"""

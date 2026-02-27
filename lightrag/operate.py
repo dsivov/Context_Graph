@@ -1868,6 +1868,87 @@ async def _merge_nodes_then_upsert(
     return node_data
 
 
+def _collect_relation_context(
+    edges_data: list[dict],
+    already_edge: dict | None,
+) -> str | None:
+    """Merge relation_context JSON strings from new and existing edge data.
+
+    Combines supporting_sentences (deduplicated), takes first non-null for scalar
+    fields, and uses the maximum confidence_score. Returns None if no context exists.
+    """
+    import json as _json
+
+    all_sentences: list[str] = []
+    seen_sentences: set = set()
+    temporal_info = None
+    quantitative_data = None
+    decision_trace = None
+    provenance = None
+    approved_by = None
+    approved_via = None
+    valid_from = None
+    valid_until = None
+    policy_ref = None
+    max_confidence = 0.0
+    found_any = False
+
+    sources = [e.get("relation_context") for e in edges_data if e.get("relation_context")]
+    if already_edge and already_edge.get("relation_context"):
+        sources.append(already_edge["relation_context"])
+
+    for rc_json in sources:
+        try:
+            rc = _json.loads(rc_json) if isinstance(rc_json, str) else rc_json
+            if not isinstance(rc, dict):
+                continue
+        except (_json.JSONDecodeError, TypeError):
+            continue
+        found_any = True
+        for s in rc.get("supporting_sentences") or []:
+            if s and s not in seen_sentences:
+                seen_sentences.add(s)
+                all_sentences.append(s)
+        if temporal_info is None and rc.get("temporal_info"):
+            temporal_info = rc["temporal_info"]
+        if quantitative_data is None and rc.get("quantitative_data"):
+            quantitative_data = rc["quantitative_data"]
+        if decision_trace is None and rc.get("decision_trace"):
+            decision_trace = rc["decision_trace"]
+        if provenance is None and rc.get("provenance"):
+            provenance = rc["provenance"]
+        if approved_by is None and rc.get("approved_by"):
+            approved_by = rc["approved_by"]
+        if approved_via is None and rc.get("approved_via"):
+            approved_via = rc["approved_via"]
+        if valid_from is None and rc.get("valid_from"):
+            valid_from = rc["valid_from"]
+        if valid_until is None and rc.get("valid_until"):
+            valid_until = rc["valid_until"]
+        if policy_ref is None and rc.get("policy_ref"):
+            policy_ref = rc["policy_ref"]
+        max_confidence = max(max_confidence, rc.get("confidence_score") or 0.0)
+
+    if not found_any:
+        return None
+    return _json.dumps(
+        {
+            "supporting_sentences": all_sentences,
+            "temporal_info": temporal_info,
+            "quantitative_data": quantitative_data,
+            "decision_trace": decision_trace,
+            "provenance": provenance,
+            "approved_by": approved_by,
+            "approved_via": approved_via,
+            "valid_from": valid_from,
+            "valid_until": valid_until,
+            "policy_ref": policy_ref,
+            "confidence_score": max_confidence if max_confidence > 0 else 1.0,
+        },
+        ensure_ascii=False,
+    )
+
+
 async def _merge_edges_then_upsert(
     src_id: str,
     tgt_id: str,
@@ -2329,20 +2410,24 @@ async def _merge_edges_then_upsert(
                         pipeline_status["latest_message"] = status_message
                         pipeline_status["history_messages"].append(status_message)
 
+    # Collect and merge relation context (Context Graph quadruple rc component).
+    # For standard LightRAG edges without relation_context this returns None and
+    # the behaviour is identical to before.
+    relation_context_json = _collect_relation_context(edges_data, already_edge)
+
     edge_created_at = int(time.time())
-    await knowledge_graph_inst.upsert_edge(
-        src_id,
-        tgt_id,
-        edge_data=dict(
-            weight=weight,
-            description=description,
-            keywords=keywords,
-            source_id=source_id,
-            file_path=file_path,
-            created_at=edge_created_at,
-            truncate=truncation_info,
-        ),
+    _upsert_edge_data = dict(
+        weight=weight,
+        description=description,
+        keywords=keywords,
+        source_id=source_id,
+        file_path=file_path,
+        created_at=edge_created_at,
+        truncate=truncation_info,
     )
+    if relation_context_json is not None:
+        _upsert_edge_data["relation_context"] = relation_context_json
+    await knowledge_graph_inst.upsert_edge(src_id, tgt_id, edge_data=_upsert_edge_data)
 
     edge_data = dict(
         src_id=src_id,
@@ -2355,6 +2440,8 @@ async def _merge_edges_then_upsert(
         truncate=truncation_info,
         weight=weight,
     )
+    if relation_context_json is not None:
+        edge_data["relation_context"] = relation_context_json
 
     # Sort src_id and tgt_id to ensure consistent ordering (smaller string first)
     if src_id > tgt_id:

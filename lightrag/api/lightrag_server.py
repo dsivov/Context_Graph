@@ -35,6 +35,7 @@ from .config import (
 )
 from lightrag.utils import get_env_value
 from lightrag import LightRAG, __version__ as core_version
+from lightrag.context_graph import ContextGraph
 from lightrag.api import __api_version__
 from lightrag.types import GPTKeywordExtractionFormat
 from lightrag.utils import EmbeddingFunc
@@ -51,6 +52,7 @@ from lightrag.api.routers.document_routes import (
 )
 from lightrag.api.routers.query_routes import create_query_routes
 from lightrag.api.routers.graph_routes import create_graph_routes
+from lightrag.api.routers.context_graph_routes import create_context_graph_routes
 from lightrag.api.routers.ollama_api import OllamaAPI
 
 from lightrag.utils import logger, set_verbose_debug
@@ -1047,9 +1049,18 @@ def create_app(args):
         name=args.simulated_model_name, tag=args.simulated_model_tag
     )
 
-    # Initialize RAG with unified configuration
+    # Initialize RAG with unified configuration.
+    # Use ContextGraph when USE_CONTEXT_GRAPH=true for contextual quadruple
+    # extraction (h,r,t,rc) and the CGR3 iterative reasoning paradigm.
+    use_context_graph = getattr(args, "use_context_graph", False)
+    rag_cls = ContextGraph if use_context_graph else LightRAG
+    if use_context_graph:
+        logger.info(
+            "Context Graph mode ENABLED — using ContextGraph for contextual "
+            "quadruple extraction and CGR3 reasoning."
+        )
     try:
-        rag = LightRAG(
+        rag = rag_cls(
             working_dir=args.working_dir,
             workspace=args.workspace,
             llm_model_func=create_llm_model_func(args.llm_binding),
@@ -1084,7 +1095,7 @@ def create_app(args):
             ollama_server_infos=ollama_server_infos,
         )
     except Exception as e:
-        logger.error(f"Failed to initialize LightRAG: {e}")
+        logger.error(f"Failed to initialize {'ContextGraph' if use_context_graph else 'LightRAG'}: {e}")
         raise
 
     # Add routes
@@ -1097,6 +1108,19 @@ def create_app(args):
     )
     app.include_router(create_query_routes(rag, api_key, args.top_k))
     app.include_router(create_graph_routes(rag, api_key))
+
+    # Context Graph routes (CGR3 query, edge context, entity context edges).
+    # Available regardless of use_context_graph — endpoints return HTTP 503
+    # when plain LightRAG is running so clients can detect capability.
+    cgr3_max_iterations = getattr(args, "cgr3_max_iterations", 3)
+    app.include_router(
+        create_context_graph_routes(
+            rag,
+            api_key=api_key,
+            cgr3_max_iterations=cgr3_max_iterations,
+            top_k=args.top_k,
+        )
+    )
 
     # Add Ollama API routes
     ollama_api = OllamaAPI(rag, top_k=args.top_k, api_key=api_key)
