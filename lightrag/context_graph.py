@@ -649,13 +649,19 @@ class ContextGraph(LightRAG):
             upsert: If True and the edge already exists, merge the new RC with
                 the existing one rather than overwriting it.
         """
-        # Ensure nodes exist in the graph
-        await self.chunk_entity_relation_graph.upsert_node(
-            src, {"entity_type": "ENTITY"}
-        )
-        await self.chunk_entity_relation_graph.upsert_node(
-            tgt, {"entity_type": "ENTITY"}
-        )
+        # Ensure nodes exist in the graph with all fields the merge pipeline expects
+        provenance = rc.provenance or "agent_runtime"
+        for name in (src, tgt):
+            await self.chunk_entity_relation_graph.upsert_node(
+                name,
+                {
+                    "entity_id": name,
+                    "entity_type": "ENTITY",
+                    "source_id": "emit_decision_trace",
+                    "description": name,
+                    "file_path": provenance,
+                },
+            )
 
         # Merge with existing RC when upsert=True
         if upsert and await self.chunk_entity_relation_graph.has_edge(src, tgt):
@@ -687,6 +693,57 @@ class ContextGraph(LightRAG):
                     }
                 }
             )
+
+    # ------------------------------------------------------------------
+    # Decision summary ingestion (makes decisions visible to /query)
+    # ------------------------------------------------------------------
+
+    async def ingest_decision_summary(
+        self,
+        text: str,
+        *,
+        category: str = "general",
+        summary_id: str | None = None,
+    ) -> str:
+        """Ingest an aggregated decision summary as a standard document.
+
+        Unlike :meth:`emit_decision_trace` which writes individual edges to
+        ``decisions_vdb`` (only reachable via precedent search), this method
+        pipes the text through the full ``ainsert`` pipeline — producing
+        chunks, entity/relation embeddings, and graph nodes — so that the
+        summary is discoverable by standard ``/query`` and CGR3 queries.
+
+        The **caller** (domain-specific loader) is responsible for aggregating
+        raw decisions into meaningful natural-language summaries.  This method
+        is intentionally domain-agnostic.
+
+        Args:
+            text: Natural-language summary of a group of decisions.
+            category: Grouping label (e.g. ``"by_vehicle"``, ``"by_outcome"``).
+                Used in the ``file_path`` tag for later identification/cleanup.
+            summary_id: Stable document ID.  When provided, an existing summary
+                with the same ID is deleted before re-ingestion, giving upsert
+                semantics.  If ``None``, an ID is derived from the text hash.
+
+        Returns:
+            The ``track_id`` from ``ainsert`` (for status polling).
+        """
+        from lightrag.utils import compute_mdhash_id
+
+        file_path = f"decision_summary/{category}"
+        doc_id = summary_id or compute_mdhash_id(text, prefix="dsum-")
+
+        # Upsert: remove stale version if re-ingesting with the same ID
+        if summary_id:
+            existing = await self.full_docs.get_by_id(summary_id)
+            if existing is not None:
+                await self.full_docs.delete([summary_id])
+
+        return await self.ainsert(
+            text,
+            ids=[doc_id],
+            file_paths=[file_path],
+        )
 
     # ------------------------------------------------------------------
     # Precedent search and decision enumeration
@@ -804,19 +861,19 @@ class ContextGraph(LightRAG):
     ) -> str:
         """CGR3 iterative reasoning: Retrieve → Rank → Reason.
 
-        Implements the three-step paradigm from the Context Graph paper:
+        Implements an improved three-step paradigm:
 
-        1. **Retrieve**: gather candidate entities, relations, and their
-           RelationContext from the graph using the given *mode*.
-        2. **Rank**: ask the LLM to re-order candidates by contextual relevance
-           to the query.
-        3. **Reason**: ask the LLM whether the retrieved context is sufficient
-           to answer the query.  If yes, return the answer.  If not, use the
-           top-ranked candidates as new seed entities for the next iteration.
+        1. **Retrieve**: Use multiple retrieval strategies (the specified mode
+           plus a vector/naive fallback) to gather entities, relations, their
+           RelationContext, **and** raw text chunks.
+        2. **Rank**: Ask the LLM to assess relevance and identify gaps in the
+           accumulated context — no wasted ID-ranking step.
+        3. **Reason**: Ask the LLM to synthesize an answer or identify what's
+           missing for the next iteration.
 
         Args:
             query: Natural language question.
-            mode: Retrieval mode passed to LightRAG (default ``"hybrid"``).
+            mode: Primary retrieval mode (default ``"hybrid"``).
             max_iterations: Maximum Retrieve-Rank-Reason loops (default 3).
             top_k: Number of entities/relations retrieved per iteration.
 
@@ -826,48 +883,79 @@ class ContextGraph(LightRAG):
         from lightrag.base import QueryParam
 
         llm_func = self.llm_model_func
-        accumulated_context: list[str] = []
+        all_contexts: list[str] = []
+        seen_context_hashes: set[int] = set()
         current_query = query
 
         for iteration in range(max_iterations):
-            logger.info(f"CGR3 iteration {iteration + 1}/{max_iterations}: '{current_query}'")
+            logger.info(
+                f"CGR3 iteration {iteration + 1}/{max_iterations}: "
+                f"'{current_query[:100]}'"
+            )
 
-            # ── Step 1: Retrieve ──────────────────────────────────────
+            # ── Step 1: Retrieve (multi-strategy) ─────────────────────
+            # Primary retrieval with the user's chosen mode
             param = QueryParam(
                 mode=mode,
                 top_k=top_k,
                 only_need_context=True,
             )
             context_result = await self.aquery(current_query, param=param)
-            raw_context: str = (
+            primary_context: str = (
                 context_result.content
                 if hasattr(context_result, "content")
                 else str(context_result)
             )
-            accumulated_context.append(raw_context)
 
-            # ── Step 2: Rank ──────────────────────────────────────────
-            # Build a simple candidate list from the accumulated context
-            candidates_text = f"[Iteration {iteration + 1}]\n{raw_context}"
-            rank_prompt = PROMPTS["cgr3_rank_prompt"].format(
-                query=current_query,
-                candidates=candidates_text,
-            )
-            try:
-                rank_response = await llm_func(rank_prompt)
-                rank_response = remove_think_tags(rank_response)
-                # Parse ranked IDs (best-effort; we use the text as context if parsing fails)
+            # On first iteration, also do a naive (vector) retrieval to
+            # catch terms that may not be graph entities (e.g. brand names,
+            # product lines).
+            if iteration == 0:
                 try:
-                    ranked_ids = json.loads(rank_response)
-                except (json.JSONDecodeError, TypeError):
-                    ranked_ids = []
-                logger.debug(f"CGR3 rank response (iter {iteration + 1}): {rank_response[:200]}")
-            except Exception as e:
-                logger.warning(f"CGR3 rank step failed (iter {iteration + 1}): {e}")
-                ranked_ids = []
+                    naive_param = QueryParam(
+                        mode="naive",
+                        top_k=min(top_k, 30),
+                        only_need_context=True,
+                    )
+                    naive_result = await self.aquery(query, param=naive_param)
+                    naive_context: str = (
+                        naive_result.content
+                        if hasattr(naive_result, "content")
+                        else str(naive_result)
+                    )
+                except Exception as e:
+                    logger.warning(f"CGR3 naive fallback failed: {e}")
+                    naive_context = ""
+            else:
+                naive_context = ""
 
-            # ── Step 3: Reason ─────────────────────────────────────────
-            full_context = "\n\n---\n\n".join(accumulated_context)
+            # Deduplicate context across iterations
+            new_parts = []
+            for ctx in [primary_context, naive_context]:
+                if not ctx or not ctx.strip():
+                    continue
+                ctx_hash = hash(ctx.strip()[:500])
+                if ctx_hash not in seen_context_hashes:
+                    seen_context_hashes.add(ctx_hash)
+                    new_parts.append(ctx)
+
+            if not new_parts and not all_contexts:
+                logger.warning("CGR3: no context retrieved; stopping early")
+                break
+            elif not new_parts:
+                logger.info("CGR3: no new context found; proceeding to answer")
+                break
+
+            iter_context = "\n\n".join(new_parts)
+            all_contexts.append(iter_context)
+
+            # ── Step 2+3: Combined Rank & Reason ──────────────────────
+            # Merge into one LLM call to reduce latency and improve coherence
+            full_context = "\n\n---\n\n".join(all_contexts)
+            # Truncate to ~12k chars to stay within context limits
+            if len(full_context) > 12000:
+                full_context = full_context[:12000] + "\n...[truncated]"
+
             reason_prompt = PROMPTS["cgr3_reason_prompt"].format(
                 query=query,
                 context=full_context,
@@ -883,10 +971,9 @@ class ContextGraph(LightRAG):
                 parsed = json.loads(cleaned)
             except (json.JSONDecodeError, TypeError) as e:
                 logger.warning(
-                    f"CGR3 reason JSON parse failed (iter {iteration + 1}): {e}. "
-                    f"Returning best available context."
+                    f"CGR3 reason parse failed (iter {iteration + 1}): {e}. "
+                    f"Falling back to final answer generation."
                 )
-                # Fall back to generating an answer from accumulated context
                 break
             except Exception as e:
                 logger.warning(f"CGR3 reason step failed (iter {iteration + 1}): {e}")
@@ -895,32 +982,45 @@ class ContextGraph(LightRAG):
             if parsed.get("is_sufficient", False):
                 answer = parsed.get("answer")
                 if answer:
-                    logger.info(f"CGR3 sufficient after {iteration + 1} iteration(s)")
+                    logger.info(
+                        f"CGR3 sufficient after {iteration + 1} iteration(s)"
+                    )
                     return answer
                 break
 
-            # Not sufficient — set up next iteration
+            # Not sufficient — refine the query for next iteration
             follow_up_entities = parsed.get("follow_up_entities") or []
             missing_info = parsed.get("missing_info", "")
             if follow_up_entities:
+                # Use the missing entities as the next query to maximize
+                # retrieval relevance for the gap
                 current_query = (
-                    f"{query}\n[Focus on: {', '.join(follow_up_entities)}]"
+                    f"{' '.join(follow_up_entities)} {missing_info or query}"
                 )
             elif missing_info:
-                current_query = f"{query}\n[Also consider: {missing_info}]"
+                current_query = f"{missing_info} {query}"
             else:
-                logger.info("CGR3: no follow-up entities; stopping iteration early")
+                logger.info("CGR3: no follow-up info; stopping iteration early")
                 break
 
         # ── Final answer generation ────────────────────────────────────
+        # Use a full LightRAG query (with LLM synthesis) using accumulated
+        # context as supplementary information in the user prompt.
         logger.info("CGR3: generating final answer from accumulated context")
-        final_context = "\n\n---\n\n".join(accumulated_context)
+        final_context = "\n\n---\n\n".join(all_contexts)
+        # Keep a generous amount of context for the final synthesis
+        max_context_chars = 10000
+        if len(final_context) > max_context_chars:
+            final_context = final_context[:max_context_chars] + "\n...[truncated]"
+
         final_param = QueryParam(
             mode=mode,
             top_k=top_k,
             user_prompt=(
-                f"Use the following accumulated retrieval context to answer the question: "
-                f"{final_context[:4000]}"
+                f"You have the following additional retrieval context gathered "
+                f"across multiple iterations. Use it together with any freshly "
+                f"retrieved data to give a comprehensive answer.\n\n"
+                f"---Accumulated Context---\n{final_context}"
             ),
         )
         final_result = await self.aquery(query, param=final_param)

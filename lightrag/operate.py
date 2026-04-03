@@ -3225,8 +3225,13 @@ async def kg_query(
         else "Multiple Paragraphs"
     )
 
-    # Build system prompt
-    sys_prompt_temp = system_prompt if system_prompt else PROMPTS["rag_response"]
+    # Build system prompt — use annotated variant when context_format is "annotated"
+    if system_prompt:
+        sys_prompt_temp = system_prompt
+    elif getattr(query_param, "context_format", "annotated") == "annotated":
+        sys_prompt_temp = PROMPTS.get("rag_response_annotated", PROMPTS["rag_response"])
+    else:
+        sys_prompt_temp = PROMPTS["rag_response"]
     sys_prompt = sys_prompt_temp.format(
         response_type=response_type,
         user_prompt=user_prompt,
@@ -3260,6 +3265,7 @@ async def kg_query(
         ll_keywords_str,
         query_param.user_prompt or "",
         query_param.enable_rerank,
+        getattr(query_param, "context_format", "annotated"),
     )
 
     cached_result = await handle_cache(
@@ -3381,13 +3387,14 @@ async def extract_keywords_only(
     language = global_config["addon_params"].get("language", DEFAULT_SUMMARY_LANGUAGE)
 
     # 2. Handle cache if needed - add cache type for keywords
+    # Use mode-independent cache key: keywords depend only on query text + language,
+    # not on retrieval mode. This allows hybrid/local/global/mix to share keyword cache.
     args_hash = compute_args_hash(
-        param.mode,
         text,
         language,
     )
     cached_result = await handle_cache(
-        hashing_kv, args_hash, text, param.mode, cache_type="keywords"
+        hashing_kv, args_hash, text, "keywords", cache_type="keywords"
     )
     if cached_result is not None:
         cached_response, _ = cached_result  # Extract content, ignore timestamp
@@ -3464,7 +3471,7 @@ async def extract_keywords_only(
                     args_hash=args_hash,
                     content=json.dumps(cache_data),
                     prompt=text,
-                    mode=param.mode,
+                    mode="keywords",
                     cache_type="keywords",
                     queryparam=queryparam_dict,
                 ),
@@ -3577,7 +3584,7 @@ async def _perform_kg_search(
                 logger.warning(f"Failed to pre-compute query embedding: {e}")
                 query_embedding = None
 
-    # Handle local and global modes
+    # Handle different query modes — parallelize independent retrievals
     if query_param.mode == "local" and len(ll_keywords) > 0:
         local_entities, local_relations = await _get_node_data(
             ll_keywords,
@@ -3594,30 +3601,41 @@ async def _perform_kg_search(
             query_param,
         )
 
-    else:  # hybrid or mix mode
+    else:  # hybrid or mix mode — run all retrievals in parallel
+        parallel_tasks = {}
         if len(ll_keywords) > 0:
-            local_entities, local_relations = await _get_node_data(
+            parallel_tasks["local"] = _get_node_data(
                 ll_keywords,
                 knowledge_graph_inst,
                 entities_vdb,
                 query_param,
             )
         if len(hl_keywords) > 0:
-            global_relations, global_entities = await _get_edge_data(
+            parallel_tasks["global"] = _get_edge_data(
                 hl_keywords,
                 knowledge_graph_inst,
                 relationships_vdb,
                 query_param,
             )
-
-        # Get vector chunks for mix mode
         if query_param.mode == "mix" and chunks_vdb:
-            vector_chunks = await _get_vector_context(
+            parallel_tasks["vector"] = _get_vector_context(
                 query,
                 chunks_vdb,
                 query_param,
                 query_embedding,
             )
+
+        if parallel_tasks:
+            keys = list(parallel_tasks.keys())
+            results = await asyncio.gather(*parallel_tasks.values())
+            task_results = dict(zip(keys, results))
+
+            if "local" in task_results:
+                local_entities, local_relations = task_results["local"]
+            if "global" in task_results:
+                global_relations, global_entities = task_results["global"]
+            if "vector" in task_results:
+                vector_chunks = task_results["vector"]
             # Track vector chunks with source metadata
             for i, chunk in enumerate(vector_chunks):
                 chunk_id = chunk.get("chunk_id") or chunk.get("id")
@@ -3776,15 +3794,26 @@ async def _apply_token_truncation(
         relation_key = (entity1, entity2)
         relation_id_to_original[relation_key] = relation
 
-        relations_context.append(
-            {
-                "entity1": entity1,
-                "entity2": entity2,
-                "description": relation.get("description", "UNKNOWN"),
-                "created_at": created_at,
-                "file_path": relation.get("file_path", "unknown_source"),
-            }
-        )
+        # Parse relation_context (CG quadruple rc field) if present
+        rc_raw = relation.get("relation_context")
+        rc_dict = None
+        if rc_raw:
+            try:
+                rc_dict = json.loads(rc_raw) if isinstance(rc_raw, str) else rc_raw
+            except (json.JSONDecodeError, TypeError):
+                rc_dict = None
+
+        rel_entry = {
+            "entity1": entity1,
+            "entity2": entity2,
+            "description": relation.get("description", "UNKNOWN"),
+            "created_at": created_at,
+            "file_path": relation.get("file_path", "unknown_source"),
+        }
+        if rc_dict:
+            rel_entry["relation_context"] = rc_dict
+
+        relations_context.append(rel_entry)
 
     logger.debug(
         f"Before truncation: {len(entities_context)} entities, {len(relations_context)} relations"
@@ -3972,6 +4001,124 @@ async def _merge_all_chunks(
     return merged_chunks
 
 
+def _format_relation_context(rc: dict) -> list[str]:
+    """Format a relation_context dict into human-readable annotation parts.
+
+    Returns a list of strings like ["Decision: ...", "Temporal: ...", ...].
+    Used by both inline chunk annotations and orphan relation rendering.
+    """
+    rc_parts = []
+    if rc.get("decision_trace"):
+        rc_parts.append(f"Decision: {rc['decision_trace']}")
+    if rc.get("temporal_info"):
+        rc_parts.append(f"Temporal: {rc['temporal_info']}")
+    if rc.get("quantitative_data"):
+        rc_parts.append(f"Data: {rc['quantitative_data']}")
+    if rc.get("approved_by"):
+        via = f" via {rc['approved_via']}" if rc.get("approved_via") else ""
+        rc_parts.append(f"Approved by: {rc['approved_by']}{via}")
+    if rc.get("valid_from") or rc.get("valid_until"):
+        vf = rc.get("valid_from", "?")
+        vu = rc.get("valid_until", "?")
+        rc_parts.append(f"Valid: {vf} → {vu}")
+    if rc.get("policy_ref"):
+        rc_parts.append(f"Policy: {rc['policy_ref']}")
+    if rc.get("confidence_score") is not None:
+        rc_parts.append(f"Confidence: {rc['confidence_score']}")
+    if rc.get("supporting_sentences"):
+        sents = rc["supporting_sentences"]
+        if isinstance(sents, list):
+            for s in sents[:2]:  # Limit to 2 supporting sentences
+                rc_parts.append(f'Evidence: "{s}"')
+        elif isinstance(sents, str):
+            rc_parts.append(f'Evidence: "{sents}"')
+    return rc_parts
+
+
+def _build_annotated_chunk(
+    chunk: dict,
+    chunk_entities: list[dict],
+    chunk_relations: list[dict],
+) -> str:
+    """Format a single chunk with inline entity/relation/quadruple annotations."""
+    ref_id = chunk.get("reference_id", "?")
+    file_path = chunk.get("file_path", "unknown_source")
+    content = chunk.get("content", "")
+
+    lines = [f"### [{ref_id}] {file_path}", "", content]
+
+    # Add entity/relation annotations if any
+    if chunk_entities or chunk_relations:
+        lines.append("")
+        lines.append("**Extracted Knowledge:**")
+
+        if chunk_entities:
+            entity_parts = []
+            for e in chunk_entities:
+                etype = e.get("type", e.get("entity_type", ""))
+                ename = e.get("entity", e.get("entity_name", ""))
+                entity_parts.append(f"{ename} ({etype})" if etype else ename)
+            lines.append(f"- **Entities:** {', '.join(entity_parts)}")
+
+        for r in chunk_relations:
+            e1 = r.get("entity1", "")
+            e2 = r.get("entity2", "")
+            desc = r.get("description", "")
+            lines.append(f"- **Relation:** {e1} → {desc} → {e2}")
+
+            # Surface relation_context (CG quadruple rc) if present
+            rc = r.get("relation_context")
+            if rc and isinstance(rc, dict):
+                rc_parts = _format_relation_context(rc)
+                if rc_parts:
+                    lines.append(f"  - **Context:** {' | '.join(rc_parts)}")
+
+    return "\n".join(lines)
+
+
+def _build_chunk_to_graph_index(
+    entities_context: list[dict],
+    relations_context: list[dict],
+    entity_id_to_original: dict | None,
+    relation_id_to_original: dict | None,
+) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:
+    """Build chunk_id → entities and chunk_id → relations indexes."""
+    chunk_to_entities: dict[str, list[dict]] = {}
+    chunk_to_relations: dict[str, list[dict]] = {}
+
+    # Map entities to their source chunks
+    for entity_ctx in entities_context:
+        entity_name = entity_ctx.get("entity", "")
+        original = (
+            entity_id_to_original.get(entity_name, {})
+            if entity_id_to_original
+            else {}
+        )
+        source_id = original.get("source_id", "")
+        if source_id:
+            for chunk_id in source_id.split(GRAPH_FIELD_SEP):
+                chunk_id = chunk_id.strip()
+                if chunk_id:
+                    chunk_to_entities.setdefault(chunk_id, []).append(entity_ctx)
+
+    # Map relations to their source chunks
+    for relation_ctx in relations_context:
+        key = (relation_ctx.get("entity1", ""), relation_ctx.get("entity2", ""))
+        original = (
+            relation_id_to_original.get(key, {})
+            if relation_id_to_original
+            else {}
+        )
+        source_id = original.get("source_id", "")
+        if source_id:
+            for chunk_id in source_id.split(GRAPH_FIELD_SEP):
+                chunk_id = chunk_id.strip()
+                if chunk_id:
+                    chunk_to_relations.setdefault(chunk_id, []).append(relation_ctx)
+
+    return chunk_to_entities, chunk_to_relations
+
+
 async def _build_context_str(
     entities_context: list[dict],
     relations_context: list[dict],
@@ -3986,11 +4133,14 @@ async def _build_context_str(
     """
     Build the final LLM context string with token processing.
     This includes dynamic token calculation and final chunk truncation.
+
+    Supports two formats via query_param.context_format:
+    - "annotated": Chunks with inline entity/relation/quadruple annotations (default).
+    - "legacy": Three separate JSON blocks (entities, relations, chunks).
     """
     tokenizer = global_config.get("tokenizer")
     if not tokenizer:
         logger.error("Missing tokenizer, cannot build LLM context")
-        # Return empty raw data structure when no tokenizer
         empty_raw_data = convert_to_user_format(
             [],
             [],
@@ -4009,12 +4159,19 @@ async def _build_context_str(
         global_config.get("max_total_tokens", DEFAULT_MAX_TOTAL_TOKENS),
     )
 
-    # Get the system prompt template from PROMPTS or global_config
-    sys_prompt_template = global_config.get(
-        "system_prompt_template", PROMPTS["rag_response"]
-    )
+    context_format = getattr(query_param, "context_format", "annotated")
+    use_annotated = context_format == "annotated"
 
-    kg_context_template = PROMPTS["kg_query_context"]
+    # Get the system prompt template
+    if use_annotated:
+        sys_prompt_template = global_config.get(
+            "system_prompt_template", PROMPTS.get("rag_response_annotated", PROMPTS["rag_response"])
+        )
+    else:
+        sys_prompt_template = global_config.get(
+            "system_prompt_template", PROMPTS["rag_response"]
+        )
+
     user_prompt = query_param.user_prompt if query_param.user_prompt else ""
     response_type = (
         query_param.response_type
@@ -4022,122 +4179,255 @@ async def _build_context_str(
         else "Multiple Paragraphs"
     )
 
-    entities_str = "\n".join(
-        json.dumps(entity, ensure_ascii=False) for entity in entities_context
-    )
-    relations_str = "\n".join(
-        json.dumps(relation, ensure_ascii=False) for relation in relations_context
-    )
-
-    # Calculate preliminary kg context tokens
-    pre_kg_context = kg_context_template.format(
-        entities_str=entities_str,
-        relations_str=relations_str,
-        text_chunks_str="",
-        reference_list_str="",
-    )
-    kg_context_tokens = len(tokenizer.encode(pre_kg_context))
-
-    # Calculate preliminary system prompt tokens
+    # Calculate system prompt overhead
     pre_sys_prompt = sys_prompt_template.format(
-        context_data="",  # Empty for overhead calculation
+        context_data="",
         response_type=response_type,
         user_prompt=user_prompt,
     )
     sys_prompt_tokens = len(tokenizer.encode(pre_sys_prompt))
-
-    # Calculate available tokens for text chunks
     query_tokens = len(tokenizer.encode(query))
-    buffer_tokens = 200  # reserved for reference list and safety buffer
-    available_chunk_tokens = max_total_tokens - (
-        sys_prompt_tokens + kg_context_tokens + query_tokens + buffer_tokens
-    )
+    buffer_tokens = 200
 
-    logger.debug(
-        f"Token allocation - Total: {max_total_tokens}, SysPrompt: {sys_prompt_tokens}, Query: {query_tokens}, KG: {kg_context_tokens}, Buffer: {buffer_tokens}, Available for chunks: {available_chunk_tokens}"
-    )
-
-    # Apply token truncation to chunks using the dynamic limit
-    truncated_chunks = await process_chunks_unified(
-        query=query,
-        unique_chunks=merged_chunks,
-        query_param=query_param,
-        global_config=global_config,
-        source_type=query_param.mode,
-        chunk_token_limit=available_chunk_tokens,  # Pass dynamic limit
-    )
-
-    # Generate reference list from truncated chunks using the new common function
-    reference_list, truncated_chunks = generate_reference_list_from_chunks(
-        truncated_chunks
-    )
-
-    # Rebuild chunks_context with truncated chunks
-    # The actual tokens may be slightly less than available_chunk_tokens due to deduplication logic
-    chunks_context = []
-    for i, chunk in enumerate(truncated_chunks):
-        chunks_context.append(
-            {
-                "reference_id": chunk["reference_id"],
-                "content": chunk["content"],
-            }
+    if use_annotated:
+        # ── Annotated format: all tokens go to annotated chunks ──
+        # Compute actual template overhead by tokenizing with empty placeholders
+        kg_annotated_template = PROMPTS["kg_annotated_context"]
+        pre_annotated_context = kg_annotated_template.format(
+            annotated_chunks_str="",
+            additional_graph_facts_str="",
+            reference_list_str="",
+        )
+        template_overhead = len(tokenizer.encode(pre_annotated_context))
+        available_chunk_tokens = max_total_tokens - (
+            sys_prompt_tokens + query_tokens + buffer_tokens + template_overhead
         )
 
-    text_units_str = "\n".join(
-        json.dumps(text_unit, ensure_ascii=False) for text_unit in chunks_context
-    )
-    reference_list_str = "\n".join(
-        f"[{ref['reference_id']}] {ref['file_path']}"
-        for ref in reference_list
-        if ref["reference_id"]
-    )
-
-    logger.info(
-        f"Final context: {len(entities_context)} entities, {len(relations_context)} relations, {len(chunks_context)} chunks"
-    )
-
-    # not necessary to use LLM to generate a response
-    if not entities_context and not relations_context and not chunks_context:
-        # Return empty raw data structure when no entities/relations
-        empty_raw_data = convert_to_user_format(
-            [],
-            [],
-            [],
-            [],
-            query_param.mode,
+        logger.info(
+            f"Token allocation [annotated] - Total: {max_total_tokens}, "
+            f"SysPrompt: {sys_prompt_tokens}, Query: {query_tokens}, "
+            f"Buffer: {buffer_tokens + template_overhead}, "
+            f"Available for annotated chunks: {available_chunk_tokens}"
         )
-        empty_raw_data["status"] = "failure"
-        empty_raw_data["message"] = "Query returned empty dataset."
-        return "", empty_raw_data
 
-    # output chunks tracking infomations
-    # format: <source><frequency>/<order> (e.g., E5/2 R2/1 C1/1)
-    if truncated_chunks and chunk_tracking:
-        chunk_tracking_log = []
+        # Truncate chunks
+        truncated_chunks = await process_chunks_unified(
+            query=query,
+            unique_chunks=merged_chunks,
+            query_param=query_param,
+            global_config=global_config,
+            source_type=query_param.mode,
+            chunk_token_limit=available_chunk_tokens,
+        )
+
+        reference_list, truncated_chunks = generate_reference_list_from_chunks(
+            truncated_chunks
+        )
+
+        logger.info(
+            f"Final context [annotated]: {len(entities_context)} entities, "
+            f"{len(relations_context)} relations, {len(truncated_chunks)} chunks"
+        )
+
+        if not entities_context and not relations_context and not truncated_chunks:
+            empty_raw_data = convert_to_user_format([], [], [], [], query_param.mode)
+            empty_raw_data["status"] = "failure"
+            empty_raw_data["message"] = "Query returned empty dataset."
+            return "", empty_raw_data
+
+        # Build chunk→entity/relation index
+        chunk_to_entities, chunk_to_relations = _build_chunk_to_graph_index(
+            entities_context,
+            relations_context,
+            entity_id_to_original,
+            relation_id_to_original,
+        )
+
+        # Track which entities/relations got attached to a chunk
+        attached_entity_names = set()
+        attached_relation_keys = set()
+
+        # Build annotated chunks
+        annotated_blocks = []
+        total_attached = 0
         for chunk in truncated_chunks:
-            chunk_id = chunk.get("chunk_id")
-            if chunk_id and chunk_id in chunk_tracking:
-                tracking_info = chunk_tracking[chunk_id]
-                source = tracking_info["source"]
-                frequency = tracking_info["frequency"]
-                order = tracking_info["order"]
-                chunk_tracking_log.append(f"{source}{frequency}/{order}")
-            else:
-                chunk_tracking_log.append("?0/0")
+            chunk_id = chunk.get("chunk_id", "")
+            c_entities = chunk_to_entities.get(chunk_id, [])
+            c_relations = chunk_to_relations.get(chunk_id, [])
+            if c_entities or c_relations:
+                total_attached += 1
 
-        if chunk_tracking_log:
-            logger.info(f"Final chunks S+F/O: {' '.join(chunk_tracking_log)}")
+            for e in c_entities:
+                attached_entity_names.add(e.get("entity", ""))
+            for r in c_relations:
+                attached_relation_keys.add(
+                    (r.get("entity1", ""), r.get("entity2", ""))
+                )
 
-    result = kg_context_template.format(
-        entities_str=entities_str,
-        relations_str=relations_str,
-        text_chunks_str=text_units_str,
-        reference_list_str=reference_list_str,
-    )
+            annotated_blocks.append(
+                _build_annotated_chunk(chunk, c_entities, c_relations)
+            )
+
+        logger.info(
+            f"[annotated] {total_attached}/{len(truncated_chunks)} chunks annotated, "
+            f"{len(attached_entity_names)} entities, {len(attached_relation_keys)} relations attached"
+        )
+
+        annotated_chunks_str = "\n\n---\n\n".join(annotated_blocks)
+
+        # Collect orphan entities/relations not linked to any displayed chunk
+        orphan_entities = [
+            e for e in entities_context
+            if e.get("entity", "") not in attached_entity_names
+        ]
+        orphan_relations = [
+            r for r in relations_context
+            if (r.get("entity1", ""), r.get("entity2", ""))
+            not in attached_relation_keys
+        ]
+
+        additional_graph_facts_str = ""
+        if orphan_entities or orphan_relations:
+            facts_lines = ["Additional Graph Knowledge (not directly linked to source chunks above):", ""]
+            for e in orphan_entities:
+                etype = e.get("type", "")
+                ename = e.get("entity", "")
+                edesc = e.get("description", "")
+                facts_lines.append(f"- **Entity:** {ename} ({etype}): {edesc}")
+            for r in orphan_relations:
+                e1 = r.get("entity1", "")
+                e2 = r.get("entity2", "")
+                desc = r.get("description", "")
+                facts_lines.append(f"- **Relation:** {e1} → {desc} → {e2}")
+                rc = r.get("relation_context")
+                if rc and isinstance(rc, dict):
+                    rc_parts = _format_relation_context(rc)
+                    if rc_parts:
+                        facts_lines.append(f"  - **Context:** {' | '.join(rc_parts)}")
+            facts_lines.append("")
+            additional_graph_facts_str = "\n".join(facts_lines)
+
+        reference_list_str = "\n".join(
+            f"[{ref['reference_id']}] {ref['file_path']}"
+            for ref in reference_list
+            if ref["reference_id"]
+        )
+
+        # Log chunk tracking
+        if truncated_chunks and chunk_tracking:
+            chunk_tracking_log = []
+            for chunk in truncated_chunks:
+                chunk_id = chunk.get("chunk_id")
+                if chunk_id and chunk_id in chunk_tracking:
+                    t = chunk_tracking[chunk_id]
+                    chunk_tracking_log.append(f"{t['source']}{t['frequency']}/{t['order']}")
+                else:
+                    chunk_tracking_log.append("?0/0")
+            if chunk_tracking_log:
+                logger.info(f"Final chunks S+F/O: {' '.join(chunk_tracking_log)}")
+
+        kg_annotated_template = PROMPTS["kg_annotated_context"]
+        result = kg_annotated_template.format(
+            annotated_chunks_str=annotated_chunks_str,
+            additional_graph_facts_str=additional_graph_facts_str,
+            reference_list_str=reference_list_str,
+        )
+
+    else:
+        # ── Legacy format: three separate JSON blocks ──
+        kg_context_template = PROMPTS["kg_query_context"]
+
+        entities_str = "\n".join(
+            json.dumps(entity, ensure_ascii=False) for entity in entities_context
+        )
+        relations_str = "\n".join(
+            json.dumps(relation, ensure_ascii=False) for relation in relations_context
+        )
+
+        pre_kg_context = kg_context_template.format(
+            entities_str=entities_str,
+            relations_str=relations_str,
+            text_chunks_str="",
+            reference_list_str="",
+        )
+        kg_context_tokens = len(tokenizer.encode(pre_kg_context))
+
+        available_chunk_tokens = max_total_tokens - (
+            sys_prompt_tokens + kg_context_tokens + query_tokens + buffer_tokens
+        )
+
+        logger.debug(
+            f"Token allocation [legacy] - Total: {max_total_tokens}, "
+            f"SysPrompt: {sys_prompt_tokens}, Query: {query_tokens}, "
+            f"KG: {kg_context_tokens}, Buffer: {buffer_tokens}, "
+            f"Available for chunks: {available_chunk_tokens}"
+        )
+
+        truncated_chunks = await process_chunks_unified(
+            query=query,
+            unique_chunks=merged_chunks,
+            query_param=query_param,
+            global_config=global_config,
+            source_type=query_param.mode,
+            chunk_token_limit=available_chunk_tokens,
+        )
+
+        reference_list, truncated_chunks = generate_reference_list_from_chunks(
+            truncated_chunks
+        )
+
+        chunks_context = []
+        for chunk in truncated_chunks:
+            chunks_context.append(
+                {
+                    "reference_id": chunk["reference_id"],
+                    "content": chunk["content"],
+                }
+            )
+
+        text_units_str = "\n".join(
+            json.dumps(text_unit, ensure_ascii=False) for text_unit in chunks_context
+        )
+        reference_list_str = "\n".join(
+            f"[{ref['reference_id']}] {ref['file_path']}"
+            for ref in reference_list
+            if ref["reference_id"]
+        )
+
+        logger.info(
+            f"Final context [legacy]: {len(entities_context)} entities, "
+            f"{len(relations_context)} relations, {len(chunks_context)} chunks"
+        )
+
+        if not entities_context and not relations_context and not chunks_context:
+            empty_raw_data = convert_to_user_format([], [], [], [], query_param.mode)
+            empty_raw_data["status"] = "failure"
+            empty_raw_data["message"] = "Query returned empty dataset."
+            return "", empty_raw_data
+
+        if truncated_chunks and chunk_tracking:
+            chunk_tracking_log = []
+            for chunk in truncated_chunks:
+                chunk_id = chunk.get("chunk_id")
+                if chunk_id and chunk_id in chunk_tracking:
+                    t = chunk_tracking[chunk_id]
+                    chunk_tracking_log.append(f"{t['source']}{t['frequency']}/{t['order']}")
+                else:
+                    chunk_tracking_log.append("?0/0")
+            if chunk_tracking_log:
+                logger.info(f"Final chunks S+F/O: {' '.join(chunk_tracking_log)}")
+
+        result = kg_context_template.format(
+            entities_str=entities_str,
+            relations_str=relations_str,
+            text_chunks_str=text_units_str,
+            reference_list_str=reference_list_str,
+        )
 
     # Always return both context and complete data structure (unified approach)
     logger.debug(
-        f"[_build_context_str] Converting to user format: {len(entities_context)} entities, {len(relations_context)} relations, {len(truncated_chunks)} chunks"
+        f"[_build_context_str] Converting to user format: {len(entities_context)} entities, "
+        f"{len(relations_context)} relations, {len(truncated_chunks)} chunks"
     )
     final_data = convert_to_user_format(
         entities_context,
@@ -4149,7 +4439,10 @@ async def _build_context_str(
         relation_id_to_original,
     )
     logger.debug(
-        f"[_build_context_str] Final data after conversion: {len(final_data.get('entities', []))} entities, {len(final_data.get('relationships', []))} relationships, {len(final_data.get('chunks', []))} chunks"
+        f"[_build_context_str] Final data after conversion: "
+        f"{len(final_data.get('entities', []))} entities, "
+        f"{len(final_data.get('relationships', []))} relationships, "
+        f"{len(final_data.get('chunks', []))} chunks"
     )
     return result, final_data
 

@@ -149,3 +149,19 @@ def run_integration_tests(request):
 
     # Fall back to environment variable
     return os.getenv("LIGHTRAG_RUN_INTEGRATION", "false").lower() == "true"
+
+
+@pytest.fixture(scope="session")
+def mcp_url():
+    """MCP server URL for agent acceptance tests."""
+    import os
+
+    return os.getenv("CG_MCP_URL", "http://localhost:9621/mcp")
+
+
+@pytest.fixture(scope="session")
+def cg_api_key():
+    """API key for CG server (empty string if auth disabled)."""
+    import os
+
+    return os.getenv("CG_API_KEY", "")

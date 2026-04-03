@@ -1662,6 +1662,8 @@ async def pipeline_index_file(rag: LightRAG, file_path: Path, track_id: str = No
         )
         if success:
             await rag.apipeline_process_enqueue_documents()
+            from lightrag.utils import invalidate_query_cache
+            await invalidate_query_cache(rag.llm_response_cache)
 
     except Exception as e:
         logger.error(f"Error indexing file {file_path.name}: {str(e)}")
@@ -1697,6 +1699,8 @@ async def pipeline_index_files(
         # Process the queue only if at least one file was successfully enqueued
         if enqueued:
             await rag.apipeline_process_enqueue_documents()
+            from lightrag.utils import invalidate_query_cache
+            await invalidate_query_cache(rag.llm_response_cache)
     except Exception as e:
         logger.error(f"Error indexing files: {str(e)}")
         logger.error(traceback.format_exc())
@@ -1728,6 +1732,10 @@ async def pipeline_index_texts(
         input=texts, file_paths=file_sources, track_id=track_id
     )
     await rag.apipeline_process_enqueue_documents()
+
+    # Invalidate query cache since catalog content has changed
+    from lightrag.utils import invalidate_query_cache
+    await invalidate_query_cache(rag.llm_response_cache)
 
 
 async def run_scanning_process(
@@ -2014,6 +2022,11 @@ async def background_delete_documents(
         async with pipeline_status_lock:
             pipeline_status["history_messages"].append(error_msg)
     finally:
+        # Invalidate query cache since catalog content has changed
+        if successful_deletions:
+            from lightrag.utils import invalidate_query_cache
+            await invalidate_query_cache(rag.llm_response_cache)
+
         # Final summary and check for pending requests
         async with pipeline_status_lock:
             pipeline_status["busy"] = False
@@ -2585,6 +2598,10 @@ def create_document_routes(
                 pipeline_status["history_messages"].append(error_msg)
             raise HTTPException(status_code=500, detail=str(e))
         finally:
+            # Invalidate query cache since all documents were cleared
+            from lightrag.utils import invalidate_query_cache
+            await invalidate_query_cache(rag.llm_response_cache)
+
             # Reset busy status after completion
             async with pipeline_status_lock:
                 pipeline_status["busy"] = False

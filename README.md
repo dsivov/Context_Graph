@@ -19,11 +19,12 @@ The result is a *system of decision*, not just a system of record: a living, que
 - [Real-Time Decision Capture](#real-time-decision-capture)
 - [Querying](#querying)
 - [REST API](#rest-api)
-- [CRM Integration Patterns](#crm-integration-patterns)
+- [Integration Patterns](#integration-patterns)
 - [Storage Backends](#storage-backends)
 - [LLM Providers](#llm-providers)
 - [Testing](#testing)
 - [Architecture](#architecture)
+- [Based On](#based-on)
 
 ---
 
@@ -98,7 +99,7 @@ Every relationship in a Context Graph is a four-component structure:
 
 **Extraction path** — ingest prose documents via `ainsert()`. The LLM extracts entities, relationships, and a RelationContext JSON object from each sentence. Suitable for historical records, call transcripts, email threads, meeting notes.
 
-**Emission path** — call `emit_decision_trace()` from agent or application code at the exact moment a decision is made. The RelationContext is written directly and atomically into the graph. Suitable for CRM webhooks, approval bots, workflow systems.
+**Emission path** — call `emit_decision_trace()` from agent or application code at the exact moment a decision is made. The RelationContext is written directly and atomically into the graph. Suitable for webhooks, approval bots, workflow systems.
 
 Both paths feed the same graph and the same vector indexes.
 
@@ -687,7 +688,7 @@ GET /graph/decisions?approved_by=CFO_Johnson&active_as_of=2025-04-01&min_confide
 
 ---
 
-## CRM Integration Patterns
+## Integration Patterns
 
 ### 1. Salesforce / HubSpot Approval Webhook
 
@@ -1017,6 +1018,126 @@ CONTEXTGRAPH_PAPER.md           — Research background
 
 ---
 
+## Privacy by Design: Pattern-Based Enrichment
+
+Context Graph follows a **patterns, not identities** principle for conversation enrichment. When ingesting real customer conversations (sales transcripts, support chats), the system anonymizes all PII before the data enters the knowledge graph.
+
+### Anonymization Pipeline
+
+| Data Type | Treatment | Example |
+|-----------|-----------|---------|
+| Customer names | Removed entirely | `"Hi Natalie"` → `"Hi customer"` |
+| Exact amounts | Bucketed into ranges | `₪4,386.06` → `"3,000-5,000"` |
+| Exact dates | Month/year only | `2025-11-14` → `"November 2025"` |
+| Phone numbers | Regex scrubbed | `054-123-4567` → `[phone]` |
+| Email addresses | Regex scrubbed | `user@example.com` → `[email]` |
+| Israeli ID numbers | Regex scrubbed | `123456789` → `[id]` |
+| Credit card numbers | Regex scrubbed | `4580-1234-5678-9012` → `[card]` |
+| Street addresses | Regex scrubbed | `12 רחוב הרצל` → `[address]` |
+| Opportunity IDs | SHA-256 hashed | `abc-123-def` → `anon-7f3a2b1c9e4d` |
+
+### What the Graph Learns
+
+The anonymized conversation documents teach the graph **behavioral patterns**:
+
+- **Cross-sell patterns** — what products customers buy together
+- **Objection handling** — what concerns arise and how they're resolved
+- **Sales techniques** — what messaging drives conversions
+- **Product comparisons** — how products differ in real customer conversations
+- **Use-case mappings** — what customers actually need products for
+
+### What the Graph Does NOT Store
+
+- Customer names or identifiers
+- Exact transaction amounts or dates
+- Phone numbers, emails, physical addresses
+- Medical conditions, disabilities, or personal circumstances
+- Any data that could identify a specific individual
+
+This approach is inspired by the [Context Graphs](https://foundationcapital.com/ideas/context-graphs-ais-trillion-dollar-opportunity) paradigm: the value is in the **patterns** (what products go together, what objections arise) — not in the **identities** (who bought what).
+
+See [`conversation_formatter.py`](conversation_formatter.py) for the full anonymization implementation.
+
+---
+
+## Research Foundations
+
+Context Graph implements the **CGR3 (Context Graphs with Retrieve-Rank-Reason)** paradigm from [Liang et al., 2024](https://arxiv.org/abs/2406.11160), built on the [LightRAG](https://github.com/HKUDS/LightRAG) graph-based RAG engine by HKUDS.
+
+### Paper Alignment
+
+| Paper Concept | Our Implementation | Notes |
+|---|---|---|
+| Factual quadruples `(h,r,t,rc)` | `RelationContext` dataclass (11 fields) | Faithful — extended with decision-specific fields |
+| Relation context (temporal, quantitative, provenance, confidence) | `temporal_info`, `quantitative_data`, `provenance`, `confidence_score` | Direct mapping |
+| CGR3: Retrieve → Rank → Reason | `cgr3_query()` with iterative loop | Faithful — max 3 iterations, early stopping |
+| Entity context from Wikidata | LLM extraction from ingested documents | Adapted for document-first workflows |
+| KGE embeddings (ComplEx, RotatE) | Text embeddings (text-embedding-3-large, 3072d) | Adapted — semantic similarity over learned structure |
+| Beam search (width M, depth D=3) | Iterative entity seed refinement per CGR3 pass | Adapted |
+| +33% Hits@1 from adding context | Hybrid mode 78.1% vs naive 70.4% relevance | Consistent improvement |
+
+### Extensions Beyond the Paper
+
+| Extension | Description |
+|-----------|-------------|
+| **Multi-tenancy** | WorkspacePool with per-tenant Neo4j label isolation, lazy init |
+| **Real-time decision capture** | `emit_decision_trace()` — write decisions without document re-ingestion |
+| **Privacy-by-design** | PII scrubbing, amount bucketing, name removal, hashed source IDs |
+| **Size-aware routing** | `catalog_bypass` for small catalogs (<100 products), `auto` router |
+| **Precedent search** | `find_precedents()` — semantic search over decision traces |
+| **Temporal filtering** | `is_active(as_of)` for date-range validity checks |
+
+---
+
+## Project Structure
+
+```
+lightrag/
+├── context_graph.py            — ContextGraph class (main entry point)
+├── context_graph_types.py      — RelationContext, ContextNode, ContextEdge
+├── lightrag.py                 — Base LightRAG engine
+├── operate.py                  — Extraction and merge pipeline
+├── prompt.py                   — CG extraction prompts (11-field RC schema)
+├── namespace.py                — Storage namespace constants
+├── base.py                     — Abstract storage interfaces
+├── api/
+│   ├── lightrag_server.py      — FastAPI application entry point
+│   ├── config.py               — Environment config (USE_CONTEXT_GRAPH etc.)
+│   ├── workspace_pool.py       — Multi-tenant workspace pool and middleware
+│   └── routers/
+│       ├── query_routes.py     — Standard query endpoints
+│       ├── document_routes.py  — Document upload and management
+│       ├── graph_routes.py     — Graph CRUD operations
+│       └── context_graph_routes.py  — CG API endpoints (CGR3, decisions)
+├── kg/                         — Storage backend implementations
+│   ├── neo4j_impl.py           — Neo4j graph storage (workspace-aware)
+│   ├── networkx_impl.py        — In-memory NetworkX graph
+│   ├── nano_vector_db_impl.py  — NanoVectorDB file-based vectors
+│   ├── json_kv_impl.py         — JSON file KV storage
+│   ├── postgres_impl.py        — PostgreSQL (KV + vector + graph)
+│   └── ...                     — Redis, MongoDB, Qdrant, Milvus, Faiss
+└── llm/                        — LLM provider bindings
+    ├── openai.py               — OpenAI / compatible
+    ├── ollama.py               — Local Ollama
+    ├── anthropic.py            — Anthropic Claude
+    └── ...                     — Azure, Gemini, Bedrock, HF, NVIDIA
+
+tests/
+├── test_context_graph.py       — Core CG unit tests (44 tests)
+├── test_context_graph_api.py   — API route tests (36 tests)
+└── conftest.py                 — Pytest configuration and fixtures
+
+docs/
+├── Algorithm.md                — LightRAG indexing and retrieval flowcharts
+├── PaperComparison.md          — Detailed CGR3 paper alignment analysis
+├── ConversationEnrichment.md   — Conversation enrichment and anonymization guide
+├── DockerDeployment.md         — Docker deployment guide
+├── FrontendBuildGuide.md       — WebUI build guide
+└── ...
+```
+
+---
+
 ## Based On
 
-Context Graph is built on top of [LightRAG](https://github.com/HKUDS/LightRAG) by HKUDS, extending it with the contextual quadruple model and decision trace infrastructure described in the Context Graph research paradigm.
+Context Graph implements the [CGR3 paradigm](https://arxiv.org/abs/2406.11160) (Liang et al., 2024) — extending knowledge graph triples into contextual quadruples `(h, r, t, rc)` with Retrieve→Rank→Reason iterative query processing. Built on [LightRAG](https://github.com/HKUDS/LightRAG) by HKUDS, with production extensions for multi-tenancy and real-time decision capture.

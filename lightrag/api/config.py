@@ -461,6 +461,7 @@ def parse_args() -> argparse.Namespace:
     # enabling contextual quadruple extraction (h,r,t,rc) and the CGR3 query paradigm.
     args.use_context_graph = get_env_value("USE_CONTEXT_GRAPH", False, bool)
     args.cgr3_max_iterations = get_env_value("CGR3_MAX_ITERATIONS", 3, int)
+    args.enable_mcp = get_env_value("ENABLE_MCP", True, bool)
 
     ollama_server_infos.LIGHTRAG_NAME = args.simulated_model_name
     ollama_server_infos.LIGHTRAG_TAG = args.simulated_model_tag

@@ -3,7 +3,7 @@ import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { throttle } from '@/lib/utils'
-import { queryText, queryTextStream } from '@/api/lightrag'
+import { queryText, queryTextStream, queryCGR3 } from '@/api/lightrag'
 import { errorMessage } from '@/lib/utils'
 import { useSettingsStore } from '@/stores/settings'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -178,7 +178,7 @@ export default function RetrievalTesting() {
       if (!inputValue.trim() || isLoading) return
 
       // Parse query mode prefix
-      const allowedModes: QueryMode[] = ['naive', 'local', 'global', 'hybrid', 'mix', 'bypass']
+      const allowedModes: QueryMode[] = ['naive', 'local', 'global', 'hybrid', 'mix', 'bypass', 'cgr3']
       const prefixMatch = inputValue.match(/^\/(\w+)\s+([\s\S]+)/)
       let modeOverride: QueryMode | undefined = undefined
       let actualQuery = inputValue
@@ -368,8 +368,24 @@ export default function RetrievalTesting() {
       }
 
       try {
-        // Run query
-        if (state.querySettings.stream) {
+        // Run query — use CGR3 endpoint for cgr3 mode
+        if (effectiveMode === 'cgr3') {
+          const cgr3Response = await queryCGR3({
+            query: actualQuery,
+            mode: 'hybrid',
+            max_iterations: 3,
+            top_k: queryParams.top_k,
+            include_references: true,
+          })
+          let responseText = cgr3Response.response
+          if (cgr3Response.references && cgr3Response.references.length > 0) {
+            responseText += '\n\n---\n**References:**\n'
+            cgr3Response.references.forEach((ref, i) => {
+              responseText += `${i + 1}. ${ref.content}\n`
+            })
+          }
+          updateAssistantMessage(responseText)
+        } else if (state.querySettings.stream) {
           let errorMessage = ''
           await queryTextStream(queryParams, updateAssistantMessage, (error) => {
             errorMessage += error

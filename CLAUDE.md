@@ -4,328 +4,162 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-LightRAG is a Retrieval-Augmented Generation (RAG) framework that uses graph-based knowledge representation for enhanced information retrieval. The system extracts entities and relationships from documents, builds a knowledge graph, and uses multi-modal retrieval (local, global, hybrid, mix, naive) for queries.
+This is **Context_Graph** — a fork of [LightRAG](https://github.com/HKUDS/LightRAG) that extends triple-based knowledge graphs `(h, r, t)` into contextual quadruples `(h, r, t, rc)`. The `RelationContext` (rc) captures decision lineage: who approved it, why, via which channel, under which policy, and validity period.
 
-## Core Architecture
+Upstream repo: https://github.com/dsivov/Context_Graph
 
-### Key Components
+## Environment
 
-- **lightrag.py**: Main orchestrator class (`LightRAG`) that coordinates document insertion, query processing, and storage management. Critical: Always call `await rag.initialize_storages()` after instantiation.
+- **Python:** 3.12
+- **Package:** `lightrag-hku` v1.4.10 installed in editable mode from this directory
+- **Server binary:** `lightrag-server` (in PATH when conda env active)
+- **Server port:** 9621
 
-- **operate.py**: Core extraction and query operations including entity/relation extraction, chunking, and multi-mode retrieval logic.
+## Common Commands
 
-- **base.py**: Abstract base classes for storage backends (`BaseKVStorage`, `BaseVectorStorage`, `BaseGraphStorage`, `BaseDocStatusStorage`).
+```bash
+# Run server
+lightrag-server
 
-- **kg/**: Storage implementations (JSON, NetworkX, Neo4j, PostgreSQL, MongoDB, Redis, Milvus, Qdrant, Faiss, Memgraph). Each storage type provides different trade-offs for production vs. development use.
+# Development mode with auto-reload
+uvicorn lightrag.api.lightrag_server:app --reload
 
-- **llm/**: LLM provider bindings (OpenAI, Ollama, Azure, Gemini, Bedrock, Anthropic, etc.). All use async patterns with caching support.
+# Run tests
+python -m pytest tests
+python -m pytest tests --run-integration  # requires external services
 
-- **api/**: FastAPI server (`lightrag_server.py`) with REST endpoints and Ollama-compatible API, plus React 19 + TypeScript WebUI.
+# Lint
+ruff check .
 
-### Storage Layer
+# Build WebUI
+cd lightrag_webui && bun install --frozen-lockfile && bun run build && cd ..
+```
 
-LightRAG uses 4 storage types with pluggable backends:
-- **KV_STORAGE**: LLM response cache, text chunks, document info
-- **VECTOR_STORAGE**: Entity/relation/chunk embeddings
-- **GRAPH_STORAGE**: Entity-relation graph structure
-- **DOC_STATUS_STORAGE**: Document processing status tracking
+## Architecture
 
-Workspace isolation is implemented differently per storage type (subdirectories for file-based, prefixes for collections, fields for relational DBs).
+### Core Files
+
+- `lightrag/context_graph.py` — `ContextGraph` class extending `LightRAG` with RelationContext, CGR3 reasoning, emit_decision_trace, find_precedents
+- `lightrag/context_graph_types.py` — `RelationContext`, `ContextNode`, `ContextEdge` dataclasses
+- `lightrag/lightrag.py` — Base `LightRAG` orchestrator (insert, query, storage management)
+- `lightrag/operate.py` — Core extraction and query operations
+- `lightrag/base.py` — Abstract storage interfaces (`BaseKVStorage`, `BaseVectorStorage`, `BaseGraphStorage`)
+- `lightrag/kg/` — Storage backends (JSON, NetworkX, Neo4j, PostgreSQL, MongoDB, Redis, Milvus, Qdrant, Faiss)
+- `lightrag/llm/` — LLM provider bindings (OpenAI, Ollama, Azure, Gemini, Bedrock)
+- `lightrag/api/lightrag_server.py` — FastAPI server, route registration, workspace routing
+- `lightrag/api/routers/context_graph_routes.py` — Context Graph API endpoints
+- `lightrag/api/config.py` — Configuration parsing (env vars → args)
+- `lightrag/kg/shared_storage.py` — Multi-process shared memory, workspace namespace isolation, pipeline locks
+
+### Storage Layer (4 pluggable backends)
+
+- **KV_STORAGE** — docs, chunks, entities, relations, LLM cache
+- **VECTOR_STORAGE** — entity/relation/chunk/decision embeddings
+- **GRAPH_STORAGE** — entity-relation graph (Neo4j in our config)
+- **DOC_STATUS_STORAGE** — document processing status
+
+### Data Flow
+
+```
+Document Upload → Chunking (1200 tokens) → Entity/Relation Extraction (LLM)
+  → RelationContext JSON extraction → Graph + Vector Storage → Ready for Query
+```
 
 ### Query Modes
 
-- **local**: Context-dependent retrieval focused on specific entities
-- **global**: Community/summary-based broad knowledge retrieval
-- **hybrid**: Combines local and global
-- **naive**: Direct vector search without graph
-- **mix**: Integrates KG and vector retrieval (recommended with reranker)
+- `local` — entity-focused retrieval
+- `global` — pattern/community analysis
+- `hybrid` — local + global combined
+- `naive` — vector search only
+- `mix` — KG + vector (recommended with reranker)
+- `bypass` — direct LLM, no retrieval
 
-## Development Commands
+## Multi-Tenancy (Workspace Isolation)
 
-### Setup
+Each company gets an isolated workspace. Isolation is per-request via HTTP header:
+
 ```bash
-# Install core package (development mode)
-uv sync
-source .venv/bin/activate  # Or: .venv\Scripts\activate on Windows
-
-# Install with API support
-uv sync --extra api
-
-# Install specific extras
-uv sync --extra offline-storage  # Storage backends
-uv sync --extra offline-llm      # LLM providers
-uv sync --extra test             # Testing dependencies
+curl -H "LIGHTRAG-WORKSPACE: company_acme" http://localhost:9621/query -d '{"query": "..."}'
 ```
 
-### API Server
-```bash
-# Copy and configure environment
-cp env.example .env  # Edit with your LLM/embedding configs
+### What gets isolated per workspace:
+- Neo4j nodes/edges (label-based: all nodes tagged with `:workspace_name`)
+- Neo4j indexes (per-workspace B-tree and full-text indexes)
+- Vector embeddings (separate collections)
+- KV stores, document status, LLM cache
+- Decision trace vector index
 
-# Build WebUI
-cd lightrag_webui
-bun install --frozen-lockfile
-bun run build
-cd ..
+### Neo4j workspace mechanism:
+- Nodes get workspace label: `MERGE (n:\`company_acme\` {entity_id: $id})`
+- Queries filter: `WHERE node:\`company_acme\``
+- Drop is workspace-scoped: `MATCH (n:\`company_acme\`) DETACH DELETE n`
 
-# Run server
-lightrag-server                                           # Production
-uvicorn lightrag.api.lightrag_server:app --reload        # Development
-lightrag-gunicorn                                         # Multi-worker (gunicorn)
-```
+## Context Graph API Endpoints
 
-### Testing
-```bash
-# Run offline tests (default)
-python -m pytest tests
+### Standard LightRAG endpoints (all workspace-aware):
+- `POST /documents/upload` — Upload documents
+- `POST /query` — Query with mode selection
+- `POST /query/stream` — Streaming query
+- `POST /query/data` — Raw data retrieval
+- `GET /health` — Health check
+- Graph CRUD: `/graph/entity/create`, `/graph/relation/create`, etc.
 
-# Run integration tests (requires external services)
-python -m pytest tests --run-integration
-# Or set: LIGHTRAG_RUN_INTEGRATION=true
+### Context Graph-specific (return 503 if USE_CONTEXT_GRAPH=false):
+- `POST /cgr3/query` — Iterative multi-hop reasoning (Retrieve→Rank→Reason)
+- `GET /graph/edge/context` — Get RelationContext for an edge
+- `GET /graph/entity/edges-with-context` — All context-enriched edges for entity
+- `POST /graph/decision/emit` — Record decision trace at runtime (no ingestion needed)
+- `GET /graph/decisions/search` — Semantic precedent search over decision traces
+- `GET /graph/decisions` — Filter decisions by approver, channel, policy, confidence, date
 
-# Run specific test file
-python test_graph_storage.py
+## RelationContext Fields
 
-# Keep artifacts for debugging
-python -m pytest tests --keep-artifacts
+| Field | Type | Description |
+|-------|------|-------------|
+| `supporting_sentences` | List[str] | Verbatim document quotes |
+| `temporal_info` | str | Validity periods |
+| `quantitative_data` | str | Numbers, percentages, amounts |
+| `decision_trace` | str | Rationale/approval reasoning |
+| `approved_by` | str | Approver entity name |
+| `approved_via` | str | Channel: slack, zoom, email, in_person, jira, system |
+| `valid_from` / `valid_until` | str | ISO-8601 dates |
+| `policy_ref` | str | Policy name/ID |
+| `provenance` | str | Source reference |
+| `confidence_score` | float | 0.0–1.0 extraction reliability |
 
-# Run with custom workers
-python -m pytest tests --test-workers 4
-```
+## Current Configuration
 
-### Linting
-```bash
-ruff check .
-```
+- **Graph storage:** Neo4j (`LIGHTRAG_GRAPH_STORAGE=Neo4JStorage`)
+- **KV/Vector/DocStatus:** Default file-based (JsonKVStorage, NanoVectorDB)
+- **LLM:** OpenAI `gpt-5-mini`
+- **Embedding:** `text-embedding-3-large` (dim 3072)
+- **Reranking:** Local server at `localhost:9000` via cohere binding
+- **Context Graph:** Enabled (`USE_CONTEXT_GRAPH=true`)
 
-## Key Implementation Patterns
+## Key Patterns
 
-### LightRAG Initialization (Critical)
-
-The most common error is forgetting to initialize storages:
-
+### Always initialize storages after instantiation:
 ```python
-import asyncio
-from lightrag import LightRAG
-from lightrag.llm.openai import gpt_4o_mini_complete, openai_embed
-
-async def main():
-    rag = LightRAG(
-        working_dir="./rag_storage",
-        llm_model_func=gpt_4o_mini_complete,
-        embedding_func=openai_embed
-    )
-
-    # REQUIRED: Initialize storage backends
-    await rag.initialize_storages()
-
-    # Now safe to use
-    await rag.ainsert("Your text here")
-    result = await rag.aquery("Your question", param=QueryParam(mode="hybrid"))
-
-    # Cleanup
-    await rag.finalize_storages()
-
-asyncio.run(main())
+rag = ContextGraph(working_dir="./rag_storage", workspace="company_acme", ...)
+await rag.initialize_storages()
+# ... use rag ...
+await rag.finalize_storages()
 ```
 
-### Custom Embedding Functions
-
-Use `@wrap_embedding_func_with_attrs` decorator and call `.func` when wrapping:
-
+### Emit decisions from application code (no document ingestion):
 ```python
-from lightrag.utils import wrap_embedding_func_with_attrs
-
-@wrap_embedding_func_with_attrs(embedding_dim=1536, max_token_size=8192)
-async def custom_embed(texts: list[str]) -> np.ndarray:
-    # Call underlying function, not wrapped version
-    return await openai_embed.func(texts, model="text-embedding-3-large")
+from lightrag.context_graph_types import RelationContext
+rc = RelationContext(decision_trace="VP approved 20% discount", approved_by="Sarah Chen", ...)
+await rag.emit_decision_trace("Sarah Chen", "MegaCorp", "discount_approval", rc)
 ```
 
-### Storage Configuration
+### Embedding model must stay consistent — changing it after ingestion breaks vector search.
 
-Configure via environment variables or constructor params:
+## Important Notes
 
-```python
-# Environment-based (recommended for production)
-# See env.example for full list
-
-# Constructor-based
-rag = LightRAG(
-    working_dir="./storage",
-    workspace="project_name",  # For data isolation
-    kv_storage="PGKVStorage",
-    vector_storage="PGVectorStorage",
-    graph_storage="Neo4JStorage",
-    doc_status_storage="PGDocStatusStorage",
-    vector_db_storage_cls_kwargs={
-        "cosine_better_than_threshold": 0.2
-    }
-)
-```
-
-### Document Insertion
-
-```python
-# Single document
-await rag.ainsert("Text content")
-
-# Batch insertion
-await rag.ainsert(["Text 1", "Text 2", ...])
-
-# With custom IDs
-await rag.ainsert("Text", ids=["doc-123"])
-
-# With file paths (for citation)
-await rag.ainsert(["Text 1", "Text 2"], file_paths=["doc1.pdf", "doc2.pdf"])
-
-# Configure batch size
-rag = LightRAG(..., max_parallel_insert=4)  # Default: 2, max recommended: 10
-```
-
-### Query Configuration
-
-```python
-from lightrag import QueryParam
-
-result = await rag.aquery(
-    "Your question",
-    param=QueryParam(
-        mode="mix",                    # Recommended with reranker
-        top_k=60,                      # KG entities/relations to retrieve
-        chunk_top_k=20,                # Text chunks to retrieve
-        max_entity_tokens=6000,
-        max_relation_tokens=8000,
-        max_total_tokens=30000,
-        enable_rerank=True,
-        user_prompt="Additional instructions for LLM",
-        stream=False
-    )
-)
-```
-
-## WebUI Development
-
-### Structure
-- `lightrag_webui/src/`: React components (TypeScript)
-- Uses Vite + Bun build system
-- Tailwind CSS for styling
-- React 19 with functional components and hooks
-
-### Commands
-```bash
-cd lightrag_webui
-bun install --frozen-lockfile  # Install dependencies
-bun run dev                    # Development server
-bun run build                  # Production build
-bun test                       # Run tests
-```
-
-## Common Issues
-
-### 1. Storage Not Initialized
-**Error**: `AttributeError: __aenter__` or `KeyError: 'history_messages'`
-**Solution**: Always call `await rag.initialize_storages()` after creating LightRAG instance
-
-### 2. Embedding Model Changes
-When switching embedding models, you MUST clear the data directory (except optionally `kv_store_llm_response_cache.json` for LLM cache).
-
-### 3. Nested Embedding Functions
-Cannot wrap already-decorated embedding functions. Use `.func` to access underlying function:
-```python
-# Wrong: EmbeddingFunc(func=openai_embed)
-# Right: EmbeddingFunc(func=openai_embed.func)
-```
-
-### 4. Context Length for Ollama
-Ollama models default to 8k context; LightRAG requires 32k+. Configure via:
-```python
-llm_model_kwargs={"options": {"num_ctx": 32768}}
-```
-
-## Configuration Files
-
-### .env Configuration
-Primary configuration file for API server. Key sections:
-- Server settings (HOST, PORT, CORS)
-- Storage backends (connection strings via environment variables)
-- Query parameters (TOP_K, MAX_TOTAL_TOKENS, etc.)
-- Reranking configuration (RERANK_BINDING, RERANK_MODEL)
-- Authentication (AUTH_ACCOUNTS, LIGHTRAG_API_KEY)
-
-See `env.example` for comprehensive template.
-
-### Workspace Isolation
-Each LightRAG instance can use a `workspace` parameter for data isolation. Implementation varies by storage type:
-- File-based: subdirectories
-- Collection-based: collection name prefixes
-- Relational DB: workspace column filtering
-- Qdrant: payload-based partitioning
-
-## Testing Guidelines
-
-### Test Structure
-- `tests/`: Main test suite (mirrors feature folders)
-- `test_*.py` in root: Specific integration tests
-- Markers: `offline`, `integration`, `requires_db`, `requires_api`
-
-### Running Tests
-```bash
-# Default: runs only offline tests
-pytest tests
-
-# Include integration tests
-pytest tests --run-integration
-
-# Keep test artifacts for debugging
-pytest tests --keep-artifacts
-
-# Configure test workers
-pytest tests --test-workers 4
-```
-
-### Environment Variables for Tests
-Set `LIGHTRAG_*` variables for integration tests:
-- `LIGHTRAG_RUN_INTEGRATION=true`
-- `LIGHTRAG_KEEP_ARTIFACTS=true`
-- `LIGHTRAG_TEST_WORKERS=4`
-- Plus storage-specific connection strings
-
-## Code Style
-
-### Language
-- Comment Language - Use English for comments and documentation
-- Backend Language - Use English for backend code and messages
-- Frontend Internationalization: i18next for multi-language support
-
-### Python
-- Follow PEP 8 with 4-space indentation
-- Use type annotations
-- Prefer dataclasses for state management
+- `.env` contains API keys — never commit it
+- `USE_CONTEXT_GRAPH=true` switches server from `LightRAG` to `ContextGraph` class
+- Neo4j credentials in `.env` need to be configured before first run
+- Workspace names: `a-z, A-Z, 0-9, _` only
 - Use `lightrag.utils.logger` instead of print
-- Async/await patterns throughout
-- Keep storage implementations in `kg/` with consistent base class inheritance
-
-### TypeScript/React
-- Functional components with hooks
-- 2-space indentation
-- PascalCase for components
-- Tailwind utility-first styling
-
-## Important Architectural Notes
-
-### LLM Requirements
-- Minimum 32B parameters recommended
-- 32KB context minimum (64KB recommended)
-- Avoid reasoning models during indexing
-- Stronger models for query stage than indexing stage
-
-### Embedding Models
-- Must be consistent across indexing and querying
-- Recommended: `BAAI/bge-m3`, `text-embedding-3-large`
-- Changing models requires clearing vector storage and recreating with new dimensions
-
-### Reranker Configuration
-- Significantly improves retrieval quality
-- Recommended models: `BAAI/bge-reranker-v2-m3`, Jina rerankers
-- Use "mix" mode when reranker is enabled
+- Code style: PEP 8, type annotations, async/await, dataclasses

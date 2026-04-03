@@ -38,6 +38,9 @@ DEFAULT_ENTITY_TYPES = [
     "Data",
     "Artifact",
     "NaturalObject",
+    "LossReason",
+    "Objection",
+    "Competitor",
 ]
 
 # Separator for: description, source_id and relation-key fields(Can not be changed after data inserted)

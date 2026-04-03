@@ -2,7 +2,7 @@
 LightRAG FastAPI Server
 """
 
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.openapi.docs import (
@@ -21,7 +21,7 @@ from pathlib import Path
 import configparser
 from ascii_colors import ASCIIColors
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, AsyncExitStack
 from dotenv import load_dotenv
 from lightrag.api.utils_api import (
     get_combined_auth_dependency,
@@ -53,7 +53,13 @@ from lightrag.api.routers.document_routes import (
 from lightrag.api.routers.query_routes import create_query_routes
 from lightrag.api.routers.graph_routes import create_graph_routes
 from lightrag.api.routers.context_graph_routes import create_context_graph_routes
+from lightrag.api.mcp_server import create_mcp_server
 from lightrag.api.routers.ollama_api import OllamaAPI
+from lightrag.api.workspace_pool import (
+    WorkspacePool,
+    WorkspaceProxy,
+    get_workspace_middleware,
+)
 
 from lightrag.utils import logger, set_verbose_debug
 from lightrag.kg.shared_storage import (
@@ -354,31 +360,39 @@ def create_app(args):
         # Store background tasks
         app.state.background_tasks = set()
 
-        try:
-            # Initialize database connections
-            # Note: initialize_storages() now auto-initializes pipeline_status for rag.workspace
-            await rag.initialize_storages()
+        async with AsyncExitStack() as stack:
+            try:
+                # Complete async initialization of the seeded default workspace
+                await workspace_pool.finalize_seed(default_workspace)
 
-            # Data migration regardless of storage implementation
-            await rag.check_and_migrate_data()
+                # Initialize MCP session manager (if MCP server is configured)
+                if hasattr(app.state, "mcp_server"):
+                    await stack.enter_async_context(
+                        app.state.mcp_server.session_manager.run()
+                    )
 
-            ASCIIColors.green("\nServer is ready to accept connections! 🚀\n")
+                if getattr(args, "token_secret", "") == "lightrag-jwt-default-secret":
+                    logger.warning(
+                        "Using default JWT secret — set TOKEN_SECRET env var for production"
+                    )
 
-            yield
+                ASCIIColors.green("\nServer is ready to accept connections! 🚀\n")
 
-        finally:
-            # Clean up database connections
-            await rag.finalize_storages()
+                yield
 
-            if "LIGHTRAG_GUNICORN_MODE" not in os.environ:
-                # Only perform cleanup in Uvicorn single-process mode
-                logger.debug("Unvicorn Mode: finalizing shared storage...")
-                finalize_share_data()
-            else:
-                # In Gunicorn mode with preload_app=True, cleanup is handled by on_exit hooks
-                logger.debug(
-                    "Gunicorn Mode: postpone shared storage finalization to master process"
-                )
+            finally:
+                # Clean up all workspace instances
+                await workspace_pool.shutdown()
+
+                if "LIGHTRAG_GUNICORN_MODE" not in os.environ:
+                    # Only perform cleanup in Uvicorn single-process mode
+                    logger.debug("Unvicorn Mode: finalizing shared storage...")
+                    finalize_share_data()
+                else:
+                    # In Gunicorn mode with preload_app=True, cleanup is handled by on_exit hooks
+                    logger.debug(
+                        "Gunicorn Mode: postpone shared storage finalization to master process"
+                    )
 
     # Initialize FastAPI
     base_description = (
@@ -1059,44 +1073,78 @@ def create_app(args):
             "Context Graph mode ENABLED — using ContextGraph for contextual "
             "quadruple extraction and CGR3 reasoning."
         )
-    try:
-        rag = rag_cls(
-            working_dir=args.working_dir,
-            workspace=args.workspace,
-            llm_model_func=create_llm_model_func(args.llm_binding),
-            llm_model_name=args.llm_model,
-            llm_model_max_async=args.max_async,
-            summary_max_tokens=args.summary_max_tokens,
-            summary_context_size=args.summary_context_size,
-            chunk_token_size=int(args.chunk_size),
-            chunk_overlap_token_size=int(args.chunk_overlap_size),
-            llm_model_kwargs=create_llm_model_kwargs(
-                args.llm_binding, args, llm_timeout
-            ),
-            embedding_func=embedding_func,
-            default_llm_timeout=llm_timeout,
-            default_embedding_timeout=embedding_timeout,
-            kv_storage=args.kv_storage,
-            graph_storage=args.graph_storage,
-            vector_storage=args.vector_storage,
-            doc_status_storage=args.doc_status_storage,
-            vector_db_storage_cls_kwargs={
-                "cosine_better_than_threshold": args.cosine_threshold
-            },
-            enable_llm_cache_for_entity_extract=args.enable_llm_cache_for_extract,
-            enable_llm_cache=args.enable_llm_cache,
-            rerank_model_func=rerank_model_func,
-            max_parallel_insert=args.max_parallel_insert,
-            max_graph_nodes=args.max_graph_nodes,
-            addon_params={
-                "language": args.summary_language,
-                "entity_types": args.entity_types,
-            },
-            ollama_server_infos=ollama_server_infos,
-        )
-    except Exception as e:
-        logger.error(f"Failed to initialize {'ContextGraph' if use_context_graph else 'LightRAG'}: {e}")
-        raise
+
+    # Build kwargs for workspace pool (everything except 'workspace')
+    rag_kwargs = dict(
+        working_dir=args.working_dir,
+        llm_model_func=create_llm_model_func(args.llm_binding),
+        llm_model_name=args.llm_model,
+        llm_model_max_async=args.max_async,
+        summary_max_tokens=args.summary_max_tokens,
+        summary_context_size=args.summary_context_size,
+        chunk_token_size=int(args.chunk_size),
+        chunk_overlap_token_size=int(args.chunk_overlap_size),
+        llm_model_kwargs=create_llm_model_kwargs(
+            args.llm_binding, args, llm_timeout
+        ),
+        embedding_func=embedding_func,
+        default_llm_timeout=llm_timeout,
+        default_embedding_timeout=embedding_timeout,
+        kv_storage=args.kv_storage,
+        graph_storage=args.graph_storage,
+        vector_storage=args.vector_storage,
+        doc_status_storage=args.doc_status_storage,
+        vector_db_storage_cls_kwargs={
+            "cosine_better_than_threshold": args.cosine_threshold
+        },
+        enable_llm_cache_for_entity_extract=args.enable_llm_cache_for_extract,
+        enable_llm_cache=args.enable_llm_cache,
+        rerank_model_func=rerank_model_func,
+        max_parallel_insert=args.max_parallel_insert,
+        max_graph_nodes=args.max_graph_nodes,
+        addon_params={
+            "language": args.summary_language,
+            "entity_types": args.entity_types,
+        },
+        ollama_server_infos=ollama_server_infos,
+    )
+
+    # Create workspace pool and proxy for multi-tenant support
+    workspace_pool = WorkspacePool(rag_cls=rag_cls, rag_kwargs=rag_kwargs)
+    default_workspace = args.workspace if args.workspace else "default"
+
+    # Seed the default workspace synchronously so the proxy can resolve
+    # attributes during route registration (e.g. OllamaAPI.__init__).
+    # Full async init happens in the lifespan.
+    workspace_pool.seed(default_workspace)
+
+    # Set the contextvar default so proxy lookups during setup find the seed
+    from lightrag.api.workspace_pool import _current_workspace
+    _current_workspace.set(default_workspace)
+
+    # rag is a proxy that delegates to the correct workspace instance
+    # based on the LIGHTRAG-WORKSPACE header (set by middleware via contextvars)
+    rag = WorkspaceProxy(workspace_pool)
+
+    # Add workspace middleware — resolves LIGHTRAG-WORKSPACE header per request
+    WorkspaceMiddleware = get_workspace_middleware(workspace_pool, default_workspace)
+    app.add_middleware(WorkspaceMiddleware)
+
+    # Document the LIGHTRAG-WORKSPACE header in OpenAPI docs.
+    # The actual routing is handled by the middleware above; this dependency
+    # only makes the header visible in Swagger UI.
+    async def workspace_header_doc(
+        lightrag_workspace: str = Header(
+            default=default_workspace,
+            alias="LIGHTRAG-WORKSPACE",
+            description="Workspace/tenant name. Each workspace has isolated storage (graph, vectors, documents). "
+            "Only a-z, A-Z, 0-9, and _ are allowed.",
+        ),
+    ):
+        pass
+
+    app.dependency_overrides.setdefault(workspace_header_doc, workspace_header_doc)
+    app.router.dependencies.append(Depends(workspace_header_doc))
 
     # Add routes
     app.include_router(
@@ -1125,6 +1173,61 @@ def create_app(args):
     # Add Ollama API routes
     ollama_api = OllamaAPI(rag, top_k=args.top_k, api_key=api_key)
     app.include_router(ollama_api.router, prefix="/api")
+
+    # Workspace management endpoints for multi-tenant API
+    @app.get("/workspaces", tags=["workspaces"])
+    async def list_workspaces():
+        """List all workspaces (tenants) — both initialized and on-disk."""
+        import os
+
+        initialized = set(workspace_pool.workspaces)
+        # Discover workspaces from working directory (each subdirectory is a workspace)
+        storage_dir = str(args.working_dir)
+        on_disk = set()
+        if os.path.isdir(storage_dir):
+            for name in os.listdir(storage_dir):
+                full = os.path.join(storage_dir, name)
+                if os.path.isdir(full) and not name.startswith("."):
+                    on_disk.add(name)
+        all_workspaces = sorted(initialized | on_disk)
+        return {"workspaces": all_workspaces}
+
+    @app.post("/workspaces/{workspace_name}", tags=["workspaces"])
+    async def create_workspace(workspace_name: str):
+        """Create and initialize a new workspace (tenant).
+
+        The workspace will be initialized with its own isolated storage
+        (Neo4j labels, KV namespaces, vector collections).
+        """
+        try:
+            await workspace_pool.get_rag(workspace_name)
+            return {
+                "status": "success",
+                "workspace": workspace_name,
+                "message": f"Workspace '{workspace_name}' is ready.",
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to initialize workspace '{workspace_name}': {e}",
+            )
+
+    @app.get("/workspaces/{workspace_name}/health", tags=["workspaces"])
+    async def workspace_health(workspace_name: str):
+        """Check if a specific workspace is initialized and healthy."""
+        if workspace_name in workspace_pool._instances:
+            return {
+                "workspace": workspace_name,
+                "status": "healthy",
+                "initialized": workspace_name not in workspace_pool._needs_init,
+            }
+        return {
+            "workspace": workspace_name,
+            "status": "not_initialized",
+            "initialized": False,
+        }
 
     # Custom Swagger UI endpoint for offline support
     @app.get("/docs", include_in_schema=False)
@@ -1383,6 +1486,21 @@ def create_app(args):
         async def webui_redirect_to_docs():
             """Redirect /webui to /docs when WebUI is not available"""
             return RedirectResponse(url="/docs")
+
+    # MCP Server (embedded, same process) — mounted last so named mounts
+    # (/webui, /static/swagger-ui) take precedence over the catch-all.
+    if getattr(args, "enable_mcp", True):
+        mcp_server, mcp_app = create_mcp_server(
+            rag=rag,
+            api_key=api_key,
+            top_k=args.top_k,
+            cgr3_max_iterations=cgr3_max_iterations,
+        )
+        app.state.mcp_server = mcp_server
+        app.mount("", mcp_app)  # MCP endpoint at POST /mcp
+        logger.info("MCP server mounted at /mcp (Streamable HTTP, stateless)")
+    else:
+        logger.info("MCP server disabled (ENABLE_MCP=false)")
 
     return app
 

@@ -554,8 +554,20 @@ class TestContextGraphNewMethods:
         )
         await cg.emit_decision_trace("Sarah", "MegaCorp", "APPROVES", rc)
 
-        graph.upsert_node.assert_any_await("Sarah", {"entity_type": "ENTITY"})
-        graph.upsert_node.assert_any_await("MegaCorp", {"entity_type": "ENTITY"})
+        graph.upsert_node.assert_any_await("Sarah", {
+            "entity_id": "Sarah",
+            "entity_type": "ENTITY",
+            "source_id": "emit_decision_trace",
+            "description": "Sarah",
+            "file_path": "agent_runtime",
+        })
+        graph.upsert_node.assert_any_await("MegaCorp", {
+            "entity_id": "MegaCorp",
+            "entity_type": "ENTITY",
+            "source_id": "emit_decision_trace",
+            "description": "MegaCorp",
+            "file_path": "agent_runtime",
+        })
         graph.upsert_edge.assert_awaited_once()
         call_kwargs = graph.upsert_edge.call_args
         edge_data = call_kwargs.kwargs.get("edge_data") or call_kwargs.args[2]

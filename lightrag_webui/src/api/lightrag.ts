@@ -95,7 +95,7 @@ export type LightragDocumentsScanProgress = {
  * - "mix": Integrates knowledge graph and vector retrieval.
  * - "bypass": Bypasses knowledge retrieval and directly uses the LLM.
  */
-export type QueryMode = 'naive' | 'local' | 'global' | 'hybrid' | 'mix' | 'bypass'
+export type QueryMode = 'naive' | 'local' | 'global' | 'hybrid' | 'mix' | 'bypass' | 'cgr3'
 
 export type Message = {
   role: 'user' | 'assistant' | 'system'
@@ -342,7 +342,9 @@ axiosInstance.interceptors.request.use((config) => {
     return config;
   }
 
-  const apiKey = useSettingsStore.getState().apiKey
+  const settings = useSettingsStore.getState()
+  const apiKey = settings.apiKey
+  const workspace = settings.workspace
   const token = localStorage.getItem('LIGHTRAG-API-TOKEN');
 
   // Always include token if it exists, regardless of path
@@ -351,6 +353,9 @@ axiosInstance.interceptors.request.use((config) => {
   }
   if (apiKey) {
     config.headers['X-API-Key'] = apiKey
+  }
+  if (workspace) {
+    config.headers['LIGHTRAG-WORKSPACE'] = workspace
   }
   return config
 })
@@ -518,7 +523,9 @@ export const queryTextStream = async (
   onChunk: (chunk: string) => void,
   onError?: (error: string) => void
 ) => {
-  const apiKey = useSettingsStore.getState().apiKey;
+  const settings = useSettingsStore.getState();
+  const apiKey = settings.apiKey;
+  const workspace = settings.workspace;
   const token = localStorage.getItem('LIGHTRAG-API-TOKEN');
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -529,6 +536,9 @@ export const queryTextStream = async (
   }
   if (apiKey) {
     headers['X-API-Key'] = apiKey;
+  }
+  if (workspace) {
+    headers['LIGHTRAG-WORKSPACE'] = workspace;
   }
 
   try {
@@ -1017,5 +1027,33 @@ export const getDocumentsPaginated = async (request: DocumentsRequest): Promise<
  */
 export const getDocumentStatusCounts = async (): Promise<StatusCountsResponse> => {
   const response = await axiosInstance.get('/documents/status_counts')
+  return response.data
+}
+
+export const listWorkspaces = async (): Promise<string[]> => {
+  const response = await axiosInstance.get('/workspaces')
+  return response.data.workspaces
+}
+
+// CGR3 (Context Graph Retrieve-Rank-Reason) query
+export type CGR3QueryRequest = {
+  query: string
+  mode?: 'local' | 'global' | 'hybrid' | 'naive' | 'mix'
+  max_iterations?: number
+  top_k?: number
+  include_references?: boolean
+}
+
+export type CGR3QueryResponse = {
+  response: string
+  references?: Array<{
+    id: string
+    source_id: string
+    content: string
+  }>
+}
+
+export const queryCGR3 = async (request: CGR3QueryRequest): Promise<CGR3QueryResponse> => {
+  const response = await axiosInstance.post('/cgr3/query', request)
   return response.data
 }

@@ -3,11 +3,14 @@ This module contains all query-related routes for the LightRAG API.
 """
 
 import json
-from typing import Any, Dict, List, Literal, Optional
+from functools import partial
+from typing import Any, Dict, List, Literal, Optional, Tuple
+
+import json_repair
 from fastapi import APIRouter, Depends, HTTPException
 from lightrag.base import QueryParam
 from lightrag.api.utils_api import get_combined_auth_dependency
-from lightrag.utils import logger
+from lightrag.utils import compute_args_hash, handle_cache, save_to_cache, CacheData, logger
 from pydantic import BaseModel, Field, field_validator
 
 router = APIRouter(tags=["query"])
@@ -100,6 +103,11 @@ class QueryRequest(BaseModel):
         description="If True, includes reference list in responses. Affects /query and /query/stream endpoints. /query/data always includes references.",
     )
 
+    context_format: Optional[Literal["annotated", "legacy"]] = Field(
+        default=None,
+        description="Controls how retrieved data is formatted for the LLM. 'annotated' (default): source chunks with inline entity/relation metadata. 'legacy': three separate JSON blocks.",
+    )
+
     include_chunk_content: Optional[bool] = Field(
         default=False,
         description="If True, includes actual chunk text content in references. Only applies when include_references=True. Useful for evaluation and debugging.",
@@ -188,6 +196,146 @@ class StreamChunkResponse(BaseModel):
     error: Optional[str] = Field(
         default=None, description="Error message if processing fails"
     )
+
+
+# --- Constants for auto query mode classification (module-level for reuse by MCP) ---
+
+SMALL_CATALOG_THRESHOLD = 100  # products; below this, bypass graph entirely
+
+CATALOG_BYPASS_SYSTEM_PROMPT = """You are a helpful sales assistant for an e-commerce store. You have access to the store's full product catalog below.
+
+Answer the customer's question using ONLY the products from this catalog. Be specific — mention product names, features, prices, and variants when available. If the catalog doesn't contain relevant products, say so honestly.
+Suggest related products or alternatives when appropriate. End with a clear next step for the customer.
+
+## Product Catalog
+
+{catalog}"""
+
+MODE_CLASSIFICATION_PROMPT = """Analyze the user query and select the optimal retrieval mode for a product catalog knowledge graph.
+
+Available modes (ordered by general effectiveness):
+- "hybrid" (DEFAULT — use this most often): Combines entity lookup AND relationship traversal. Best all-around mode. Use for most product queries including recommendations, category browsing, product questions, and general customer inquiries.
+- "local": Use ONLY when the query mentions a SPECIFIC product by exact name and needs just that one product's details (e.g., "Tell me about the H1H headphones", "details on CurQD-4").
+- "global": Use ONLY for broad category exploration where no specific product is referenced (e.g., "what types of tea do you have?", "show me all your courses").
+- "mix": Use when the query asks about detailed specs, ingredients, technical comparisons, or needs both structured product data AND raw text details (e.g., "what's the difference between matcha Shiro and Imperial?", "specs of the Hybrid Mattress").
+- "cgr3": Use ONLY for explicit multi-product comparisons or complex multi-hop reasoning (e.g., "compare X vs Y", "find products similar to X but with feature Y", "what's cheaper than X with the same features?"). Slowest mode — do not use for simple queries.
+
+Selection rules:
+1. DEFAULT to "hybrid" — it handles 80%+ of queries well.
+2. Use "local" only when a specific product name is clearly stated and no exploration is needed.
+3. Use "global" only for pure category-level browsing with no specific product mentioned.
+4. Use "mix" when the query explicitly asks about technical details, specs, or ingredient-level comparisons.
+5. Use "cgr3" only for explicit cross-product comparisons or multi-step reasoning queries.
+6. NEVER use "naive" — it has poor quality for product queries.
+
+Respond with ONLY a JSON object with keys "mode" and "reason", for example: {{"mode": "hybrid", "reason": "customer asking for product recommendation"}}
+
+User query: {query}"""
+
+VALID_AUTO_MODES = {"local", "global", "hybrid", "mix", "cgr3"}
+
+
+def get_catalog_info(rag) -> Tuple[int, Optional[str]]:
+    """Get product count and concatenated text from in-memory full_docs store.
+
+    Reads directly from the in-memory dict on every call (~0.03ms for 81 products),
+    so it always reflects the latest state even after document inserts/deletes.
+    """
+    try:
+        docs_data = rag.full_docs._data
+        if not docs_data:
+            return 0, None
+        products = [doc.get("content", "") for doc in docs_data.values() if doc.get("content")]
+        if not products:
+            return 0, None
+        return len(products), "\n\n---\n\n".join(products)
+    except Exception:
+        return -1, None  # unknown, fall through to graph mode
+
+
+async def classify_query_mode(
+    query: str,
+    rag: Any,
+    classification_cache: Any = None,
+) -> Tuple[str, str]:
+    """Classify query intent and return (mode, reason).
+
+    Uses LLM to select the optimal retrieval mode for the query.
+    Checks for small catalog bypass first. Results are cached per query hash.
+
+    Args:
+        query: The user's query text.
+        rag: The LightRAG/ContextGraph instance (needs llm_model_func, global_config, full_docs).
+        classification_cache: Optional cache override. If None, uses rag.llm_response_cache.
+
+    Returns:
+        Tuple of (selected_mode, mode_reason). Mode is one of:
+        "local", "global", "hybrid", "mix", "cgr3", or "catalog_bypass".
+    """
+    global_config = rag.global_config if hasattr(rag, "global_config") else {}
+    llm_func = global_config.get("llm_model_func")
+    if not llm_func:
+        llm_func = rag.llm_model_func
+
+    # Step 0: Check catalog size — skip graph for small catalogs
+    catalog_size, catalog_text = get_catalog_info(rag)
+    if 0 < catalog_size < SMALL_CATALOG_THRESHOLD and catalog_text:
+        logger.info(f"[auto] Small catalog ({catalog_size} products) — bypassing graph, sending full catalog to LLM")
+        return "catalog_bypass", f"small catalog ({catalog_size} products < {SMALL_CATALOG_THRESHOLD} threshold), full catalog sent to LLM"
+
+    # Step 1: Classify query to pick optimal mode
+    classification_prompt = MODE_CLASSIFICATION_PROMPT.format(query=query)
+    hashing_kv = classification_cache if classification_cache is not None else rag.llm_response_cache
+
+    class_hash = compute_args_hash("auto_mode", query)
+    cached = await handle_cache(
+        hashing_kv, class_hash, query, "auto_mode", cache_type="mode_classification"
+    )
+
+    if cached is not None:
+        cached_response, _ = cached
+        try:
+            classification = json_repair.loads(cached_response)
+            selected_mode = classification.get("mode", "hybrid")
+            mode_reason = classification.get("reason", "cached classification")
+            logger.info(f"[auto] Cache hit: mode={selected_mode} for query: {query[:60]}")
+        except Exception:
+            selected_mode = "hybrid"
+            mode_reason = "cache parse error, defaulting to hybrid"
+    else:
+        try:
+            classify_func = partial(llm_func, _priority=5)
+            raw_response = await classify_func(classification_prompt)
+
+            classification = json_repair.loads(raw_response)
+            selected_mode = classification.get("mode", "hybrid")
+            mode_reason = classification.get("reason", "no reason provided")
+
+            # Validate mode — naive excluded (poor quality on product queries)
+            if selected_mode not in VALID_AUTO_MODES:
+                logger.warning(f"[auto] LLM returned '{selected_mode}', rerouting to hybrid")
+                mode_reason = f"LLM suggested '{selected_mode}', rerouted to hybrid"
+                selected_mode = "hybrid"
+
+            logger.info(f"[auto] Selected mode={selected_mode} reason='{mode_reason}' for query: {query[:60]}")
+
+            # Cache the classification
+            await save_to_cache(
+                hashing_kv,
+                CacheData(
+                    args_hash=class_hash,
+                    content=json.dumps(classification),
+                    prompt=query,
+                    mode="auto_mode",
+                    cache_type="mode_classification",
+                ),
+            )
+        except Exception as e:
+            logger.warning(f"[auto] Mode classification failed ({e}), defaulting to hybrid")
+            selected_mode = "hybrid"
+            mode_reason = f"classification error: {str(e)[:80]}, defaulted to hybrid"
+
+    return selected_mode, mode_reason
 
 
 def create_query_routes(rag, api_key: Optional[str] = None, top_k: int = 60):
@@ -1154,6 +1302,121 @@ def create_query_routes(rag, api_key: Optional[str] = None, top_k: int = 60):
                 )
         except Exception as e:
             logger.error(f"Error processing data query: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    class AutoQueryRequest(BaseModel):
+        query: str = Field(min_length=3, description="The query text")
+        top_k: Optional[int] = Field(ge=1, default=None, description="Number of top items to retrieve")
+        conversation_history: Optional[List[Dict[str, Any]]] = Field(default=None, description="Conversation history for context")
+        user_prompt: Optional[str] = Field(default=None, description="User-provided prompt override")
+        include_references: Optional[bool] = Field(default=True, description="Include reference list in response")
+        response_type: Optional[str] = Field(default=None, description="Response format")
+
+        @field_validator("query", mode="after")
+        @classmethod
+        def query_strip_after(cls, query: str) -> str:
+            return query.strip()
+
+    class AutoQueryResponse(BaseModel):
+        response: str = Field(description="The generated response")
+        mode: str = Field(description="The mode that was automatically selected")
+        mode_reason: str = Field(description="Why this mode was selected")
+        latency_ms: int = Field(description="Total latency including mode selection")
+        references: Optional[List[ReferenceItem]] = Field(default=None, description="Reference list")
+
+    @router.post(
+        "/query/auto",
+        response_model=AutoQueryResponse,
+        dependencies=[Depends(combined_auth)],
+        responses={
+            200: {"description": "Auto-routed query response with mode selection metadata"},
+            500: {"description": "Internal Server Error"},
+        },
+    )
+    async def query_auto(request: AutoQueryRequest):
+        """
+        Smart query endpoint that automatically selects the optimal retrieval mode.
+
+        Uses a lightweight LLM call to classify the query intent, then routes to
+        the best mode (local/global/hybrid/naive/mix/cgr3) for that query type.
+
+        Returns the response along with which mode was chosen and why.
+        """
+        import time as _time
+
+        t_start = _time.time()
+        try:
+            # Step 0+1: Classify query mode (handles catalog bypass + LLM classification + caching)
+            selected_mode, mode_reason = await classify_query_mode(query=request.query, rag=rag)
+
+            # Handle catalog bypass — needs LLM call with full catalog text
+            if selected_mode == "catalog_bypass":
+                global_config = rag.global_config if hasattr(rag, "global_config") else {}
+                llm_func = global_config.get("llm_model_func")
+                if not llm_func:
+                    llm_func = rag.llm_model_func
+                _, catalog_text = get_catalog_info(rag)
+                system_prompt = CATALOG_BYPASS_SYSTEM_PROMPT.format(catalog=catalog_text)
+                bypass_func = partial(llm_func, _priority=3)
+                response_content = await bypass_func(
+                    request.query,
+                    system_prompt=system_prompt,
+                )
+                total_ms = int((_time.time() - t_start) * 1000)
+                return AutoQueryResponse(
+                    response=response_content,
+                    mode="catalog_bypass",
+                    mode_reason=mode_reason,
+                    latency_ms=total_ms,
+                    references=None,
+                )
+
+            # Step 2: Execute query with selected mode
+            if selected_mode == "cgr3":
+                # CGR3 uses a dedicated method, returns a string
+                response_content = await rag.cgr3_query(
+                    query=request.query,
+                    mode="hybrid",
+                    max_iterations=3,
+                    top_k=request.top_k or 30,
+                )
+                references = []  # CGR3 collects context internally, no per-chunk refs
+            else:
+                param = QueryParam(
+                    mode=selected_mode,
+                    stream=False,
+                )
+                if request.top_k is not None:
+                    param.top_k = request.top_k
+                if request.conversation_history is not None:
+                    param.conversation_history = request.conversation_history
+                if request.user_prompt is not None:
+                    param.user_prompt = request.user_prompt
+                if request.response_type is not None:
+                    param.response_type = request.response_type
+
+                result = await rag.aquery_llm(request.query, param=param)
+
+                llm_response = result.get("llm_response", {})
+                data = result.get("data", {})
+                references = data.get("references", [])
+
+                response_content = llm_response.get("content", "")
+
+            if not response_content:
+                response_content = "No relevant context found for the query."
+
+            total_ms = int((_time.time() - t_start) * 1000)
+
+            return AutoQueryResponse(
+                response=response_content,
+                mode=selected_mode,
+                mode_reason=mode_reason,
+                latency_ms=total_ms,
+                references=references if request.include_references else None,
+            )
+        except Exception as e:
+            logger.error(f"Error processing auto query: {str(e)}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
     return router

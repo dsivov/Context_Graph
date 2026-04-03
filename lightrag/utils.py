@@ -1466,6 +1466,45 @@ async def save_to_cache(hashing_kv, cache_data: CacheData):
     await hashing_kv.upsert({flattened_key: cache_entry})
 
 
+async def invalidate_query_cache(hashing_kv) -> int:
+    """Remove all query and mode_classification cache entries.
+
+    Called when documents are inserted or deleted so that stale
+    query responses are not served from cache.
+
+    Preserves 'extract' and 'keywords' cache entries since those
+    are not affected by catalog changes.
+
+    Returns:
+        Number of cache entries removed.
+    """
+    if hashing_kv is None:
+        return 0
+
+    invalidate_types = {":query:", ":mode_classification:"}
+    try:
+        async with hashing_kv._storage_lock:
+            keys_to_remove = [
+                k for k in hashing_kv._data
+                if any(ct in k for ct in invalidate_types)
+            ]
+            for k in keys_to_remove:
+                del hashing_kv._data[k]
+
+        if keys_to_remove:
+            from lightrag.kg.shared_storage import set_all_update_flags
+            await set_all_update_flags(
+                hashing_kv.namespace, workspace=hashing_kv.workspace
+            )
+            logger.info(
+                f"[{hashing_kv.workspace}] Invalidated {len(keys_to_remove)} query cache entries"
+            )
+        return len(keys_to_remove)
+    except Exception as e:
+        logger.warning(f"Cache invalidation failed: {e}")
+        return 0
+
+
 def safe_unicode_decode(content):
     # Regular expression to find all Unicode escape sequences of the form \uXXXX
     unicode_escape_pattern = re.compile(r"\\u([0-9a-fA-F]{4})")
@@ -2647,6 +2686,8 @@ async def apply_rerank_if_enabled(
 
     try:
         # Extract document content for reranking
+        # Truncate to stay within the reranker's per-document character limit
+        rerank_max_chars = int(os.environ.get("RERANK_MAX_TOKENS_PER_DOC", "4096"))
         document_texts = []
         for doc in retrieved_docs:
             # Try multiple possible content fields
@@ -2657,6 +2698,8 @@ async def apply_rerank_if_enabled(
                 or doc.get("document")
                 or str(doc)
             )
+            if len(content) > rerank_max_chars:
+                content = content[:rerank_max_chars]
             document_texts.append(content)
 
         # Call the new rerank function that returns index-based results

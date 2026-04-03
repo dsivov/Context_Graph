@@ -157,6 +157,14 @@ class QueryParam:
     It's purpose is the let user customize the way LLM generate the response.
     """
 
+    context_format: Literal["annotated", "legacy"] = os.getenv(
+        "CONTEXT_FORMAT", "annotated"
+    )
+    """Controls how retrieved data is formatted for the LLM:
+    - "annotated": Source chunks annotated with inline entity/relation/quadruple metadata (default).
+    - "legacy": Three separate JSON blocks (entities, relations, chunks).
+    """
+
     enable_rerank: bool = os.getenv("RERANK_BY_DEFAULT", "true").lower() == "true"
     """Enable reranking for retrieved text chunks. If True but no rerank model is configured, a warning will be issued.
     Default is True to enable reranking when rerank model is available.

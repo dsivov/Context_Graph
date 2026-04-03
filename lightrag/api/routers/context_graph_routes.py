@@ -92,6 +92,20 @@ class RelationContextData(BaseModel):
         default=None,
         description="Numerical data: amounts, percentages, counts.",
     )
+
+    @field_validator("quantitative_data", "decision_trace", "provenance", "temporal_info", mode="before")
+    @classmethod
+    def coerce_to_str(cls, v):
+        if isinstance(v, list):
+            return ", ".join(str(item) for item in v)
+        return v
+
+    @field_validator("supporting_sentences", mode="before")
+    @classmethod
+    def coerce_to_list(cls, v):
+        if isinstance(v, str):
+            return [v]
+        return v
     decision_trace: Optional[str] = Field(
         default=None,
         description="Rationale, exception, or approval behind this relationship.",
@@ -206,6 +220,30 @@ class DecisionsListResponse(BaseModel):
     decisions: List[DecisionResult] = Field(
         description="List of decision-bearing edges."
     )
+
+
+class IngestDecisionSummaryRequest(BaseModel):
+    """Request body for ingesting an aggregated decision summary as a document."""
+
+    text: str = Field(
+        description="Natural-language summary of a group of related decisions."
+    )
+    category: str = Field(
+        default="general",
+        description="Grouping label (e.g. 'by_vehicle', 'by_outcome'). Used in file_path for identification.",
+    )
+    summary_id: Optional[str] = Field(
+        default=None,
+        description="Stable document ID for upsert semantics. If omitted, derived from text hash.",
+    )
+
+
+class IngestDecisionSummaryResponse(BaseModel):
+    """Response after ingesting a decision summary."""
+
+    status: str = Field(description="'ok' on success.")
+    track_id: str = Field(description="Tracking ID for processing status.")
+    summary_id: str = Field(description="Document ID assigned to the summary.")
 
 
 class PrecedentResult(BaseModel):
@@ -674,6 +712,76 @@ def create_context_graph_routes(
             raise
         except Exception as e:
             logger.error(f"emit_decision error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # ── Decision summary ingestion ───────────────────────────────────────────
+
+    @router.post(
+        "/graph/decisions/ingest-summary",
+        response_model=IngestDecisionSummaryResponse,
+        dependencies=[Depends(combined_auth)],
+        summary="Ingest an aggregated decision summary as a searchable document",
+        responses={
+            200: {
+                "description": "Decision summary ingested and queued for processing.",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "status": "ok",
+                            "track_id": "insert_1710000000000_abc",
+                            "summary_id": "dsum-a1b2c3d4e5",
+                        }
+                    }
+                },
+            },
+            503: {"description": "Context Graph mode is not enabled."},
+        },
+    )
+    async def ingest_decision_summary(request: IngestDecisionSummaryRequest):
+        """
+        Ingest an **aggregated decision summary** as a standard document.
+
+        Unlike `/graph/decision/emit` which writes individual edges to a
+        separate decisions vector store, this endpoint pipes the summary text
+        through the full ingestion pipeline — creating chunks, entity/relation
+        embeddings, and graph nodes.  This makes the summary discoverable by
+        standard `/query` and CGR3 queries.
+
+        The **caller** is responsible for aggregating raw decisions into
+        meaningful natural-language summaries.  This endpoint is domain-agnostic.
+
+        **Example request:**
+        ```json
+        {
+            "text": "Out of 47 discount requests for sedans, 38 were approved (81%)...",
+            "category": "by_vehicle_type",
+            "summary_id": "sedan-discount-patterns"
+        }
+        ```
+
+        **Requires:** `USE_CONTEXT_GRAPH=true` in server configuration.
+        """
+        _require_context_graph(rag)
+        try:
+            from lightrag.utils import compute_mdhash_id
+
+            summary_id = request.summary_id or compute_mdhash_id(
+                request.text, prefix="dsum-"
+            )
+            track_id = await rag.ingest_decision_summary(
+                text=request.text,
+                category=request.category,
+                summary_id=summary_id,
+            )
+            return IngestDecisionSummaryResponse(
+                status="ok",
+                track_id=track_id,
+                summary_id=summary_id,
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"ingest_decision_summary error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
     # ── Precedent search ──────────────────────────────────────────────────────

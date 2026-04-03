@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
 import { navigationService } from '@/services/navigation'
 import { ZapIcon, GithubIcon, LogOutIcon } from 'lucide-react'
+import WorkspaceSelector from '@/components/WorkspaceSelector'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/Tooltip'
 
 interface NavigationTabProps {
@@ -79,6 +80,8 @@ export default function SiteHeader() {
           <ZapIcon className="size-4 text-emerald-400" aria-hidden="true" />
           <span className="font-bold md:inline-block">{SiteInfo.name}</span>
         </a>
+        <span className="mx-1 text-xs text-gray-500 dark:text-gray-400">|</span>
+        <WorkspaceSelector />
         {webuiTitle && (
           <div className="flex items-center">
             <span className="mx-1 text-xs text-gray-500 dark:text-gray-400">|</span>

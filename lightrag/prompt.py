@@ -275,6 +275,62 @@ Consider the conversation history if provided to maintain conversational flow an
 {context_data}
 """
 
+PROMPTS["rag_response_annotated"] = """---Role---
+
+You are an expert AI assistant specializing in synthesizing information from a provided knowledge base. Your primary function is to answer user queries accurately by ONLY using the information within the provided **Context**.
+
+---Goal---
+
+Generate a comprehensive, well-structured answer to the user query.
+The answer must integrate relevant facts from the Annotated Source Documents found in the **Context**.
+Each source document includes the original text followed by structured knowledge (entities, relationships, and decision context) extracted from it. Use both the prose text and the structured annotations to build your response.
+Consider the conversation history if provided to maintain conversational flow and avoid repeating information.
+
+---Instructions---
+
+1. Step-by-Step Instruction:
+  - Carefully determine the user's query intent in the context of the conversation history to fully understand the user's information need.
+  - For each Annotated Source Document, read both the source text AND the Extracted Knowledge section. The annotations highlight key entities, their relationships, and any decision context (temporal validity, approval chains, quantitative data) that enriches the source text.
+  - Weave the extracted facts into a coherent and logical response. Your own knowledge must ONLY be used to formulate fluent sentences and connect ideas, NOT to introduce any external information.
+  - Track the reference_id of the document chunk which directly support the facts presented in the response. Correlate reference_id with the entries in the `Reference Document List` to generate the appropriate citations.
+  - Generate a references section at the end of the response. Each reference document must directly support the facts presented in the response.
+  - Do not generate anything after the reference section.
+
+2. Content & Grounding:
+  - Strictly adhere to the provided context from the **Context**; DO NOT invent, assume, or infer any information not explicitly stated.
+  - If the answer cannot be found in the **Context**, state that you do not have enough information to answer. Do not attempt to guess.
+  - When decision context is available (approval chains, temporal validity, confidence scores), incorporate these details to provide authoritative answers.
+
+3. Formatting & Language:
+  - The response MUST be in the same language as the user query.
+  - The response MUST utilize Markdown formatting for enhanced clarity and structure (e.g., headings, bold text, bullet points).
+  - The response should be presented in {response_type}.
+
+4. References Section Format:
+  - The References section should be under heading: `### References`
+  - Reference list entries should adhere to the format: `* [n] Document Title`. Do not include a caret (`^`) after opening square bracket (`[`).
+  - The Document Title in the citation must retain its original language.
+  - Output each citation on an individual line
+  - Provide maximum of 5 most relevant citations.
+  - Do not generate footnotes section or any comment, summary, or explanation after the references.
+
+5. Reference Section Example:
+```
+### References
+
+- [1] Document Title One
+- [2] Document Title Two
+- [3] Document Title Three
+```
+
+6. Additional Instructions: {user_prompt}
+
+
+---Context---
+
+{context_data}
+"""
+
 PROMPTS["naive_rag_response"] = """---Role---
 
 You are an expert AI assistant specializing in synthesizing information from a provided knowledge base. Your primary function is to answer user queries accurately by ONLY using the information within the provided **Context**.
@@ -349,6 +405,20 @@ Document Chunks (Each entry has a reference_id refer to the `Reference Document 
 ```
 
 Reference Document List (Each entry starts with a [reference_id] that corresponds to entries in the Document Chunks):
+
+```
+{reference_list_str}
+```
+
+"""
+
+PROMPTS["kg_annotated_context"] = """
+Annotated Source Documents (each source chunk is followed by structured knowledge extracted from it):
+
+{annotated_chunks_str}
+
+{additional_graph_facts_str}
+Reference Document List (Each entry starts with a [reference_id] that corresponds to entries in the Annotated Source Documents):
 
 ```
 {reference_list_str}
@@ -531,6 +601,49 @@ relation{tuple_delimiter}Barack Obama{tuple_delimiter}Affordable Care Act{tuple_
 {completion_delimiter}
 
 """,
+    """<Entity_types>
+["Person","Organization","LossReason","Objection","Competitor","Concept","Artifact"]
+
+<Input Text>
+```
+Sales Conversation Pattern: Lost Deal
+Company: TechGadgets
+Conversation Type: Purchasing Assistance
+Outcome: Lost (ClosedLost)
+Period: January 2026
+Value Range: 1,000-2,000
+Products Discussed: Premium Wireless Speaker
+Conversation Length: 14 messages
+
+## Conversation Transcript
+
+**Customer:** Hi, I'm interested in the Premium Wireless Speaker. What's the best price you can offer?
+
+**Sales Agent:** The Premium Wireless Speaker is listed at $1,499. It's our top-rated product with excellent reviews.
+
+**Customer:** That's quite expensive. I saw the SoundMax Pro from AudioRival for $999 with similar features.
+
+**Sales Agent:** Our product has superior build quality and longer warranty coverage.
+
+**Customer:** I understand, but the price difference is significant. Can you match their price or offer a discount?
+
+**Sales Agent:** Unfortunately, we can't match competitor pricing. Our standard policy doesn't allow discounts beyond 5%.
+
+**Customer:** That's not enough. I'll go with AudioRival then. Thanks anyway.
+```
+
+<Output>
+entity{tuple_delimiter}Premium Wireless Speaker{tuple_delimiter}artifact{tuple_delimiter}Premium Wireless Speaker is a top-rated product by TechGadgets listed at $1,499, discussed in a lost sales conversation.
+entity{tuple_delimiter}AudioRival{tuple_delimiter}competitor{tuple_delimiter}AudioRival is a competitor offering the SoundMax Pro at $999, cited by the customer as an alternative to the Premium Wireless Speaker.
+entity{tuple_delimiter}SoundMax Pro{tuple_delimiter}artifact{tuple_delimiter}SoundMax Pro is a competing product from AudioRival priced at $999 with features similar to the Premium Wireless Speaker.
+entity{tuple_delimiter}Price Too High{tuple_delimiter}lossreason{tuple_delimiter}The customer found the $1,499 price too high compared to the competitor's $999 offering, a $500 price gap that could not be bridged by the 5% maximum discount policy.
+entity{tuple_delimiter}Competitor Pricing Objection{tuple_delimiter}objection{tuple_delimiter}The customer objected to the price by citing a competitor (AudioRival SoundMax Pro at $999) offering similar features at a lower price. The objection was not resolved — the agent could not match or sufficiently close the price gap.
+relation{tuple_delimiter}Premium Wireless Speaker{tuple_delimiter}SoundMax Pro{tuple_delimiter}competitive pressure, price comparison{tuple_delimiter}The customer compared the Premium Wireless Speaker ($1,499) against the SoundMax Pro ($999), finding the competitor's price more attractive.{tuple_delimiter}{{"supporting_sentences": ["I saw the SoundMax Pro from AudioRival for $999 with similar features", "the price difference is significant"], "temporal_info": "January 2026", "quantitative_data": "$1,499 vs $999 — $500 price gap", "decision_trace": "Customer chose competitor due to unresolvable price difference. Agent limited to 5% discount by policy.", "approved_by": null, "approved_via": null, "valid_from": null, "valid_until": null, "policy_ref": "Standard 5% maximum discount policy", "provenance": "Lost deal conversation, January 2026", "confidence_score": 0.95}}
+relation{tuple_delimiter}Price Too High{tuple_delimiter}Premium Wireless Speaker{tuple_delimiter}deal loss, pricing failure{tuple_delimiter}The high price of the Premium Wireless Speaker ($1,499) was the primary reason for losing this deal, as the agent could not offer a competitive discount.{tuple_delimiter}{{"supporting_sentences": ["That's quite expensive", "Can you match their price or offer a discount?", "That's not enough. I'll go with AudioRival then."], "temporal_info": "January 2026", "quantitative_data": "$1,499 price, 5% max discount ($74.95 off), competitor at $999", "decision_trace": "Deal lost because discount policy capped at 5% could not bridge $500 price gap to competitor", "approved_by": null, "approved_via": null, "valid_from": null, "valid_until": null, "policy_ref": "Standard 5% maximum discount policy", "provenance": "Lost deal conversation", "confidence_score": 0.96}}
+relation{tuple_delimiter}Competitor Pricing Objection{tuple_delimiter}AudioRival{tuple_delimiter}objection trigger, competitor reference{tuple_delimiter}The customer's pricing objection was triggered by AudioRival's lower-priced SoundMax Pro offering. The objection was not resolved.{tuple_delimiter}{{"supporting_sentences": ["I saw the SoundMax Pro from AudioRival for $999 with similar features"], "temporal_info": "January 2026", "quantitative_data": "$999 competitor price", "decision_trace": "Unresolved objection — agent could not match competitor pricing, leading to deal loss", "approved_by": null, "approved_via": null, "valid_from": null, "valid_until": null, "policy_ref": null, "provenance": "Lost deal conversation", "confidence_score": 0.94}}
+{completion_delimiter}
+
+""",
 ]
 
 PROMPTS["cg_entity_continue_extraction_user_prompt"] = """---Task---
@@ -551,35 +664,13 @@ Based on the last extraction task, identify and extract any **missed or incorrec
 <Output>
 """
 
-PROMPTS["cgr3_rank_prompt"] = """---Role---
-You are a Context Graph Reasoning Specialist performing the **Rank** step of the CGR3 paradigm.
-
----Task---
-Given a user query and a list of candidate entities/relationships with their contexts, rank the candidates by relevance to the query. Return a JSON array of candidate IDs ordered from most to least relevant.
-
----Query---
-{query}
-
----Candidates---
-{candidates}
-
----Instructions---
-1. Evaluate each candidate based on:
-   - Semantic relevance to the query
-   - Quality and specificity of Relation Context (supporting_sentences, decision_trace)
-   - Temporal applicability (temporal_info relative to query context)
-   - Confidence score
-2. Return ONLY a valid JSON array of candidate IDs, ordered most-relevant first.
-3. Example output: ["id_3", "id_1", "id_5", "id_2", "id_4"]
-
----Output---
-"""
-
 PROMPTS["cgr3_reason_prompt"] = """---Role---
-You are a Context Graph Reasoning Specialist performing the **Reason** step of the CGR3 paradigm.
+You are a knowledge graph reasoning specialist performing iterative Retrieve-Rank-Reason analysis.
 
 ---Task---
-Determine whether the retrieved context is sufficient to answer the user query. If sufficient, provide the answer. If not, identify what additional information is needed.
+Given a user query and retrieved context from a knowledge graph and document chunks, do TWO things:
+1. Determine if the context is sufficient to give a comprehensive answer.
+2. If sufficient, write a detailed answer. If not, identify exactly what's missing.
 
 ---Query---
 {query}
@@ -588,13 +679,25 @@ Determine whether the retrieved context is sufficient to answer the user query. 
 {context}
 
 ---Instructions---
-1. Assess whether the context contains enough information to fully answer the query.
-2. Return a JSON object with:
-   - `"is_sufficient"`: true if context is sufficient, false if more retrieval is needed
-   - `"answer"`: The answer to the query (if is_sufficient is true), or null
-   - `"missing_info"`: Description of what information is still needed (if is_sufficient is false), or null
-   - `"follow_up_entities"`: List of entity names to use as seeds for next retrieval iteration (if is_sufficient is false), or []
-3. Output ONLY valid JSON, nothing else.
+Analyze the retrieved context carefully. Consider entities, relationships, text chunks, and any relation context metadata (temporal info, decision traces, provenance).
+
+Return ONLY a valid JSON object (no markdown, no explanation outside JSON):
+
+If the context IS sufficient to answer comprehensively:
+```
+{{"is_sufficient": true, "answer": "<your detailed answer using specific facts, numbers, and names from the context>", "missing_info": null, "follow_up_entities": []}}
+```
+
+If the context is NOT sufficient:
+```
+{{"is_sufficient": false, "answer": null, "missing_info": "<specific description of what facts/details are missing>", "follow_up_entities": ["<entity or topic name 1>", "<entity or topic name 2>"]}}
+```
+
+Important:
+- When answering, be thorough — include specific details, numbers, comparisons, and names from the context.
+- When identifying missing info, be specific about what concepts or entities to search for next.
+- follow_up_entities should be concrete nouns/names likely to exist in the knowledge graph.
+- Err on the side of "sufficient" — if you have enough to give a useful answer, do so.
 
 ---Output---
 """
