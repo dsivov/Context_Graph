@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context Graph — Technical Field Guide</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  /* accents: a=graph/entities, b=RelationContext(rc), c=retrieval/CGR3, ctrl=API/decisions */
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1180px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 80% -10%, rgba(25,184,154,.10), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(91,141,239,.08), transparent 55%), var(--bg);
+  color:var(--ink);font:16px/1.65 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+
+.hero{padding:64px 22px 30px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(25,184,154,.06),transparent)}
+.hero-inner{max-width:var(--maxw);margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,52px);line-height:1.05;margin:.3em 0 .2em;
+  background:linear-gradient(92deg,#cfe0ff,#8fd9c9 55%,#ffd79a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(16px,2.1vw,20px);color:var(--ink-soft);max-width:880px}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:248px 1fr;gap:34px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(25,184,154,.18),transparent);color:#fff;border-left:2px solid var(--b)}
+
+main{min-width:0}
+section{margin:0 0 46px;scroll-margin-top:20px}
+h2{font-size:clamp(21px,3vw,28px);margin:0 0 4px;display:flex;align-items:baseline;gap:12px}
+.sec-num{font-family:var(--mono);font-size:14px;color:var(--b);border:1px solid var(--line);border-radius:8px;padding:2px 8px;background:var(--panel)}
+.sec-sub{color:var(--ink-faint);margin:0 0 18px;font-size:15px}
+h3{font-size:18px;margin:26px 0 8px}
+p{margin:.6em 0}
+.small{font-size:13.5px;color:var(--ink-faint)}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.card+.card{margin-top:14px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3,.g4{grid-template-columns:1fr}}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:14px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)} .callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)} .callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(25,184,154,.55);background:rgba(25,184,154,.10)} .callout.key .clabel{color:#7fe3cf}
+
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--a)}
+.stat.b::after{background:var(--b)} .stat.c::after{background:var(--c)} .stat.ctrl::after{background:var(--ctrl)}
+.stat .v{font-size:28px;font-weight:800;letter-spacing:-.02em} .stat .l{color:var(--ink-faint);font-size:13px;margin-top:3px}
+
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--line)}
+.m-get{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.m-post{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.cg{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.std{background:rgba(123,132,153,.14);color:var(--ink-soft)}
+
+dl.kvs{display:grid;grid-template-columns:130px 1fr;gap:6px 14px;margin:0}
+dl.kvs dt{color:var(--ink-faint);font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+dl.kvs dd{margin:0;color:var(--ink)}
+
+figure{margin:16px 0}
+figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13px;margin-top:8px} figcaption b{color:var(--ink-soft)}
+
+details.fold{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin:12px 0;overflow:hidden}
+details.fold>summary{cursor:pointer;padding:12px 16px;font-weight:600;list-style:none;display:flex;gap:10px;align-items:center}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::before{content:"▸";color:var(--b)} details.fold[open]>summary::before{content:"▾"}
+.foldbody{padding:4px 16px 16px;border-top:1px solid var(--line-soft)}
+
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{color:#d6deec}
+.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+.tree{font-size:13.5px;line-height:1.7} .tree .d{color:#8fd9c9} .tree .note{color:var(--ink-faint)}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 60px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Technical Field Guide</div>
+    <h1>Context Graph</h1>
+    <p class="lede">A decision-aware knowledge-graph system built on
+      <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a>. It extends triples
+      <code>(h, r, t)</code> into contextual quadruples <code>(h, r, t, rc)</code> — attaching a full decision record
+      to every edge — and adds CGR3 multi-hop reasoning, runtime decision capture, precedent search, a REST API, and an
+      MCP server.</p>
+    <div class="hero-tags">
+      <span class="tag"><b>(h, r, t, rc)</b> quadruples</span>
+      <span class="tag"><b>11</b>-field RelationContext</span>
+      <span class="tag"><b>CGR3</b> reasoning</span>
+      <span class="tag"><b>9</b> storage backends</span>
+      <span class="tag"><b>MCP</b> + REST</span>
+      <span class="tag">multi-tenant workspaces</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">Contents</div>
+  <ol>
+    <li><a href="#summary">Executive summary</a></li>
+    <li><a href="#components">Components at a glance</a></li>
+    <li><a href="#architecture">End-to-end architecture</a></li>
+    <li><a href="#model">The quadruple &amp; RelationContext</a></li>
+    <li><a href="#ingestion">Ingestion: extract &amp; emit</a></li>
+    <li><a href="#query">Querying &amp; CGR3</a></li>
+    <li><a href="#decisions">Decisions &amp; precedents</a></li>
+    <li><a href="#rest">REST API reference</a></li>
+    <li><a href="#mcp">MCP server</a></li>
+    <li><a href="#storage">Storage &amp; LLM providers</a></li>
+    <li><a href="#workspaces">Multi-tenancy</a></li>
+    <li><a href="#config">Configuration</a></li>
+    <li><a href="#repo">Repository map</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- 1 -->
+<section id="summary">
+  <h2><span class="sec-num">01</span> Executive summary</h2>
+  <p class="sec-sub">What Context Graph is, and the one idea everything else hangs on.</p>
+  <p>Standard RAG retrieves text chunks; standard knowledge graphs store <code>(subject, predicate, object)</code>
+  triples. Neither records <i>why</i> a relationship exists. <b>Context Graph (CG)</b> attaches a
+  <b>RelationContext</b> (<code>rc</code>) to every edge — who approved it, why, via which channel, under which policy,
+  for how long, with what evidence and confidence. The graph becomes a <b>system of decision</b>, not just a system of
+  record, and you can query the lineage, not only the fact.</p>
+
+  <div class="grid g4" style="margin:18px 0">
+    <div class="stat b"><div class="v">4th</div><div class="l">element on every edge — the decision record</div></div>
+    <div class="stat"><div class="v">11</div><div class="l">RelationContext fields</div></div>
+    <div class="stat c"><div class="v">6</div><div class="l">query modes + CGR3 multi-hop</div></div>
+    <div class="stat ctrl"><div class="v">REST+MCP</div><div class="l">API surfaces, workspace-isolated</div></div>
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">◆ The one idea</div>
+    A triple says <i>Sarah Chen — APPROVES → MegaCorp</i>. A quadruple adds <code>rc</code>: "20% discount, in-person,
+    valid through 2024-12-31, under DiscountPolicy_Standard, confidence 0.97." Now "who approved &gt;15% discounts in Q3
+    and are they still valid?" is a query, not a research project.
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="components">
+  <h2><span class="sec-num">02</span> Components at a glance</h2>
+  <p class="sec-sub">Five moving parts, five jobs.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Component</th><th>Job</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill cg">ContextGraph</span></td><td>Orchestrator — subclass of LightRAG; insert, query, emit, find precedents, CGR3.</td><td class="mono">lightrag/context_graph.py</td></tr>
+      <tr><td><span class="pill cg">RelationContext</span></td><td>The 11-field decision record carried by each edge.</td><td class="mono">lightrag/context_graph_types.py</td></tr>
+      <tr><td><span class="pill cg">CGR3</span></td><td>Retrieve → Rank → Reason iterative multi-hop query loop.</td><td class="mono">context_graph.py · operate.py</td></tr>
+      <tr><td><span class="pill cg">Decision capture</span></td><td>Runtime <code>emit_decision_trace</code> + semantic precedent search.</td><td class="mono">context_graph.py</td></tr>
+      <tr><td><span class="pill std">LightRAG core</span></td><td>Chunking, extraction, embeddings, storage, query modes (inherited).</td><td class="mono">lightrag/lightrag.py · operate.py · kg/</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 3 -->
+<section id="architecture">
+  <h2><span class="sec-num">03</span> End-to-end architecture</h2>
+  <p class="sec-sub">From document (or live decision) to a grounded, decision-aware answer.</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 980 360" role="img" aria-label="Architecture">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
+        <linearGradient id="gA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22314f"/><stop offset="1" stop-color="#1a2236"/></linearGradient>
+        <linearGradient id="gB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#173a34"/><stop offset="1" stop-color="#13251f"/></linearGradient>
+        <linearGradient id="gC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a2f17"/><stop offset="1" stop-color="#241c10"/></linearGradient>
+        <linearGradient id="gP" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2e2347"/><stop offset="1" stop-color="#1d1730"/></linearGradient>
+      </defs>
+      <style>
+        .bx{rx:10;stroke:#39425a;stroke-width:1}
+        .t{fill:#e7ebf3;font:13px "Segoe UI",sans-serif} .ts{fill:#aab3c5;font:11px "Segoe UI",sans-serif}
+        .m{fill:#8fd9c9;font:11px var(--mono),monospace}
+        .ln{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#ar)} .lb{stroke:#19b89a;stroke-width:2.2;fill:none;marker-end:url(#ar)}
+      </style>
+      <!-- inputs -->
+      <rect class="bx" x="30" y="40" width="170" height="44" fill="url(#gC)"/><text class="t" x="115" y="60" text-anchor="middle">Documents</text><text class="ts" x="115" y="76" text-anchor="middle">transcripts · notes</text>
+      <rect class="bx" x="30" y="110" width="170" height="44" fill="url(#gP)"/><text class="t" x="115" y="130" text-anchor="middle">App / agent</text><text class="ts" x="115" y="146" text-anchor="middle">emit_decision_trace</text>
+      <!-- pipeline -->
+      <rect class="bx" x="250" y="30" width="200" height="64" fill="url(#gA)"/><text class="t" x="350" y="54" text-anchor="middle" font-weight="700">Chunk + Extract</text><text class="ts" x="350" y="72" text-anchor="middle">entities · relations · rc (LLM)</text><text class="ts" x="350" y="87" text-anchor="middle">1200-tok chunks</text>
+      <rect class="bx" x="250" y="110" width="200" height="44" fill="url(#gB)"/><text class="t" x="350" y="130" text-anchor="middle">RelationContext</text><text class="ts" x="350" y="146" text-anchor="middle">written directly</text>
+      <path class="ln" d="M202 62 H248"/>
+      <path class="lb" d="M202 132 H248"/>
+      <!-- storage -->
+      <rect class="bx" x="510" y="24" width="210" height="150" fill="url(#gA)"/>
+      <text class="t" x="615" y="46" text-anchor="middle" font-weight="700">Storage (4 layers)</text>
+      <text class="m" x="525" y="70">GRAPH — Neo4j (h,r,t,rc)</text>
+      <text class="m" x="525" y="90">VECTOR — entity/rel/chunk</text>
+      <text class="m" x="525" y="110">&#160;&#160;+ decision-trace index</text>
+      <text class="m" x="525" y="130">KV — docs · chunks · cache</text>
+      <text class="m" x="525" y="150">DOC_STATUS</text>
+      <path class="ln" d="M450 62 C480 70 486 80 508 86"/>
+      <path class="lb" d="M450 132 C480 124 486 116 508 110"/>
+      <!-- query -->
+      <rect class="bx" x="510" y="210" width="210" height="120" fill="url(#gC)"/>
+      <text class="t" x="615" y="232" text-anchor="middle" font-weight="700">Query</text>
+      <text class="ts" x="615" y="252" text-anchor="middle">local·global·hybrid·mix·…</text>
+      <text class="ts" x="615" y="270" text-anchor="middle">+ CGR3 (Retrieve→Rank→Reason)</text>
+      <text class="ts" x="615" y="290" text-anchor="middle">annotated context (rc inline)</text>
+      <path class="ln" d="M615 174 V208"/>
+      <!-- answer + api -->
+      <rect class="bx" x="780" y="40" width="170" height="120" fill="url(#gP)"/>
+      <text class="t" x="865" y="62" text-anchor="middle" font-weight="700">API</text>
+      <text class="ts" x="865" y="82" text-anchor="middle">REST + MCP</text>
+      <text class="ts" x="865" y="100" text-anchor="middle">workspace-isolated</text>
+      <text class="ts" x="865" y="118" text-anchor="middle">X-API-Key auth</text>
+      <text class="ts" x="865" y="140" text-anchor="middle">:9621</text>
+      <path class="ln" d="M722 100 C750 90 756 80 778 78"/>
+      <rect class="bx" x="780" y="240" width="170" height="60" fill="url(#gP)"/>
+      <text class="t" x="865" y="266" text-anchor="middle" font-weight="700">Grounded answer</text>
+      <text class="ts" x="865" y="284" text-anchor="middle">+ decision lineage</text>
+      <path class="lb" d="M722 270 H778"/>
+    </svg>
+    <figcaption><b>Figure 1 —</b> Two ingestion paths feed one graph + vector store; queries (modes or CGR3) read edges
+      with their RelationContext; everything is exposed over REST and MCP, isolated per workspace.</figcaption>
+  </div></figure>
+  <div class="card"><dl class="kvs">
+    <dt>Default LLM</dt><dd>OpenAI <code>gpt-5-mini</code> · embeddings <code>text-embedding-3-large</code> (dim 3072)</dd>
+    <dt>Default graph</dt><dd>Neo4j (label-per-workspace isolation)</dd>
+    <dt>Server</dt><dd><code>lightrag-server</code> on port <code>9621</code></dd>
+    <dt>CG switch</dt><dd><code>USE_CONTEXT_GRAPH=true</code> swaps <code>LightRAG</code> → <code>ContextGraph</code></dd>
+  </dl></div>
+</section>
+
+<!-- 4 -->
+<section id="model">
+  <h2><span class="sec-num">04</span> The quadruple &amp; RelationContext</h2>
+  <p class="sec-sub">The data model that makes everything else possible.</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 900 210" role="img" aria-label="RelationContext groups">
+      <style>.gt{fill:#e7ebf3;font:600 13px "Segoe UI",sans-serif} .gs{fill:#aab3c5;font:11px var(--mono),monospace}</style>
+      <rect class="bx" x="20" y="20" width="210" height="170" fill="url(#gB)"/><text class="gt" x="36" y="44">Evidence</text>
+      <text class="gs" x="36" y="68">supporting_sentences[]</text><text class="gs" x="36" y="88">provenance</text><text class="gs" x="36" y="108">confidence_score</text>
+      <rect class="bx" x="244" y="20" width="200" height="170" fill="url(#gP)"/><text class="gt" x="260" y="44">Authority</text>
+      <text class="gs" x="260" y="68">approved_by</text><text class="gs" x="260" y="88">approved_via</text><text class="gs" x="260" y="108">policy_ref</text>
+      <rect class="bx" x="458" y="20" width="200" height="170" fill="url(#gC)"/><text class="gt" x="474" y="44">Time</text>
+      <text class="gs" x="474" y="68">valid_from</text><text class="gs" x="474" y="88">valid_until</text><text class="gs" x="474" y="108">temporal_info</text>
+      <rect class="bx" x="672" y="20" width="208" height="170" fill="url(#gA)"/><text class="gt" x="688" y="44">Rationale</text>
+      <text class="gs" x="688" y="68">decision_trace</text><text class="gs" x="688" y="88">quantitative_data</text>
+    </svg>
+    <figcaption><b>Figure 2 —</b> The 11 RelationContext fields grouped by what they answer. Each is independently
+      filterable in queries and decision search.</figcaption>
+  </div></figure>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">supporting_sentences</td><td>List[str]</td><td>Verbatim quotes from source documents</td></tr>
+      <tr><td class="mono">temporal_info</td><td>str?</td><td>Free-form validity ("Q4 2026", "since 2020")</td></tr>
+      <tr><td class="mono">quantitative_data</td><td>str?</td><td>Numbers — discount %, budget, counts</td></tr>
+      <tr><td class="mono">decision_trace</td><td>str?</td><td>The <b>why</b> — rationale / exception / override / approval</td></tr>
+      <tr><td class="mono">approved_by</td><td>str?</td><td>Approver entity name</td></tr>
+      <tr><td class="mono">approved_via</td><td>str?</td><td>Channel: slack · zoom · email · in_person · jira · system</td></tr>
+      <tr><td class="mono">valid_from / valid_until</td><td>str?</td><td>ISO-8601 effective / expiry dates</td></tr>
+      <tr><td class="mono">policy_ref</td><td>str?</td><td>Policy name/ID followed or overridden</td></tr>
+      <tr><td class="mono">provenance</td><td>str?</td><td>Source reference — thread ID, doc section, timestamp</td></tr>
+      <tr><td class="mono">confidence_score</td><td>float</td><td>Extraction reliability 0.0–1.0 (default 1.0)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">A 5-field relation (no rc) gets <code>relation_context = null</code> — full backward compatibility with
+  standard LightRAG extraction.</p>
+</section>
+
+<!-- 5 -->
+<section id="ingestion">
+  <h2><span class="sec-num">05</span> Ingestion: extract &amp; emit</h2>
+  <p class="sec-sub">Two paths in; one graph.</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 900 200" role="img" aria-label="Ingestion paths">
+      <style>.t5{fill:#e7ebf3;font:13px "Segoe UI",sans-serif}.s5{fill:#aab3c5;font:11px "Segoe UI",sans-serif}.m5{fill:#8fd9c9;font:11px var(--mono),monospace}.l5{stroke:#19b89a;stroke-width:2.2;fill:none;marker-end:url(#ar)}</style>
+      <rect class="bx" x="40" y="24" width="220" height="50" fill="url(#gC)"/><text class="t5" x="150" y="45" text-anchor="middle">Documents → ainsert()</text><text class="s5" x="150" y="63" text-anchor="middle">LLM extracts entities + rc</text>
+      <rect class="bx" x="40" y="126" width="220" height="50" fill="url(#gP)"/><text class="t5" x="150" y="147" text-anchor="middle">App → emit_decision_trace()</text><text class="s5" x="150" y="165" text-anchor="middle">rc written atomically</text>
+      <rect class="bx" x="350" y="74" width="200" height="52" fill="url(#gB)"/><text class="t5" x="450" y="98" text-anchor="middle">6-field extraction</text><text class="m5" x="450" y="116" text-anchor="middle">…|description|{rc json}</text>
+      <rect class="bx" x="640" y="74" width="220" height="52" fill="url(#gA)"/><text class="t5" x="750" y="98" text-anchor="middle" font-weight="700">Graph + vectors</text><text class="s5" x="750" y="116" text-anchor="middle">edge.relation_context</text>
+      <path class="l5" d="M262 50 C310 64 320 80 348 92"/>
+      <path class="l5" d="M262 150 C320 140 560 120 638 108"/>
+      <path class="l5" d="M552 100 H638"/>
+    </svg>
+    <figcaption><b>Figure 3 —</b> Extraction mines rc from prose (6-field relation format); emission writes rc directly
+      from application code. Both land on the same edges and vector indexes.</figcaption>
+  </div></figure>
+  <h3>Extraction format (6-field relation)</h3>
+<pre><code><span class="cm"># standard LightRAG (5 fields)</span>
+relation&lt;|#|&gt;source&lt;|#|&gt;target&lt;|#|&gt;keywords&lt;|#|&gt;description
+<span class="cm"># Context Graph adds a 6th — a compact RelationContext JSON</span>
+relation&lt;|#|&gt;source&lt;|#|&gt;target&lt;|#|&gt;keywords&lt;|#|&gt;description&lt;|#|&gt;{<span class="str">"decision_trace"</span>:<span class="str">"…"</span>,<span class="str">"approved_by"</span>:<span class="str">"…"</span>,<span class="str">"confidence_score"</span>:<span class="num">0.95</span>}</code></pre>
+  <h3>Emission (runtime, no document)</h3>
+<pre><code><span class="kw">from</span> lightrag.context_graph_types <span class="kw">import</span> RelationContext
+rc = RelationContext(
+    decision_trace=<span class="str">"VP approved 20% discount; 5-yr relationship + competitive pressure"</span>,
+    approved_by=<span class="str">"Sarah Chen"</span>, approved_via=<span class="str">"in_person"</span>,
+    valid_until=<span class="str">"2024-12-31"</span>, policy_ref=<span class="str">"DiscountPolicy_Standard"</span>,
+    quantitative_data=<span class="str">"20% discount"</span>, confidence_score=<span class="num">0.97</span>)
+<span class="kw">await</span> cg.<span class="fn">emit_decision_trace</span>(<span class="str">"Sarah Chen"</span>, <span class="str">"MegaCorp"</span>, <span class="str">"discount_approval"</span>, rc)</code></pre>
+</section>
+
+<!-- 6 -->
+<section id="query">
+  <h2><span class="sec-num">06</span> Querying &amp; CGR3</h2>
+  <p class="sec-sub">Six retrieval modes for single-shot, CGR3 for multi-hop.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Mode</th><th>Strategy</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">local</td><td>Low-level keywords → entities → connected relations → chunks</td></tr>
+      <tr><td class="mono">global</td><td>High-level keywords → relations → connected entities → chunks</td></tr>
+      <tr><td class="mono">hybrid</td><td>local + global combined</td></tr>
+      <tr><td class="mono">naive</td><td>Pure vector similarity over chunks (no graph)</td></tr>
+      <tr><td class="mono">mix</td><td>KG retrieval + vector chunks + reranking (recommended)</td></tr>
+      <tr><td class="mono">bypass</td><td>Skip retrieval; query straight to the LLM</td></tr>
+    </tbody>
+  </table></div>
+  <figure><div class="fig">
+    <svg viewBox="0 0 880 200" role="img" aria-label="CGR3 loop">
+      <style>.t6{fill:#e7ebf3;font:600 14px "Segoe UI",sans-serif}.s6{fill:#aab3c5;font:11px "Segoe UI",sans-serif}.l6{stroke:#f0a73c;stroke-width:2.2;fill:none;marker-end:url(#ar)}</style>
+      <rect class="bx" x="60" y="64" width="180" height="58" fill="url(#gC)"/><text class="t6" x="150" y="88" text-anchor="middle">1 · Retrieve</text><text class="s6" x="150" y="107" text-anchor="middle">entities + edges + rc</text>
+      <rect class="bx" x="345" y="64" width="180" height="58" fill="url(#gC)"/><text class="t6" x="435" y="88" text-anchor="middle">2 · Rank</text><text class="s6" x="435" y="107" text-anchor="middle">LLM orders by relevance</text>
+      <rect class="bx" x="630" y="64" width="180" height="58" fill="url(#gC)"/><text class="t6" x="720" y="88" text-anchor="middle">3 · Reason</text><text class="s6" x="720" y="107" text-anchor="middle">sufficient to answer?</text>
+      <path class="l6" d="M242 93 H343"/><path class="l6" d="M527 93 H628"/>
+      <path class="l6" d="M720 122 C720 165 435 172 250 137 L200 124"/>
+      <text class="s6" x="455" y="168" text-anchor="middle">if not: seed follow_up_entities, repeat (≤ 3 iterations, context deduped)</text>
+    </svg>
+    <figcaption><b>Figure 4 —</b> CGR3 loops up to 3 times; each pass can surface new entities that seed the next
+      retrieval. Edges return with rc, so answers cite the decision lineage.</figcaption>
+  </div></figure>
+<pre><code><span class="kw">from</span> lightrag <span class="kw">import</span> QueryParam
+<span class="cm"># standard query — rc enriches retrieved edges; annotated context by default</span>
+res    = <span class="kw">await</span> cg.<span class="fn">aquery</span>(<span class="str">"Who approved discounts above 15% in Q3?"</span>, param=QueryParam(mode=<span class="str">"hybrid"</span>))
+<span class="cm"># CGR3 multi-hop</span>
+answer = <span class="kw">await</span> cg.<span class="fn">cgr3_query</span>(<span class="str">"Are there precedents for waiving payment terms for a renewal?"</span>)</code></pre>
+  <div class="callout info"><div class="clabel">◆ Annotated context</div>
+    CG renders RelationContext inline in the prompt (the <code>annotated</code> context format, the default for CGR3)
+    rather than hiding it — a comparative benchmark found annotated answers stronger on completeness, usefulness, and
+    grounding than the legacy format.</div>
+</section>
+
+<!-- 7 -->
+<section id="decisions">
+  <h2><span class="sec-num">07</span> Decisions &amp; precedents</h2>
+  <p class="sec-sub">The capabilities a flat graph can't offer.</p>
+  <div class="grid g3">
+    <div class="card"><h3 style="margin-top:0">Emit</h3><p class="small"><code>emit_decision_trace(h, t, relation, rc)</code> records a decision the instant it's made — webhooks, approval bots, workflows. No ingestion.</p></div>
+    <div class="card"><h3 style="margin-top:0">Find precedents</h3><p class="small"><code>find_precedents(...)</code> — semantic search over decision traces: "have we done something like this, and how did it go?"</p></div>
+    <div class="card"><h3 style="margin-top:0">Validity &amp; authority</h3><p class="small"><code>valid_from/until</code> answer "still in force?"; <code>approved_by</code> + <code>policy_ref</code> reconstruct the approval chain.</p></div>
+  </div>
+  <p>These map to dedicated REST endpoints (§8): <code>/graph/decision/emit</code>, <code>/graph/decisions/search</code>,
+  and <code>/graph/decisions</code> (filter by approver, channel, policy, confidence, date).</p>
+</section>
+
+<!-- 8 -->
+<section id="rest">
+  <h2><span class="sec-num">08</span> REST API reference</h2>
+  <p class="sec-sub">All endpoints are workspace-aware. CG-specific endpoints return <code>503</code> when
+  <code>USE_CONTEXT_GRAPH=false</code>.</p>
+
+  <h3>Standard (inherited from LightRAG)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill m-post">POST</span></td><td class="mono">/documents/upload</td><td>Upload &amp; ingest a document</td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td class="mono">/query</td><td>Query with <code>mode</code> selection</td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td class="mono">/query/stream</td><td>Streaming query</td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td class="mono">/query/data</td><td>Raw retrieved data (no synthesis)</td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td class="mono">/graph/entity/create · /graph/relation/create</td><td>Graph CRUD (and update/delete variants)</td></tr>
+      <tr><td><span class="pill m-get">GET</span></td><td class="mono">/health</td><td>Health check</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Context Graph-specific <span class="pill cg">CG</span></h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill m-post">POST</span></td><td class="mono">/cgr3/query</td><td>Iterative multi-hop reasoning (Retrieve→Rank→Reason)</td></tr>
+      <tr><td><span class="pill m-get">GET</span></td><td class="mono">/graph/edge/context</td><td>RelationContext for a specific edge</td></tr>
+      <tr><td><span class="pill m-get">GET</span></td><td class="mono">/graph/entity/edges-with-context</td><td>All context-enriched edges for an entity</td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td class="mono">/graph/decision/emit</td><td>Record a decision trace at runtime</td></tr>
+      <tr><td><span class="pill m-get">GET</span></td><td class="mono">/graph/decisions/search</td><td>Semantic precedent search over decision traces</td></tr>
+      <tr><td><span class="pill m-get">GET</span></td><td class="mono">/graph/decisions</td><td>Filter decisions by approver · channel · policy · confidence · date</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Auth &amp; workspace</h3>
+  <p>Authenticate with <code>X-API-Key</code>; select the tenant with the <code>LIGHTRAG-WORKSPACE</code> header.</p>
+<pre><code><span class="cm"># query a specific workspace</span>
+curl -X POST http://localhost:9621/query \
+  -H <span class="str">"X-API-Key: $LIGHTRAG_API_KEY"</span> \
+  -H <span class="str">"LIGHTRAG-WORKSPACE: company_acme"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"query": "Who approved the MegaCorp discount?", "mode": "hybrid"}'</span>
+
+<span class="cm"># CGR3 multi-hop reasoning</span>
+curl -X POST http://localhost:9621/cgr3/query \
+  -H <span class="str">"X-API-Key: $LIGHTRAG_API_KEY"</span> -H <span class="str">"LIGHTRAG-WORKSPACE: company_acme"</span> \
+  -d <span class="str">'{"query": "Precedents for waiving payment terms on a renewal?"}'</span>
+
+<span class="cm"># filter decisions (illustrative params)</span>
+curl <span class="str">"http://localhost:9621/graph/decisions?approved_via=slack&amp;min_confidence=0.8"</span> \
+  -H <span class="str">"X-API-Key: $LIGHTRAG_API_KEY"</span> -H <span class="str">"LIGHTRAG-WORKSPACE: company_acme"</span></code></pre>
+  <p class="small">Exact request/response schemas live in
+  <code>lightrag/api/routers/context_graph_routes.py</code>; payloads above are illustrative.</p>
+</section>
+
+<!-- 9 -->
+<section id="mcp">
+  <h2><span class="sec-num">09</span> MCP server</h2>
+  <p class="sec-sub">The same capabilities as tools for MCP-speaking agents.</p>
+  <p>When enabled (<code>ENABLE_MCP=true</code>, default), the server mounts a
+  <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol</a> sub-app exposing
+  <b>8 tools</b>, each wrapping one <code>rag</code> method. It uses <code>FastMCP(stateless_http=True)</code>, validates
+  the <code>X-API-Key</code> header on the MCP sub-app, and tools that require CG mode raise an MCP error (not HTTP 503)
+  when <code>USE_CONTEXT_GRAPH=false</code>. Workspace isolation is automatic via the parent app's middleware.</p>
+  <div class="callout caveat"><div class="clabel">▲ Mount order</div>
+    The MCP app is mounted last (after <code>/webui</code> and <code>/static</code>) so it doesn't shadow named mounts.</div>
+</section>
+
+<!-- 10 -->
+<section id="storage">
+  <h2><span class="sec-num">10</span> Storage &amp; LLM providers</h2>
+  <p class="sec-sub">Four pluggable storage layers; multiple LLM/embedding backends.</p>
+  <div class="grid g2">
+    <div class="card"><h3 style="margin-top:0">Storage layers</h3>
+      <div class="tablewrap" style="margin:6px 0"><table style="min-width:0">
+        <tbody>
+          <tr><td class="mono">KV</td><td>docs, chunks, entities, relations, LLM cache</td></tr>
+          <tr><td class="mono">VECTOR</td><td>entity / relation / chunk / decision embeddings</td></tr>
+          <tr><td class="mono">GRAPH</td><td>entity-relation graph (Neo4j in default config)</td></tr>
+          <tr><td class="mono">DOC_STATUS</td><td>document processing status</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small">Backends: JSON, NetworkX, Neo4j, PostgreSQL, MongoDB, Redis, Milvus, Qdrant, Faiss.</p>
+    </div>
+    <div class="card"><h3 style="margin-top:0">LLM &amp; embeddings</h3>
+      <p class="small">Bindings for <b>OpenAI, Ollama, Azure, Gemini, Bedrock</b>. Default: <code>gpt-5-mini</code> +
+      <code>text-embedding-3-large</code> (3072-dim). Optional reranker via Cohere binding.</p>
+      <div class="callout caveat" style="margin-top:10px"><div class="clabel">▲ Embedding consistency</div>
+        The embedding model must stay fixed after ingestion — changing it invalidates the vector indexes.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section id="workspaces">
+  <h2><span class="sec-num">11</span> Multi-tenancy (workspaces)</h2>
+  <p class="sec-sub">Per-request isolation — one deployment, many tenants.</p>
+  <p>Each company gets an isolated workspace selected by the <code>LIGHTRAG-WORKSPACE</code> request header. Isolation
+  spans Neo4j nodes/edges (label-based), per-workspace indexes, vector collections, KV stores, doc status, LLM cache,
+  and the decision-trace index.</p>
+<pre><code><span class="cm"># Neo4j: nodes carry a workspace label; queries + drops are workspace-scoped</span>
+MERGE (n:`company_acme` {entity_id: $id})
+MATCH (n) WHERE n:`company_acme` …
+MATCH (n:`company_acme`) DETACH DELETE n</code></pre>
+  <p class="small">Workspace names allow <code>a-z A-Z 0-9 _</code> only.</p>
+</section>
+
+<!-- 12 -->
+<section id="config">
+  <h2><span class="sec-num">12</span> Configuration</h2>
+  <p class="sec-sub">Key environment variables (full list in <code>env.example</code> / <code>config.ini.example</code>).</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">USE_CONTEXT_GRAPH</td><td><code>true</code></td><td>Use <code>ContextGraph</code> instead of base <code>LightRAG</code></td></tr>
+      <tr><td class="mono">ENABLE_MCP</td><td><code>true</code></td><td>Mount the MCP server</td></tr>
+      <tr><td class="mono">LIGHTRAG_GRAPH_STORAGE</td><td><code>Neo4JStorage</code></td><td>Graph backend</td></tr>
+      <tr><td class="mono">LLM_BINDING / LLM_MODEL</td><td>openai / <code>gpt-5-mini</code></td><td>LLM provider + model</td></tr>
+      <tr><td class="mono">EMBEDDING_MODEL</td><td><code>text-embedding-3-large</code></td><td>Embedding model (dim 3072)</td></tr>
+      <tr><td class="mono">NEO4J_URI / _USERNAME / _PASSWORD</td><td>—</td><td>Neo4j credentials</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Run it</h3>
+<pre><code><span class="cm"># server (port 9621)</span>
+lightrag-server
+<span class="cm"># dev with auto-reload</span>
+uvicorn lightrag.api.lightrag_server:app --reload
+<span class="cm"># tests</span>
+python -m pytest tests</code></pre>
+</section>
+
+<!-- 13 -->
+<section id="repo">
+  <h2><span class="sec-num">13</span> Repository map</h2>
+  <p class="sec-sub">The Context-Graph surface on top of the LightRAG tree.</p>
+  <div class="card tree mono">
+lightrag/<br>
+&nbsp;├─ <span class="d">context_graph.py</span> <span class="note"># ContextGraph: insert/query, emit_decision_trace, find_precedents, CGR3</span><br>
+&nbsp;├─ <span class="d">context_graph_types.py</span> <span class="note"># RelationContext, ContextNode, ContextEdge</span><br>
+&nbsp;├─ <span class="d">operate.py</span> <span class="note"># extraction, merge, annotated-context assembly</span><br>
+&nbsp;├─ <span class="d">prompt.py</span> <span class="note"># CG extraction + annotated-response prompts</span><br>
+&nbsp;├─ <span class="d">lightrag.py · base.py</span> <span class="note"># base orchestrator + storage interfaces</span><br>
+&nbsp;├─ <span class="d">kg/</span> <span class="note"># storage backends (Neo4j, PG, Milvus, Qdrant, Faiss, …)</span><br>
+&nbsp;├─ <span class="d">llm/</span> <span class="note"># OpenAI · Ollama · Azure · Gemini · Bedrock</span><br>
+&nbsp;└─ <span class="d">api/</span><br>
+&nbsp;&nbsp;&nbsp;├─ <span class="d">lightrag_server.py</span> <span class="note"># FastAPI app, routes, workspace middleware</span><br>
+&nbsp;&nbsp;&nbsp;├─ <span class="d">mcp_server.py</span> <span class="note"># MCP server (8 tools, X-API-Key)</span><br>
+&nbsp;&nbsp;&nbsp;└─ <span class="d">routers/context_graph_routes.py</span> <span class="note"># CG REST endpoints</span><br>
+docs/ <span class="note"># this guide, the blog, the paper, deployment guides</span><br>
+tests/ <span class="note"># test_context_graph · test_context_graph_api · test_mcp_server</span>
+  </div>
+</section>
+
+<!-- 14 -->
+<section id="glossary">
+  <h2><span class="sec-num">14</span> Glossary</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>Quadruple <code>(h,r,t,rc)</code></td><td>A graph edge plus its RelationContext</td></tr>
+      <tr><td>RelationContext (<code>rc</code>)</td><td>The 11-field decision record on an edge</td></tr>
+      <tr><td>CGR3</td><td>Retrieve → Rank → Reason iterative multi-hop reasoning</td></tr>
+      <tr><td>Decision trace</td><td>The rationale/approval recorded for a relationship</td></tr>
+      <tr><td>Precedent</td><td>A prior decision retrieved by semantic similarity</td></tr>
+      <tr><td>Annotated context</td><td>Prompt format that renders rc inline for the LLM</td></tr>
+      <tr><td>Workspace</td><td>An isolated per-tenant namespace selected by header</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+</main>
+</div>
+
+<footer class="footer">
+  Context Graph — technical field guide. Built on <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a>
+  (HKUDS), implementing the <a href="https://arxiv.org/abs/2406.11160" target="_blank" rel="noopener">CGR3 paradigm</a>
+  (Liang et al., 2024). Supported by <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>.
+  Diagrams are inline SVG; code and endpoint payloads are illustrative — see the source for exact schemas.
+</footer>
+
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('nav.toc a')), map={};
+  links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id); if(el)map[id]=a;});
+  var obs=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},
+    {rootMargin:'-20% 0px -70% 0px',threshold:0});
+  Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});
+  var btt=document.getElementById('btt');
+  window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});
+})();
+</script>
+</body>
+</html>
