@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Fourth Element — Knowledge Graphs That Remember the Why</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  /* accents: a=graph/triples, b=RelationContext(rc), c=retrieval/CGR3, ctrl=decisions/precedents */
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(25,184,154,.10), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(91,141,239,.08), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(25,184,154,.07),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(32px,5.5vw,54px);line-height:1.04;margin:.3em 0 .25em;
+  background:linear-gradient(92deg,#cfe0ff,#8fd9c9 50%,#ffd79a);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}
+.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:230px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(25,184,154,.18),transparent);color:#fff;border-left:2px solid var(--b)}
+
+main{min-width:0;max-width:760px}
+article section{margin:0 0 52px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--b);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}
+p{margin:.7em 0}
+.lead-p{font-size:19px;color:var(--ink)}
+.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--b);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)} .callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)} .callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(25,184,154,.55);background:rgba(25,184,154,.10)} .callout.key .clabel{color:#7fe3cf}
+
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--a)}
+.stat.b::after{background:var(--b)} .stat.c::after{background:var(--c)} .stat.ctrl::after{background:var(--ctrl)}
+.stat .v{font-size:30px;font-weight:800;letter-spacing:-.02em} .stat .l{color:var(--ink-faint);font-size:13px;margin-top:3px}
+
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:540px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+
+figure{margin:22px 0}
+figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px} figcaption b{color:var(--ink-soft)}
+
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}
+.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);
+  border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">On knowledge graphs &amp; RAG</div>
+    <h1>The Fourth Element</h1>
+    <p class="lede">Most knowledge graphs know <i>what</i> is true. Few know <i>why</i> it's true, <i>who</i> decided it,
+      and whether it still holds. Context Graph adds a fourth element to every edge — turning a system of record into a
+      <b>system of decision</b>.</p>
+    <div class="byline">A developer's tour of contextual quadruples <code>(h, r, t, rc)</code> · built on
+      <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a> · supported by
+      <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a></div>
+    <div class="hero-tags">
+      <span class="tag"><b>(h, r, t, rc)</b> quadruples</span>
+      <span class="tag"><b>11</b>-field RelationContext</span>
+      <span class="tag"><b>CGR3</b> reasoning</span>
+      <span class="tag">decision traces &amp; precedents</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this post</div>
+  <ol>
+    <li><a href="#what">What a flat graph forgets</a></li>
+    <li><a href="#rc">The fourth element: rc</a></li>
+    <li><a href="#capture">Two ways into the graph</a></li>
+    <li><a href="#cgr3">CGR3: retrieve, rank, reason</a></li>
+    <li><a href="#precedents">Precedents &amp; validity</a></li>
+    <li><a href="#benchmark">Does surfacing rc help?</a></li>
+    <li><a href="#lightrag">Standing on LightRAG</a></li>
+    <li><a href="#fit">Where it fits · try it</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="what">
+  <div class="kicker">The gap</div>
+  <h2>What a flat graph forgets</h2>
+  <p class="lead-p">Retrieval-augmented generation has two classic memories. Vector RAG fetches relevant text chunks.
+  Knowledge graphs store <code>(subject, predicate, object)</code> triples. Both are good at <i>what</i>. Neither
+  remembers <i>why</i>.</p>
+
+  <p>Take a pricing decision. A normal knowledge graph records:</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 880 300" role="img" aria-label="Triple versus quadruple">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
+        <linearGradient id="gA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22314f"/><stop offset="1" stop-color="#1a2236"/></linearGradient>
+        <linearGradient id="gB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#173a34"/><stop offset="1" stop-color="#13251f"/></linearGradient>
+        <linearGradient id="gC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a2f17"/><stop offset="1" stop-color="#241c10"/></linearGradient>
+        <linearGradient id="gP" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2e2347"/><stop offset="1" stop-color="#1d1730"/></linearGradient>
+      </defs>
+      <style>
+        .bx{rx:10;stroke:#39425a;stroke-width:1}
+        .t{fill:#e7ebf3;font:13px "Segoe UI",sans-serif} .ts{fill:#aab3c5;font:11px "Segoe UI",sans-serif}
+        .m{fill:#8fd9c9;font:11px var(--mono),monospace} .h{fill:#cfe0ff;font:600 12px "Segoe UI",sans-serif}
+        .ln{stroke:#8a93a8;stroke-width:1.8;fill:none;marker-end:url(#ar)}
+      </style>
+      <text class="h" x="220" y="22" text-anchor="middle">STANDARD KG — a triple</text>
+      <rect class="bx" x="40" y="44" width="140" height="40" fill="url(#gA)"/>
+      <text class="t" x="110" y="69" text-anchor="middle">Sarah Chen</text>
+      <rect class="bx" x="300" y="44" width="140" height="40" fill="url(#gA)"/>
+      <text class="t" x="370" y="69" text-anchor="middle">MegaCorp</text>
+      <path class="ln" d="M182 64 H298"/>
+      <text class="ts" x="240" y="58" text-anchor="middle">APPROVES</text>
+      <text class="ts" x="240" y="104" text-anchor="middle">…but approved what? why? still valid?</text>
+
+      <text class="h" x="650" y="22" text-anchor="middle">CONTEXT GRAPH — a quadruple</text>
+      <rect class="bx" x="470" y="44" width="140" height="40" fill="url(#gA)"/>
+      <text class="t" x="540" y="69" text-anchor="middle">Sarah Chen</text>
+      <rect class="bx" x="700" y="44" width="140" height="40" fill="url(#gA)"/>
+      <text class="t" x="770" y="69" text-anchor="middle">MegaCorp</text>
+      <path class="ln" d="M612 64 H698"/>
+      <text class="ts" x="655" y="58" text-anchor="middle">APPROVES</text>
+      <!-- rc card -->
+      <rect class="bx" x="470" y="104" width="370" height="176" fill="url(#gB)"/>
+      <text class="m" x="486" y="126">rc = RelationContext {</text>
+      <text class="m" x="500" y="146">decision_trace: "20% discount — 5-yr</text>
+      <text class="m" x="500" y="162">&#160;&#160;relationship + Salesforce pressure"</text>
+      <text class="m" x="500" y="182">approved_by: "Sarah Chen"</text>
+      <text class="m" x="500" y="198">approved_via: "in_person"</text>
+      <text class="m" x="500" y="214">valid_from→until: 2024-08-14 → 12-31</text>
+      <text class="m" x="500" y="230">policy_ref: "DiscountPolicy_Standard"</text>
+      <text class="m" x="500" y="246">provenance: "Slack #deals-review"</text>
+      <text class="m" x="500" y="262">confidence_score: 0.97</text>
+      <text class="m" x="486" y="278">}</text>
+      <path class="ln" d="M655 84 V102"/>
+    </svg>
+    <figcaption><b>Figure 1 —</b> Same edge, two memories. The triple knows an approval happened; the quadruple knows the
+      decision behind it — and can be queried on any of those fields.</figcaption>
+  </div></figure>
+
+  <p>With the fourth element in place, you can ask questions a flat graph simply cannot represent:</p>
+  <ul>
+    <li>"Who approved discounts above 15% in Q3 2024, and are those approvals <i>still valid</i>?"</li>
+    <li>"Find all pricing exceptions approved <i>via Slack</i> in the last 6 months."</li>
+    <li>"Are there <i>precedents</i> for waiving standard payment terms for a renewal commitment?"</li>
+  </ul>
+
+  <p class="pull">A triple is a headline. A quadruple is the headline plus the byline, the dateline, and the sources.</p>
+</section>
+
+<!-- 2 -->
+<section id="rc">
+  <div class="kicker">The model</div>
+  <h2>The fourth element: <code>rc</code></h2>
+  <p class="lead-p">Context Graph extends every edge from a triple <code>(h, r, t)</code> to a quadruple
+  <code>(h, r, t, rc)</code>. <b>RelationContext</b> is an 11-field dataclass — the decision record attached to the
+  relationship.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 900 250" role="img" aria-label="RelationContext anatomy">
+      <style>
+        .gt{fill:#e7ebf3;font:600 13px "Segoe UI",sans-serif} .gs{fill:#aab3c5;font:11px var(--mono),monospace}
+      </style>
+      <rect class="bx" x="20" y="30" width="200" height="190" fill="url(#gB)"/>
+      <text class="gt" x="36" y="54">Evidence &amp; provenance</text>
+      <text class="gs" x="36" y="78">supporting_sentences[]</text>
+      <text class="gs" x="36" y="98">provenance</text>
+      <text class="gs" x="36" y="118">confidence_score</text>
+      <text class="gs" x="36" y="150" fill="#7b8499">— verbatim quotes,</text>
+      <text class="gs" x="36" y="166" fill="#7b8499">&#160;&#160;source ref, reliability</text>
+
+      <rect class="bx" x="240" y="30" width="200" height="190" fill="url(#gP)"/>
+      <text class="gt" x="256" y="54">Authority &amp; channel</text>
+      <text class="gs" x="256" y="78">approved_by</text>
+      <text class="gs" x="256" y="98">approved_via</text>
+      <text class="gs" x="256" y="118">policy_ref</text>
+      <text class="gs" x="256" y="150" fill="#7b8499">— who, through which</text>
+      <text class="gs" x="256" y="166" fill="#7b8499">&#160;&#160;channel, under what policy</text>
+
+      <rect class="bx" x="460" y="30" width="200" height="190" fill="url(#gC)"/>
+      <text class="gt" x="476" y="54">Time</text>
+      <text class="gs" x="476" y="78">valid_from</text>
+      <text class="gs" x="476" y="98">valid_until</text>
+      <text class="gs" x="476" y="118">temporal_info</text>
+      <text class="gs" x="476" y="150" fill="#7b8499">— ISO-8601 window;</text>
+      <text class="gs" x="476" y="166" fill="#7b8499">&#160;&#160;"is it still in force?"</text>
+
+      <rect class="bx" x="680" y="30" width="200" height="190" fill="url(#gA)"/>
+      <text class="gt" x="696" y="54">Rationale &amp; numbers</text>
+      <text class="gs" x="696" y="78">decision_trace</text>
+      <text class="gs" x="696" y="98">quantitative_data</text>
+      <text class="gs" x="696" y="150" fill="#7b8499">— the "why", plus the</text>
+      <text class="gs" x="696" y="166" fill="#7b8499">&#160;&#160;numbers that matter</text>
+    </svg>
+    <figcaption><b>Figure 2 —</b> The 11 RelationContext fields, grouped by what they answer: where it came from, who
+      authorized it, when it holds, and why. Every field is independently queryable.</figcaption>
+  </div></figure>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Field</th><th>Answers</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">decision_trace</td><td>the <b>why</b> — rationale, exception, override, approval reasoning</td></tr>
+        <tr><td class="mono">approved_by · approved_via</td><td>who authorized it, and through which channel (slack · zoom · email · in_person · jira · system)</td></tr>
+        <tr><td class="mono">valid_from · valid_until · temporal_info</td><td>the validity window — is this still in force today?</td></tr>
+        <tr><td class="mono">policy_ref</td><td>the policy followed (or overridden)</td></tr>
+        <tr><td class="mono">quantitative_data</td><td>the numbers — discount %, budget, counts</td></tr>
+        <tr><td class="mono">supporting_sentences · provenance · confidence_score</td><td>verbatim evidence, source reference, and extraction reliability (0–1)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">◆ System of record → system of decision</div>
+    A system of record tells you the relationship exists. A system of decision tells you the operational reality behind
+    it — and lets you filter the graph by authority, channel, policy, validity, and confidence.
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="capture">
+  <div class="kicker">Ingestion</div>
+  <h2>Two ways into the graph</h2>
+  <p class="lead-p">RelationContext arrives through two paths that feed the same graph and the same vector indexes.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 900 230" role="img" aria-label="Two capture paths">
+      <style>
+        .t3{fill:#e7ebf3;font:13px "Segoe UI",sans-serif} .s3{fill:#aab3c5;font:11px "Segoe UI",sans-serif}
+        .m3{fill:#8fd9c9;font:11px var(--mono),monospace}
+        .l3{stroke:#19b89a;stroke-width:2.2;fill:none;marker-end:url(#ar)}
+      </style>
+      <rect class="bx" x="40" y="30" width="230" height="54" fill="url(#gC)"/>
+      <text class="t3" x="155" y="52" text-anchor="middle" font-weight="700">Documents</text>
+      <text class="s3" x="155" y="70" text-anchor="middle">transcripts · emails · notes</text>
+      <rect class="bx" x="40" y="146" width="230" height="54" fill="url(#gP)"/>
+      <text class="t3" x="155" y="168" text-anchor="middle" font-weight="700">Application / agent</text>
+      <text class="s3" x="155" y="186" text-anchor="middle">approval bots · webhooks</text>
+
+      <rect class="bx" x="340" y="30" width="220" height="54" fill="url(#gB)"/>
+      <text class="t3" x="450" y="52" text-anchor="middle">Extraction path</text>
+      <text class="m3" x="450" y="70" text-anchor="middle">ainsert() → LLM extracts rc</text>
+      <rect class="bx" x="340" y="146" width="220" height="54" fill="url(#gB)"/>
+      <text class="t3" x="450" y="168" text-anchor="middle">Emission path</text>
+      <text class="m3" x="450" y="186" text-anchor="middle">emit_decision_trace(rc)</text>
+
+      <rect class="bx" x="640" y="86" width="220" height="58" fill="url(#gA)"/>
+      <text class="t3" x="750" y="110" text-anchor="middle" font-weight="700">Context Graph</text>
+      <text class="s3" x="750" y="128" text-anchor="middle">graph + vector indexes</text>
+
+      <path class="l3" d="M272 57 H338"/>
+      <path class="l3" d="M272 173 H338"/>
+      <path class="l3" d="M562 57 C600 70 610 90 638 104"/>
+      <path class="l3" d="M562 173 C600 160 610 140 638 126"/>
+    </svg>
+    <figcaption><b>Figure 3 —</b> Extraction mines RelationContext from prose at ingestion; emission writes it directly
+      the moment a decision happens. Same graph, same indexes — so both are queryable together.</figcaption>
+  </div></figure>
+
+  <p><b>Extraction</b> suits historical records — call transcripts, email threads, meeting notes. The LLM pulls
+  entities, relations, and an <code>rc</code> JSON object per relationship.</p>
+
+  <p><b>Emission</b> suits the live moment a decision is made — no document, no re-ingestion. An agent or workflow writes
+  the context atomically:</p>
+<pre><code><span class="kw">from</span> lightrag.context_graph_types <span class="kw">import</span> RelationContext
+
+rc = RelationContext(
+    decision_trace=<span class="str">"VP approved 20% discount; 5-yr relationship + competitive pressure"</span>,
+    approved_by=<span class="str">"Sarah Chen"</span>, approved_via=<span class="str">"in_person"</span>,
+    valid_until=<span class="str">"2024-12-31"</span>, policy_ref=<span class="str">"DiscountPolicy_Standard"</span>,
+    quantitative_data=<span class="str">"20% discount"</span>, confidence_score=<span class="num">0.97</span>,
+)
+<span class="kw">await</span> cg.<span class="fn">emit_decision_trace</span>(<span class="str">"Sarah Chen"</span>, <span class="str">"MegaCorp"</span>, <span class="str">"discount_approval"</span>, rc)</code></pre>
+</section>
+
+<!-- 4 -->
+<section id="cgr3">
+  <div class="kicker">Reasoning</div>
+  <h2>CGR3: retrieve, rank, reason</h2>
+  <p class="lead-p">Single-shot retrieval answers single-hop questions. Real decision questions are multi-hop — the
+  answer to "are there precedents…" depends on entities you haven't found yet. CGR3 loops until it has enough.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 880 210" role="img" aria-label="CGR3 loop">
+      <style>
+        .t4{fill:#e7ebf3;font:600 14px "Segoe UI",sans-serif} .s4{fill:#aab3c5;font:11px "Segoe UI",sans-serif}
+        .l4{stroke:#f0a73c;stroke-width:2.2;fill:none;marker-end:url(#ar)}
+      </style>
+      <rect class="bx" x="60" y="70" width="190" height="60" fill="url(#gC)"/>
+      <text class="t4" x="155" y="95" text-anchor="middle">1 · Retrieve</text>
+      <text class="s4" x="155" y="114" text-anchor="middle">entities + edges + rc</text>
+      <rect class="bx" x="345" y="70" width="190" height="60" fill="url(#gC)"/>
+      <text class="t4" x="440" y="95" text-anchor="middle">2 · Rank</text>
+      <text class="s4" x="440" y="114" text-anchor="middle">LLM orders by relevance</text>
+      <rect class="bx" x="630" y="70" width="190" height="60" fill="url(#gC)"/>
+      <text class="t4" x="725" y="95" text-anchor="middle">3 · Reason</text>
+      <text class="s4" x="725" y="114" text-anchor="middle">enough to answer?</text>
+      <path class="l4" d="M252 100 H343"/>
+      <path class="l4" d="M537 100 H628"/>
+      <path class="l4" d="M725 130 C725 175 440 182 250 145 L200 132" />
+      <text class="s4" x="455" y="178" text-anchor="middle">if not: seed new entities, iterate (≤ max_iterations)</text>
+    </svg>
+    <figcaption><b>Figure 4 —</b> Each pass can surface new entities that seed the next retrieval, so the graph walk
+      expands only as far as the question needs.</figcaption>
+  </div></figure>
+
+  <p>Edges come back with their RelationContext attached, and the answer is grounded in it:</p>
+<pre><code>answer = <span class="kw">await</span> cg.<span class="fn">cgr3_query</span>(
+    <span class="str">"Are there precedents for waiving standard payment terms for a renewal?"</span>)
+<span class="cm"># cites approval chains, decision traces, temporal validity, and provenance</span></code></pre>
+  <p class="small">CGR3 implements the <a href="https://arxiv.org/abs/2406.11160" target="_blank" rel="noopener">Retrieve→Rank→Reason
+  paradigm</a> (Liang et al., 2024) over the context-enriched graph.</p>
+</section>
+
+<!-- 5 -->
+<section id="precedents">
+  <div class="kicker">The payoff</div>
+  <h2>Precedents &amp; validity — your graph as case law</h2>
+  <p class="lead-p">Once every edge carries authority, a policy basis, a validity window, and a rationale, the graph
+  starts to behave like a body of case law: decisions you can cite, check for currency, and trace to who made them.</p>
+
+  <div class="grid g3">
+    <div class="card"><h3 style="margin-top:0">Precedent search</h3>
+      <p class="small"><code>find_precedents()</code> does semantic search over <i>decision traces</i> — "have we done
+      something like this before, and how did it go?"</p></div>
+    <div class="card"><h3 style="margin-top:0">Temporal validity</h3>
+      <p class="small"><code>valid_from/until</code> turns "is this still in force today?" into a filter, not a guess —
+      expired approvals stop counting.</p></div>
+    <div class="card"><h3 style="margin-top:0">Approval chains</h3>
+      <p class="small"><code>approved_by</code> + <code>policy_ref</code> reconstruct who authorized what under which
+      rule — an audit trail by construction.</p></div>
+  </div>
+
+  <div class="callout info">
+    <div class="clabel">◆ Why agents care</div>
+    An AI agent negotiating or advising doesn't just need facts — it needs <i>defensible</i> ones: the precedent it can
+    cite, the approval still in force, the policy it's operating under. That's exactly what the fourth element stores.
+  </div>
+</section>
+
+<!-- 6 -->
+<section id="benchmark">
+  <div class="kicker">Evidence</div>
+  <h2>Does surfacing <code>rc</code> actually help?</h2>
+  <p class="lead-p">Storing context is only useful if exposing it to the LLM produces better answers. Context Graph
+  renders RelationContext inline in the prompt (the <b>annotated</b> context format) and was benchmarked head-to-head
+  against the <b>legacy</b> format that hides it.</p>
+
+  <div class="grid g3" style="margin:14px 0">
+    <div class="stat b"><div class="v">10 / 12</div><div class="l">overall comparisons won by annotated</div></div>
+    <div class="stat b"><div class="v">56%</div><div class="l">criterion win rate (vs 21.4% legacy)</div></div>
+    <div class="stat"><div class="v">6 – 0</div><div class="l">grounding (annotated – legacy)</div></div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Dimension</th><th>Annotated – Legacy</th></tr></thead>
+      <tbody>
+        <tr><td>Completeness</td><td><span class="pill win">10 – 2</span></td></tr>
+        <tr><td>Usefulness</td><td><span class="pill win">10 – 2</span></td></tr>
+        <tr><td>Synthesis</td><td><span class="pill win">9 – 3</span></td></tr>
+        <tr><td>Grounding</td><td><span class="pill win">6 – 0</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small">Comparative LLM-judged benchmark over the project's question set. Surfacing the decision context
+  inline — not just storing it — is what moves the needle, most strongly on grounding (answers tied to real evidence).</p>
+</section>
+
+<!-- 7 -->
+<section id="lightrag">
+  <div class="kicker">Foundations</div>
+  <h2>Standing on LightRAG</h2>
+  <p class="lead-p">Context Graph is a fork of <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a>
+  (HKUDS). It inherits a production-grade RAG substrate and adds the decision layer on top.</p>
+
+  <div class="grid g2">
+    <div class="card"><h3 style="margin-top:0">Inherited from LightRAG</h3>
+      <ul class="small" style="margin:0;padding-left:18px">
+        <li>Pluggable storage: JSON, NetworkX, Neo4j, PostgreSQL, Mongo, Redis, Milvus, Qdrant, Faiss</li>
+        <li>Query modes: local · global · hybrid · naive · mix · bypass</li>
+        <li>LLM bindings: OpenAI, Ollama, Azure, Gemini, Bedrock</li>
+        <li>Chunking, entity/relation extraction, embeddings</li>
+      </ul></div>
+    <div class="card"><h3 style="margin-top:0">Added by Context Graph</h3>
+      <ul class="small" style="margin:0;padding-left:18px">
+        <li><code>RelationContext</code> extraction + storage on every edge</li>
+        <li>CGR3 iterative reasoning + annotated context format</li>
+        <li><code>emit_decision_trace</code> / <code>find_precedents</code> + decision endpoints</li>
+        <li>Multi-tenant workspaces (per-request isolation) and an MCP server (8 tools)</li>
+      </ul></div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section id="fit">
+  <div class="kicker">In practice</div>
+  <h2>Where it fits · try it</h2>
+  <p class="lead-p">Any place an AI system reasons over decisions rather than just documents: deal desks, policy and
+  compliance, ops runbooks, support escalations.</p>
+
+  <p>The use case that drove these extensions is <b>AI sales</b>. A negotiating agent needs more than product facts —
+  it needs the precedent it can cite ("we waived setup fees for a comparable renewal in Q2"), the discount approval
+  still in force, and the policy it's operating under. Context Graph is the memory that makes those answers
+  <i>defensible</i> — the decision layer behind agents built at <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>.</p>
+
+  <p>Getting started is a few lines:</p>
+<pre><code><span class="kw">from</span> lightrag.context_graph <span class="kw">import</span> ContextGraph
+<span class="kw">from</span> lightrag <span class="kw">import</span> QueryParam
+
+cg = ContextGraph(working_dir=<span class="str">"./cg_storage"</span>, llm_model_func=..., embedding_func=...)
+<span class="kw">await</span> cg.<span class="fn">initialize_storages</span>()
+<span class="kw">await</span> cg.<span class="fn">ainsert</span>(<span class="str">"Your text with decisions, approvals, and context…"</span>)
+
+result = <span class="kw">await</span> cg.<span class="fn">aquery</span>(<span class="str">"Your question"</span>, param=QueryParam(mode=<span class="str">"hybrid"</span>))
+answer = <span class="kw">await</span> cg.<span class="fn">cgr3_query</span>(<span class="str">"A multi-hop precedent question?"</span>)</code></pre>
+
+  <div class="callout key">
+    <div class="clabel">◆ The takeaway</div>
+    Facts tell you what is true. Decisions tell you why, who, and for how long. By making the decision the fourth
+    element of every edge, Context Graph turns a knowledge graph from a system of record into a system you can reason —
+    and act — from.
+  </div>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  A developer's tour of Context Graph — contextual quadruples <code>(h, r, t, rc)</code> and the CGR3 reasoning loop.
+  Built on <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a> (HKUDS), implementing
+  the <a href="https://arxiv.org/abs/2406.11160" target="_blank" rel="noopener">CGR3 paradigm</a> (Liang et al., 2024).
+  Supported by <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>. Code examples are
+  illustrative; the model, methods, and benchmark described are from the project.
+</footer>
+
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('nav.toc a')), map={};
+  links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id); if(el)map[id]=a;});
+  var obs=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}
+  });},{rootMargin:'-20% 0px -70% 0px',threshold:0});
+  Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});
+  var btt=document.getElementById('btt');
+  window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});
+})();
+</script>
+</body>
+</html>
