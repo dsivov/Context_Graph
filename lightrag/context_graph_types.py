@@ -76,13 +76,27 @@ class RelationContext:
         return cls()
 
     def is_empty(self) -> bool:
-        """Returns True if no meaningful content has been captured."""
-        return (
-            not self.supporting_sentences
-            and self.temporal_info is None
-            and self.quantitative_data is None
-            and self.decision_trace is None
-            and self.provenance is None
+        """Returns True if no meaningful content has been captured.
+
+        Checks every content field, including the decision-lineage fields
+        (approved_by / approved_via / valid_from / valid_until / policy_ref).
+        ``confidence_score`` is intentionally excluded: it defaults to 1.0 and
+        is metadata about the extraction, not content, so an rc carrying only a
+        confidence score is still empty.
+        """
+        return not any(
+            (
+                self.supporting_sentences,
+                self.temporal_info,
+                self.quantitative_data,
+                self.decision_trace,
+                self.provenance,
+                self.approved_by,
+                self.approved_via,
+                self.valid_from,
+                self.valid_until,
+                self.policy_ref,
+            )
         )
 
     def is_active(self, as_of: Optional[str] = None) -> bool:

@@ -454,12 +454,16 @@ async def _handle_single_relationship_extraction(
     timestamp: int,
     file_path: str = "unknown_source",
 ):
+    # Accept 5-field (standard) and 6-field (Context Graph, with a trailing
+    # RelationContext JSON) relation records. Accepting 6 here is what lets the
+    # graph-rebuild path (e.g. after document deletion) preserve CG relations
+    # and their relation_context instead of silently dropping them.
     if (
-        len(record_attributes) != 5 or "relation" not in record_attributes[0]
+        len(record_attributes) not in (5, 6) or "relation" not in record_attributes[0]
     ):  # treat "relationship" and "relation" interchangeable
         if len(record_attributes) > 1 and "relation" in record_attributes[0]:
             logger.warning(
-                f"{chunk_key}: LLM output format error; found {len(record_attributes)}/5 fields on REALTION `{record_attributes[1]}`~`{record_attributes[2] if len(record_attributes) > 2 else 'N/A'}`"
+                f"{chunk_key}: LLM output format error; found {len(record_attributes)}/5-6 fields on REALTION `{record_attributes[1]}`~`{record_attributes[2] if len(record_attributes) > 2 else 'N/A'}`"
             )
             logger.debug(record_attributes)
         return None
@@ -507,7 +511,7 @@ async def _handle_single_relationship_extraction(
             else 1.0
         )
 
-        return dict(
+        edge = dict(
             src_id=source,
             tgt_id=target,
             weight=weight,
@@ -517,6 +521,31 @@ async def _handle_single_relationship_extraction(
             file_path=file_path,
             timestamp=timestamp,
         )
+
+        # Context Graph: a 6th field carries a RelationContext JSON object.
+        # Preserve it (normalizing confidence_score) so graph rebuilds don't
+        # drop decision lineage. Standard 5-field records are unaffected.
+        if len(record_attributes) == 6:
+            raw_rc = record_attributes[5].strip()
+            if raw_rc:
+                try:
+                    rc_dict = json.loads(raw_rc)
+                except json.JSONDecodeError:
+                    rc_dict = None
+                    logger.warning(
+                        f"{chunk_key}: malformed relation context JSON for "
+                        f"`{source}`->`{target}`; ignored"
+                    )
+                if isinstance(rc_dict, dict):
+                    cs = rc_dict.get("confidence_score", 1.0)
+                    try:
+                        cs = float(cs)
+                    except (TypeError, ValueError):
+                        cs = 1.0
+                    rc_dict["confidence_score"] = min(max(cs, 0.0), 1.0)
+                    edge["relation_context"] = json.dumps(rc_dict, ensure_ascii=False)
+
+        return edge
 
     except ValueError as e:
         logger.warning(

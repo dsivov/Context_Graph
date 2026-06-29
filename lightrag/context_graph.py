@@ -72,6 +72,39 @@ from lightrag.constants import DEFAULT_ENTITY_NAME_MAX_LENGTH, DEFAULT_SUMMARY_L
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _extract_json_object(text: str) -> dict | None:
+    """Best-effort extraction of a JSON object from an LLM response.
+
+    LLMs frequently wrap JSON in a ``` or ```json code fence, or surround it
+    with prose. This recovers the object in those cases and returns it as a
+    dict, or ``None`` if no JSON object can be parsed (callers treat ``None``
+    as 'unparseable' and fall back). Returning ``None`` for a non-object
+    (scalar/array) avoids ``AttributeError`` on a later ``.get(...)``.
+    """
+    if not text:
+        return None
+    s = text.strip()
+    # Strip a leading code fence + optional language tag, then drop the
+    # trailing fence (and anything after it).
+    if s.startswith("```"):
+        s = s[3:]
+        if s[:4].lower() == "json":
+            s = s[4:]
+        s = s.split("```", 1)[0].strip()
+    try:
+        obj = json.loads(s)
+    except (json.JSONDecodeError, TypeError):
+        # Fall back to the outermost {...} span.
+        start, end = s.find("{"), s.rfind("}")
+        if start == -1 or end <= start:
+            return None
+        try:
+            obj = json.loads(s[start : end + 1])
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return obj if isinstance(obj, dict) else None
+
+
 async def _handle_single_cg_relationship_extraction(
     record_attributes: list[str],
     chunk_key: str,
@@ -963,20 +996,19 @@ class ContextGraph(LightRAG):
             try:
                 reason_response = await llm_func(reason_prompt)
                 reason_response = remove_think_tags(reason_response)
-                # Strip markdown code fences if present
-                cleaned = reason_response.strip()
-                if cleaned.startswith("```"):
-                    cleaned = cleaned.split("```", 2)[-1].lstrip("json").strip()
-                    cleaned = cleaned.rsplit("```", 1)[0].strip()
-                parsed = json.loads(cleaned)
-            except (json.JSONDecodeError, TypeError) as e:
-                logger.warning(
-                    f"CGR3 reason parse failed (iter {iteration + 1}): {e}. "
-                    f"Falling back to final answer generation."
-                )
-                break
             except Exception as e:
                 logger.warning(f"CGR3 reason step failed (iter {iteration + 1}): {e}")
+                break
+
+            # Robustly recover the JSON object (handles ```/```json fences and
+            # prose). Returns None for unparseable or non-object output, which
+            # we treat as "stop iterating and synthesize a final answer".
+            parsed = _extract_json_object(reason_response)
+            if parsed is None:
+                logger.warning(
+                    f"CGR3 reason parse failed (iter {iteration + 1}): could not "
+                    f"extract a JSON object. Falling back to final answer generation."
+                )
                 break
 
             if parsed.get("is_sufficient", False):
