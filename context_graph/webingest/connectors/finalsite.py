@@ -1,15 +1,10 @@
-"""Site connectors — resolve data hidden behind JS document-management widgets.
+"""Finalsite / Blackboard "Content Item" document-container connector.
 
-Some platforms load their documents from a paginated/recursive JSON API rather
-than as links: the page renders a viewer, and the files only appear if you
-replay the API. A connector recognises such a platform from the requests a page
-made during render, replays the API (reusing the browser's session), walks the
-tree, and returns the real files as :class:`FetchResult` data resources.
-
-:class:`FinalsiteConnector` handles the **Finalsite / Blackboard "Content Item"**
-document container (``ContentItemSvc.asmx/GetItemList``) used by thousands of K-12
-district sites — the East Hartford policy binder is one. It recurses the folder
-tree by ``parentId`` and downloads each file item's ``DownloadLink``.
+Powers thousands of K-12 district sites (East Hartford's policy binder is one).
+The policies load via a recursive JSON API (``ContentItemSvc.asmx/GetItemList``)
+that returns a folder tree; files live at the leaves with a ``DownloadLink``.
+Generic across the platform — nothing about any specific district is hardcoded;
+the ``Params`` blob and folder ids are read from what the page actually sent.
 """
 
 from __future__ import annotations
@@ -19,20 +14,19 @@ from typing import Any, List, Optional
 
 from lightrag.utils import logger
 
+from context_graph.webingest.connectors.base import Connector, download_as_data
 from context_graph.webingest.fetch import FetchResult
 
 
-class FinalsiteConnector:
-    """Resolves a Finalsite/Blackboard document container into its files."""
-
+class FinalsiteConnector(Connector):
     name = "finalsite"
 
     def __init__(self, *, max_files: int = 500, max_folders: int = 400) -> None:
         self._max_files = max_files
         self._max_folders = max_folders
 
-    def detect(self, requests: List[Any]) -> Optional[dict]:
-        """Find a GetItemList POST among captured requests; return a replay template."""
+    def detect(self, *, requests: List[Any], responses: List[Any],
+               page_url: str, html: str) -> Optional[dict]:
         for req in requests:
             url = getattr(req, "url", "")
             body = getattr(req, "post_data", None)
@@ -47,11 +41,6 @@ class FinalsiteConnector:
 
     async def resolve(self, request_context: Any, template: dict,
                       *, max_files: Optional[int] = None) -> List[FetchResult]:
-        """Recurse the folder tree and download every file. Returns data FetchResults.
-
-        ``max_files`` (e.g. the scrape request's ``max_documents``) overrides the
-        connector's own cap for this run.
-        """
         cap = max_files if max_files is not None else self._max_files
         url, params, root = template["url"], template["params"], template["root"]
         files: List[FetchResult] = []
@@ -84,7 +73,8 @@ class FinalsiteConnector:
                 dl = it.get("DownloadLink")
                 is_file = it.get("Type") == "content_file" or it.get("Extension") or dl
                 if is_file and dl:
-                    fr = await self._download(request_context, it, dl)
+                    fr = await download_as_data(request_context, dl,
+                                                filename=self._filename(it))
                     if fr is not None:
                         files.append(fr)
                 elif it.get("Type") == "content_folder" and depth < 8:
@@ -95,25 +85,7 @@ class FinalsiteConnector:
         return files
 
     @staticmethod
-    async def _download(request_context: Any, item: dict, dl: str) -> Optional[FetchResult]:
-        try:
-            resp = await request_context.get(dl)
-            if not (200 <= resp.status < 300):
-                return None
-            body = await resp.body()
-        except Exception as e:
-            logger.debug(f"finalsite: download {dl} failed: {e}")
-            return None
-        if not body:
-            return None
-        ct = resp.headers.get("content-type", "application/octet-stream")
+    def _filename(item: dict) -> str:
         name = (item.get("Name") or item.get("Title") or "document").strip()
         ext = (item.get("Extension") or "").lstrip(".")
-        filename = f"{name}.{ext}" if ext and not name.lower().endswith("." + ext) else name
-        return FetchResult(dl, resp.status, kind="data", content_type=ct,
-                           content=body, ok=True, filename=filename)
-
-
-# The per-run cap comes from the scrape request's max_documents (passed to
-# resolve()); the constructor default is just an upper safety bound.
-DEFAULT_CONNECTORS = [FinalsiteConnector()]
+        return f"{name}.{ext}" if ext and not name.lower().endswith("." + ext) else name

@@ -99,7 +99,8 @@ class PlaywrightFetcher:
             # Connectors: resolve data hidden behind JS document widgets (e.g. a
             # Finalsite container that lists files only via a recursive API).
             for conn in self._connectors:
-                template = conn.detect(requests)
+                template = conn.detect(requests=requests, responses=responses,
+                                       page_url=page.url, html=html)
                 if template:
                     try:
                         captured.extend(await conn.resolve(
