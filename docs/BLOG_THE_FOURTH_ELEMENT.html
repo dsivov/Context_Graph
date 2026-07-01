@@ -639,6 +639,53 @@ end</code></pre>
   page makes — finding data that never appears as a link in the HTML. On a real school-district site, the entire policy
   catalog lived only in a JSON API the page called at load time — invisible to ordinary scraping, captured here.</p>
 
+  <h3>Connectors — and letting the LLM pick the right one</h3>
+  <p>Some platforms don't just render with JavaScript; they hide every document behind a <i>recursive</i> or <i>paged</i>
+  API. A Finalsite document container lists files only through a folder-tree service you have to walk; a WordPress site
+  keeps its PDFs in a media endpoint you have to page; a BoardDocs board portal serves agendas through a chain of AJAX
+  calls. Capturing one response isn't enough — you have to <b>replay the platform's API</b>. So Context Graph ships
+  <b>connectors</b>: small, platform-generic plugins that recognise a technology and replay its API to enumerate and
+  download every file. Each keys off the platform's signature, never a specific site.</p>
+
+  <p>But which connector fits a given site? Rather than try a fixed list in config order, Context Graph <b>asks the
+  LLM</b>. Every connector carries a one-line self-description; at load time the ingester summarises the real page's
+  signals — its <code>generator</code> meta tag, tell-tale markers, the API URLs it actually called — and the LLM reads
+  those against the connector descriptions and names the plugin(s) that apply. Selection is <i>reasoning about the real
+  site</i>, not pattern-matching a hard-coded rule. If the LLM is unsure it says so, and the engine safely falls back to
+  letting each connector self-check.</p>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 960 150" role="img" aria-label="LLM connector selection">
+    <defs><marker id="cs-ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b93a7"/></marker></defs>
+    <g><rect x="8" y="34" width="212" height="82" rx="11" style="fill:rgba(240,167,60,.12);stroke:#f0a73c;stroke-width:1.7"/>
+      <text x="114" y="60" text-anchor="middle" class="wb">Real-site signals</text>
+      <text x="114" y="80" text-anchor="middle" class="ws">generator tag · markers</text>
+      <text x="114" y="96" text-anchor="middle" class="ws">API request URLs</text></g>
+    <g><rect x="8" y="120" width="212" height="24" rx="7" style="fill:rgba(25,184,154,.10);stroke:#19b89a;stroke-width:1.2"/>
+      <text x="114" y="137" text-anchor="middle" class="ws">connector self-descriptions</text></g>
+    <path d="M220 84 L262 84" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#cs-ar)"/>
+    <g><rect x="264" y="46" width="188" height="60" rx="11" style="fill:rgba(169,116,240,.14);stroke:#a974f0;stroke-width:1.7"/>
+      <text x="358" y="72" text-anchor="middle" class="wb">LLM selector</text>
+      <text x="358" y="92" text-anchor="middle" class="ws">which platform is this?</text></g>
+    <path d="M452 76 L494 76" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#cs-ar)"/>
+    <g><rect x="496" y="46" width="196" height="60" rx="11" style="fill:rgba(91,141,239,.13);stroke:#5b8def;stroke-width:1.7"/>
+      <text x="594" y="72" text-anchor="middle" class="wb">Chosen connector</text>
+      <text x="594" y="92" text-anchor="middle" class="ws">finalsite · wordpress · boarddocs</text></g>
+    <path d="M692 76 L734 76" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#cs-ar)"/>
+    <g><rect x="736" y="46" width="216" height="60" rx="11" style="fill:rgba(25,184,154,.12);stroke:#19b89a;stroke-width:1.7"/>
+      <text x="844" y="72" text-anchor="middle" class="wb">Replay API → files</text>
+      <text x="844" y="92" text-anchor="middle" class="ws">every PDF/doc → the graph</text></g>
+  </svg>
+  </div>
+  <figcaption>The LLM chooses the connector from the site's own signals — so a new platform is a new plugin with a
+    one-line description, not a change to the engine.</figcaption>
+  </figure>
+
+  <p>It works end-to-end on real sites. On a school district's Finalsite portal it walked the document service and pulled
+  the full policy binder as clean, named PDFs. On <code>creativecommons.org</code> — a WordPress site — the selector
+  reasoned <i>"the <code>api.w.org</code> tag means WordPress"</i>, paged the media API, and downloaded the annual report
+  and issue briefs, which Context Graph turned into a graph of over a hundred cited entities.</p>
+
   <h3>Polite by default, cited by design</h3>
   <p>It honours <code>robots.txt</code>, rate-limits per host, and stays on-domain — and every fact it extracts carries
   the <b>page URL as provenance</b>, so the mentor can cite the exact page it learned something from.</p>
@@ -649,7 +696,8 @@ end</code></pre>
     <div class="clabel">◆ The honest edge</div>
     Capturing everything also captures noise (analytics, tracking beacons). Telling a policy catalog from a tracking
     pixel — and pulling the document URLs out of an API response — is a <i>relevance</i> problem, not a plumbing one.
-    That's the next piece: an <b>LLM site analyst</b> (see the roadmap).
+    An <b>LLM site analyst</b> now handles it: it drops the noise and keeps the real documents. The frontier is breadth of
+    coverage — every new platform still benefits from a connector, even though adding one is now a one-file plugin.
   </div>
 </section>
 
