@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from context_graph.ontology.schema import Ontology
+from context_graph.ontology.schema import LinkType, Ontology, _validate_properties
 
 # Keys CG/LightRAG extraction has used for the same concept, most-specific first.
 _ENTITY_NAME_KEYS = ("entity_name", "name", "id", "entity_id")
@@ -36,6 +36,21 @@ _RESERVED_ENTITY = set(_ENTITY_NAME_KEYS) | set(_ENTITY_TYPE_KEYS) | {"descripti
                                                                       "source_id"}
 _RESERVED_REL = (set(_REL_SOURCE_KEYS) | set(_REL_TARGET_KEYS) | set(_REL_TYPE_KEYS)
                  | {"description", "source_id", "weight", "source_type", "target_type"})
+
+
+def _side_ok(allowed: List[str], value: Optional[str]) -> bool:
+    """A link endpoint is fine if unconstrained, unknown (unverifiable), or allowed."""
+    return (not allowed) or (value is None) or (value in allowed)
+
+
+def _endpoints_ok(link: LinkType, src: Optional[str], tgt: Optional[str]) -> bool:
+    """Domain/range check that treats an unknown endpoint type as unverifiable
+    rather than disallowed (mirrors LinkType.allows, incl. undirected reversal)."""
+    if _side_ok(link.source_types, src) and _side_ok(link.target_types, tgt):
+        return True
+    if not link.directed:
+        return _side_ok(link.source_types, tgt) and _side_ok(link.target_types, src)
+    return False
 
 
 def _first(d: Mapping[str, Any], keys: Iterable[str]) -> Optional[Any]:
@@ -162,13 +177,28 @@ class ExtractionValidator:
 
     def check_relation(self, r: ExtractedRelation) -> ItemValidation:
         ref = f"{r.type or '?'}:{r.source}->{r.target}"
-        if not self.ontology.has_link(r.type):
+        link = self.ontology.link_types.get(r.type)
+        if link is None:
             return self._unknown("relation", ref, f"link type '{r.type}'")
-        rep = self.ontology.validate_relation(
-            r.type, r.source_type, r.target_type, r.attributes)
-        return ItemValidation("relation", ref, CONFORMS if rep.ok else INVALID,
-                              rep.ok, list(rep.errors), list(rep.warnings),
-                              dict(rep.coerced))
+
+        # Properties always validated.
+        rep = _validate_properties(link.properties, r.attributes or {}, label=link.name)
+        errors, warnings = list(rep.errors), list(rep.warnings)
+
+        # Domain/range: an *unknown* endpoint type can't be verified (warn, don't
+        # fail); only a *known-but-disallowed* endpoint is a violation.
+        if r.source_type is None and link.source_types:
+            warnings.append(f"{link.name}: source type unknown — domain not verified")
+        if r.target_type is None and link.target_types:
+            warnings.append(f"{link.name}: target type unknown — range not verified")
+        if not _endpoints_ok(link, r.source_type, r.target_type):
+            errors.append(
+                f"{link.name}: {r.source_type} → {r.target_type} not allowed "
+                f"(source={link.source_types or 'any'}, target={link.target_types or 'any'})")
+
+        ok = not errors
+        return ItemValidation("relation", ref, CONFORMS if ok else INVALID,
+                              ok, errors, warnings, dict(rep.coerced))
 
     def _unknown(self, kind: str, ref: str, what: str) -> ItemValidation:
         msg = f"{what} not defined in ontology '{self.ontology.name}'"

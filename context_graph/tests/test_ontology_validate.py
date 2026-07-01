@@ -92,6 +92,20 @@ def test_relation_wrong_direction_is_invalid(onto):
 
 
 @pytest.mark.offline
+def test_unknown_endpoint_type_warns_not_fails(onto):
+    # relation references an entity not declared in the batch → endpoint type
+    # unknown → domain can't be verified → warning, not a violation
+    v = ExtractionValidator(onto)
+    rep = v.validate(
+        entities=[ExtractedEntity("Sarah", "Person")],       # "Deal" not declared
+        relations=[ExtractedRelation("approved", "Sarah", "Deal")],
+    )
+    rel = [i for i in rep.items if i.kind == "relation"][0]
+    assert rep.ok and rel.status == CONFORMS
+    assert any("range not verified" in w for w in rel.warnings)
+
+
+@pytest.mark.offline
 def test_unknown_link_type(onto):
     rep = ExtractionValidator(onto, closed_world=True).validate(
         relations=[ExtractedRelation("bribed", "A", "B")])
