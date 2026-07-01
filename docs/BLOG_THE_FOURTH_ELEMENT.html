@@ -123,6 +123,8 @@ b.hl{color:#8fd9c9}
       <span class="tag"><b>11</b>-field RelationContext</span>
       <span class="tag"><b>CGR3</b> reasoning</span>
       <span class="tag">decision traces &amp; precedents</span>
+      <span class="tag"><b>rules</b> &amp; decision gate</span>
+      <span class="tag"><b>web</b> ingester (any site)</span>
     </div>
   </div>
 </header>
@@ -138,6 +140,9 @@ b.hl{color:#8fd9c9}
     <li><a href="#precedents">Precedents &amp; validity</a></li>
     <li><a href="#benchmark">Does surfacing rc help?</a></li>
     <li><a href="#lightrag">Standing on LightRAG</a></li>
+    <li><a href="#rules">From memory to policy</a></li>
+    <li><a href="#ingest">Filling the graph</a></li>
+    <li><a href="#roadmap">What's next</a></li>
     <li><a href="#fit">Where it fits · try it</a></li>
   </ol>
 </nav>
@@ -460,6 +465,173 @@ rc = RelationContext(
 </section>
 
 <!-- 8 -->
+<section id="rules">
+  <div class="kicker">New · governance</div>
+  <h2>From memory to policy: the decision gate</h2>
+  <p class="lead-p">Once every edge carries <i>why</i> a decision was made, the next question writes itself: should this
+  decision have been allowed at all? Context Graph now ships a <b>business rules engine</b> that evaluates every decision
+  the moment it's recorded.</p>
+
+  <p>A flat graph stores facts; the <code>rc</code> layer made it remember decisions; this layer lets it <b>act on
+  them</b> — pass, flag for review, or reject — before they're ever written.</p>
+
+  <h3>The catch: you can't exact-match free text</h3>
+  <p>The fields a rule wants to read — the relation type, the approver, the channel — are LLM-extracted prose. The same
+  decision surfaces as <code>APPROVES</code>, <code>GRANTED_APPROVAL</code>, "signed off on", "authorized". A classic
+  rule engine matches strings exactly and would miss all but one spelling. So rules get a <b>soft</b> predicate,
+  <code>sim()</code>, backed by fast static embeddings (<a href="https://github.com/MinishLab/model2vec" target="_blank" rel="noopener">model2vec</a>,
+  numpy-only, sub-millisecond on CPU). It matches by <i>meaning</i> against a small <b>concept catalog</b> — and it's
+  cheap enough to run on every write. Numbers, dates and flags stay on exact predicates, where you want them.</p>
+
+<pre><code><span class="cm"># a rule reads like the policy a human would state</span>
+rule <span class="str">"large discount needs finance review"</span>  priority <span class="num">10</span>
+when
+    sim(relation_type, <span class="str">"APPROVAL"</span>) &gt; <span class="num">0.4</span>     <span class="cm"># soft — meaning, not spelling</span>
+    and percent &gt; <span class="num">0.15</span>                     <span class="cm"># hard</span>
+    and approved_via == <span class="str">"slack"</span>             <span class="cm"># hard</span>
+then
+    flag(<span class="str">"Discount &gt;15% approved over Slack — route to Finance for review"</span>)
+end</code></pre>
+  <p class="small">On the real model, <code>sim("GRANTED_APPROVAL", "APPROVAL")</code> scores <b>1.00</b> while unrelated
+  relations sit near <b>0.1</b> — a wide, calibratable gap. Polarity (approved vs. rejected) stays on structured fields,
+  where static embeddings are weak.</p>
+
+  <div class="pull">Exact match asks "is it spelled this way?" The gate asks "is this <i>about</i> an approval?" — and
+  then "is it allowed?"</div>
+
+  <h3>Three outcomes, one audit trail</h3>
+  <p>The gate sits at the single point every decision flows through. A decision <b>passes</b> and persists, gets
+  <b>flagged</b> (persisted, marked <code>needs_review</code>), or is <b>rejected</b> (HTTP&nbsp;422, nothing written).
+  Either way it leaves a record as explainable as a numeric check — <i>matched concept · score · threshold</i>:</p>
+<pre><code>POST /graph/decision/emit  →  <span class="num">200</span> {
+  <span class="str">"outcome"</span>: <span class="str">"FLAG"</span>,
+  <span class="str">"audit"</span>: { <span class="str">"matched_concept"</span>: <span class="str">"APPROVAL"</span>, <span class="str">"score"</span>: <span class="num">1.0</span>, <span class="str">"threshold"</span>: <span class="num">0.4</span>,
+             <span class="str">"rule"</span>: <span class="str">"large discount needs finance review"</span> }
+}                          <span class="cm"># …or 422 if a rule rejects the decision</span></code></pre>
+
+  <h3>Authored over REST, per workspace</h3>
+  <p>Policies are managed through a small <code>/rules</code> API and validated before they're stored — the DSL must
+  parse and every concept a rule references must be defined. Each tenant (workspace) carries its own rule set and concept
+  catalog, with a pinned embedding model so a rule that passed yesterday behaves identically today.</p>
+
+  <div class="callout key">
+    <div class="clabel">◆ Why it matters</div>
+    The graph went from a <b>system of record</b> (facts) to a <b>system of decision</b> (the <code>rc</code> layer) to a
+    <b>system of policy</b> — one where an agent's actions are checked against the institution's own rules, with a
+    defensible reason for every pass, flag, and block.
+  </div>
+</section>
+
+<section id="ingest">
+  <div class="kicker">New · ingestion</div>
+  <h2>Filling the graph — from any website</h2>
+  <p class="lead-p">A decision graph is only as good as what's in it, and in most real deployments the primary source is
+  the customer's own website. So Context Graph now includes a <b>smart web ingester</b>: point it at a URL and it turns
+  the site into grounded, cited knowledge.</p>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 960 172" role="img" aria-label="Web ingestion pipeline">
+    <defs>
+      <marker id="wi-ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b93a7"/></marker>
+      <style>
+        .wb{font:600 13px "Segoe UI",system-ui,sans-serif;fill:#e7ebf3}
+        .ws{font:500 10.5px "Segoe UI",system-ui,sans-serif;fill:#aab3c5}
+      </style>
+    </defs>
+    <g><rect x="8" y="52" width="120" height="64" rx="11" style="fill:rgba(91,141,239,.13);stroke:#5b8def;stroke-width:1.7"/>
+      <text x="68" y="80" text-anchor="middle" class="wb">Any URL</text>
+      <text x="68" y="98" text-anchor="middle" class="ws">a customer site</text></g>
+    <path d="M128 84 L164 84" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#wi-ar)"/>
+    <g><rect x="166" y="42" width="214" height="84" rx="11" style="fill:rgba(240,167,60,.12);stroke:#f0a73c;stroke-width:1.7"/>
+      <text x="273" y="70" text-anchor="middle" class="wb">Crawl · politely</text>
+      <text x="273" y="90" text-anchor="middle" class="ws">static + JS render (headless)</text>
+      <text x="273" y="106" text-anchor="middle" class="ws">+ network capture · robots · rate-limit</text></g>
+    <path d="M380 84 L416 84" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#wi-ar)"/>
+    <g><rect x="418" y="48" width="192" height="72" rx="11" style="fill:rgba(25,184,154,.12);stroke:#19b89a;stroke-width:1.7"/>
+      <text x="514" y="76" text-anchor="middle" class="wb">Any format</text>
+      <text x="514" y="96" text-anchor="middle" class="ws">html · pdf · docx · json…</text>
+      <text x="514" y="110" text-anchor="middle" class="ws">classified by content-type</text></g>
+    <path d="M610 84 L646 84" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#wi-ar)"/>
+    <g><rect x="648" y="52" width="140" height="64" rx="11" style="fill:rgba(169,116,240,.14);stroke:#a974f0;stroke-width:1.7"/>
+      <text x="718" y="80" text-anchor="middle" class="wb">CG ingestion</text>
+      <text x="718" y="98" text-anchor="middle" class="ws">extract (h,r,t,rc)</text></g>
+    <path d="M788 84 L824 84" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#wi-ar)"/>
+    <g><rect x="826" y="52" width="126" height="64" rx="11" style="fill:rgba(91,141,239,.13);stroke:#5b8def;stroke-width:1.7"/>
+      <text x="889" y="78" text-anchor="middle" class="wb">Graph</text>
+      <text x="889" y="98" text-anchor="middle" class="ws">+ URL provenance</text></g>
+  </svg>
+  </div>
+  <figcaption>Point it at a URL; it crawls politely, reads any format, and hands the content to Context Graph's ingestion
+    — every fact tagged with the page it came from.</figcaption>
+  </figure>
+
+  <h3>Any format, judged by content-type</h3>
+  <p>The crawler never guesses by file extension. It fetches each link and classifies it by <b>content-type</b> — HTML
+  pages are crawled; <i>any</i> data payload (PDF, Word, PowerPoint, Excel, JSON, CSV, Markdown…) is downloaded and handed
+  to Context Graph's existing document pipeline. A new format needs no new code.</p>
+
+  <h3>It reads what the browser reads</h3>
+  <p>Modern sites hide their data: content rendered by JavaScript, documents inside embedded viewers, catalogs fetched
+  from back-end APIs. So the ingester renders pages in a headless browser <b>and captures the network responses</b> a
+  page makes — finding data that never appears as a link in the HTML. On a real school-district site, the entire policy
+  catalog lived only in a JSON API the page called at load time — invisible to ordinary scraping, captured here.</p>
+
+  <h3>Polite by default, cited by design</h3>
+  <p>It honours <code>robots.txt</code>, rate-limits per host, and stays on-domain — and every fact it extracts carries
+  the <b>page URL as provenance</b>, so the mentor can cite the exact page it learned something from.</p>
+<pre><code>POST /scrape { <span class="str">"url"</span>: <span class="str">"https://a-district.org/policies"</span>, <span class="str">"render_js"</span>: true }
+   →  crawl + render + capture  →  documents ingested  →  graph, with citations</code></pre>
+
+  <div class="callout caveat">
+    <div class="clabel">◆ The honest edge</div>
+    Capturing everything also captures noise (analytics, tracking beacons). Telling a policy catalog from a tracking
+    pixel — and pulling the document URLs out of an API response — is a <i>relevance</i> problem, not a plumbing one.
+    That's the next piece: an <b>LLM site analyst</b> (see the roadmap).
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="kicker">What's next</div>
+  <h2>The road from memory to operational ontology</h2>
+  <p class="lead-p">The decision gate and the web ingester are in; the plan turns Context Graph into a system you don't
+  just reason from, but operate from. <span class="small">(The AI rule author — plain-English policy → validated DSL,
+  dry-run before it goes live — already ships with the rules engine.)</span></p>
+
+  <div class="grid g3" style="margin:18px 0">
+    <div class="card">
+      <div class="kicker" style="color:var(--c)">Near term</div>
+      <h3 style="margin-top:2px">LLM site analyst</h3>
+      <p class="small">The brain on top of the web ingester: given a page, its links, and its captured API responses, an
+      LLM judges <i>relevance</i> (policy catalog vs. tracking beacon) and extracts the document URLs to fetch — so the
+      graph fills with what matters, on any site.</p>
+    </div>
+    <div class="card">
+      <div class="kicker" style="color:var(--a)">In progress</div>
+      <h3 style="margin-top:2px">Ontology layer</h3>
+      <p class="small">A typed schema — object types, typed properties, link types, cardinality — authored top-down and
+      AI-assisted. It gives rules a real vocabulary (<code>Order.value</code>, <code>Employee.role</code>) and validates
+      what extraction writes. The schema model and store are built.</p>
+    </div>
+    <div class="card">
+      <div class="kicker" style="color:var(--ctrl)">Beyond</div>
+      <h3 style="margin-top:2px">Actions &amp; access</h3>
+      <p class="small">Executable operations bound to objects, deterministic inference, object-level access control, and
+      agents that discover the actions they're permitted to take and plan over them.</p>
+    </div>
+  </div>
+
+  <p>The arc is deliberate: <b>facts → decisions → policy → an operational ontology</b>, fed from real sources. Each stage
+  stands on its own and sharpens the next — the rules engine gets dramatically stronger once the ontology gives it typed
+  values to reason over.</p>
+
+  <div class="callout info">
+    <div class="clabel">Read the plan</div>
+    The full gap analysis, architecture, and build log live in the companion
+    <a href="CLOSING_THE_GAPS.html">“Closing the Gaps”</a> working document — including the diagrams for how a decision
+    is matched to the graph and flows through the gate.
+  </div>
+</section>
+
 <section id="fit">
   <div class="kicker">In practice</div>
   <h2>Where it fits · try it</h2>
