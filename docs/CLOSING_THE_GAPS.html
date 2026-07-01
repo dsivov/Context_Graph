@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context Graph — Closing the Gaps (Discussion &amp; Proposal)</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  /* accents: a=ontology, b=rc/decisions, c=retrieval, ctrl=API, rules=business-rules, danger/ok */
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --rules:#ef6f9e; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1180px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 80% -10%, rgba(239,111,158,.10), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(91,141,239,.08), transparent 55%), var(--bg);
+  color:var(--ink);font:16px/1.65 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+
+.hero{padding:64px 22px 30px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(239,111,158,.06),transparent)}
+.hero-inner{max-width:var(--maxw);margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,52px);line-height:1.05;margin:.3em 0 .2em;
+  background:linear-gradient(92deg,#ffd0e0,#cfe0ff 55%,#8fd9c9);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(16px,2.1vw,20px);color:var(--ink-soft);max-width:880px}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:248px 1fr;gap:34px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(239,111,158,.18),transparent);color:#fff;border-left:2px solid var(--rules)}
+
+main{min-width:0}
+section{margin:0 0 46px;scroll-margin-top:20px}
+h2{font-size:clamp(21px,3vw,28px);margin:0 0 4px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.sec-num{font-family:var(--mono);font-size:14px;color:var(--rules);border:1px solid var(--line);border-radius:8px;padding:2px 8px;background:var(--panel)}
+.sec-sub{color:var(--ink-faint);margin:0 0 18px;font-size:15px}
+h3{font-size:18px;margin:26px 0 8px}
+h4{font-size:15px;margin:18px 0 6px;color:var(--ink-soft);letter-spacing:.02em}
+p{margin:.6em 0}
+.small{font-size:13.5px;color:var(--ink-faint)}
+ul,ol{margin:.5em 0 .6em;padding-left:1.25em} li{margin:.28em 0}
+
+.prio{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--line);vertical-align:middle}
+.p1{background:rgba(239,111,158,.16);color:#ff9dc0;border-color:rgba(239,111,158,.45)}
+.p2{background:rgba(91,141,239,.16);color:#9cc0ff;border-color:rgba(91,141,239,.45)}
+.p3{background:rgba(123,132,153,.16);color:var(--ink-soft)}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.card+.card{margin-top:14px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3,.g4{grid-template-columns:1fr}}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:14px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)} .callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)} .callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(239,111,158,.55);background:rgba(239,111,158,.10)} .callout.key .clabel{color:#ff9dc0}
+.callout.q{border-color:rgba(169,116,240,.5);background:rgba(169,116,240,.08)} .callout.q .clabel{color:#c4a3f7}
+
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--a)}
+.stat.b::after{background:var(--b)} .stat.c::after{background:var(--c)} .stat.ctrl::after{background:var(--ctrl)} .stat.rules::after{background:var(--rules)}
+.stat .v{font-size:26px;font-weight:800;letter-spacing:-.02em} .stat .l{color:var(--ink-faint);font-size:13px;margin-top:3px}
+
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--line)}
+.m-get{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.m-post{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.s-have{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.s-part{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.s-gap{background:rgba(239,91,110,.14);color:#ff9aa8;border-color:rgba(239,91,110,.4)}
+
+figure{margin:16px 0}
+figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;overflow:auto}
+figcaption{color:var(--ink-faint);font-size:13px;margin-top:8px} figcaption b{color:var(--ink-soft)}
+
+details.fold{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin:12px 0;overflow:hidden}
+details.fold>summary{cursor:pointer;padding:12px 16px;font-weight:600;list-style:none;display:flex;gap:10px;align-items:center}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::before{content:"▸";color:var(--rules)} details.fold[open]>summary::before{content:"▾"}
+.foldbody{padding:4px 16px 16px;border-top:1px solid var(--line-soft)}
+
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{color:#d6deec}
+.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}.ty{color:#bb9af7}
+.flow{font-family:var(--mono);font-size:13px;line-height:1.5;color:var(--ink-soft)}
+.flow b{color:var(--ink)}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 60px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+.disc{border:1px solid var(--line);border-left:3px solid var(--ctrl);border-radius:10px;background:var(--panel2);padding:12px 14px;margin:10px 0}
+.disc .who{font-size:12px;color:var(--ink-faint);font-family:var(--mono);margin-bottom:4px}
+.steps{counter-reset:s;list-style:none;padding-left:0}
+.steps li{counter-increment:s;position:relative;padding:8px 0 8px 38px;border-bottom:1px solid var(--line-soft)}
+.steps li::before{content:counter(s);position:absolute;left:0;top:8px;width:24px;height:24px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);color:var(--rules);font-family:var(--mono);font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:700}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Working document · Discussion &amp; Proposal</div>
+    <h1>Closing the Gaps</h1>
+    <p class="lede">A starting point for deciding how Context Graph evolves from a <b>contextual retrieval memory</b>
+      toward an <b>operational ontology</b>. Driven by the gap analysis against
+      <a href="https://medium.com/@aftab001x/the-ai-revolution-nobody-saw-coming-why-ontology-just-beat-vector-embeddings-9e999457f108" target="_blank" rel="noopener">“Ontology just beat vector embeddings.”</a>
+      Prioritised: <b>(1)</b> a Business Rules Engine (BRE) with AI-generated DSL, <b>(2)</b> Ontology creation,
+      <b>(3)</b> everything else captured for later.</p>
+    <div class="hero-tags">
+      <span class="tag"><span class="prio p1">P1</span> Business Rules Engine</span>
+      <span class="tag"><span class="prio p2">P2</span> Ontology creation</span>
+      <span class="tag"><span class="prio p3">P3</span> Backlog gaps</span>
+      <span class="tag"><b>AI</b>-authored DSL</span>
+      <span class="tag">status: <b>draft for discussion</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">Contents</div>
+  <ol>
+    <li><a href="#summary">Executive summary</a></li>
+    <li><a href="#scorecard">Gap scorecard</a></li>
+    <li><a href="#p1">P1 · Business Rules Engine</a></li>
+    <li><a href="#p1-fuzzy">P1 · Fuzzy fact matching</a></li>
+    <li><a href="#p1-dsl">P1 · AI-generated DSL</a></li>
+    <li><a href="#p1-api">P1 · Integration &amp; API</a></li>
+    <li><a href="#p2">P2 · Ontology creation</a></li>
+    <li><a href="#p3">P3 · Backlog gaps</a></li>
+    <li><a href="#roadmap">Sequencing &amp; dependencies</a></li>
+    <li><a href="#questions">Open questions</a></li>
+    <li><a href="#log">Discussion log</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- 1 -->
+<section id="summary">
+  <h2><span class="sec-num">01</span> Executive summary</h2>
+  <p class="sec-sub">Two axes, one direction of travel.</p>
+  <p>The gap analysis found that Context Graph (CG) <b>meets or exceeds</b> the article on the
+  <i>decision-memory / provenance / temporal</i> axis — that is exactly what the 11-field
+  <code>RelationContext</code> (<code>rc</code>) was built for — and is solid on multi-hop retrieval (CGR3). What CG
+  lacks is the article’s other half: the ontology as an <b>operational runtime</b> — typed schema, executable actions,
+  <b>constraint enforcement</b>, inference, and object-level access control.</p>
+
+  <p>This document proposes closing that half in priority order. The headline move (P1) is a
+  <b>Business Rules Engine</b>: it directly fills the largest, most concrete gaps — <i>constraint enforcement</i> and
+  the first useful slice of an <i>action layer</i> — while staying close to CG’s grain. Because authoring rule logic by
+  hand is the adoption bottleneck, we pair it with an <b>AI agent that generates the rule DSL</b> from natural-language
+  policy, per use case. P2 (Ontology) then gives those rules a typed vocabulary to reference. P3 captures the remaining
+  gaps so nothing is lost.</p>
+
+  <div class="grid g4" style="margin:18px 0">
+    <div class="stat rules"><div class="v">P1</div><div class="l">Business Rules Engine + AI DSL</div></div>
+    <div class="stat"><div class="v">P2</div><div class="l">Ontology: typed schema &amp; cardinality</div></div>
+    <div class="stat b"><div class="v">5</div><div class="l">backlog gaps documented (P3)</div></div>
+    <div class="stat c"><div class="v">0→1</div><div class="l">from system-of-record to system-of-policy</div></div>
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">The one idea</div>
+    CG today records <i>that</i> a decision happened (<code>emit_decision_trace</code>). A rules engine lets CG say
+    <i>whether a decision is <b>allowed</b></i> — and, eventually, <i>act</i> on it. That is the jump from passive
+    memory to active policy.
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="scorecard">
+  <h2><span class="sec-num">02</span> Gap scorecard</h2>
+  <p class="sec-sub">Where we stand against the article’s claimed capabilities. <span class="pill s-have">have</span>
+    <span class="pill s-part">partial</span> <span class="pill s-gap">gap</span> — and which priority addresses it.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Article capability</th><th>CG today</th><th>Evidence / note</th><th>Addressed by</th></tr></thead>
+    <tbody>
+      <tr><td>Decision-history tracking</td><td><span class="pill s-have">exceeds</span></td><td><code>rc</code> 11-field record, <code>decisions_vdb</code> — <span class="mono">context_graph_types.py:16</span></td><td>—</td></tr>
+      <tr><td>Precedent discovery</td><td><span class="pill s-have">have</span></td><td><code>find_precedents()</code> — <span class="mono">context_graph.py:785</span></td><td>—</td></tr>
+      <tr><td>Multi-hop reasoning</td><td><span class="pill s-have">have</span></td><td>CGR3 loop — <span class="mono">context_graph.py:888</span></td><td>—</td></tr>
+      <tr><td>Temporal reasoning</td><td><span class="pill s-part">partial</span></td><td><code>valid_from/until</code>, <code>is_active()</code> — edge-level only</td><td>P2/P3</td></tr>
+      <tr><td>Structured context delivery</td><td><span class="pill s-have">have</span></td><td><code>RelationContext.to_text()</code></td><td>—</td></tr>
+      <tr><td><b>Constraint enforcement</b></td><td><span class="pill s-gap">gap</span></td><td>no rule eval anywhere</td><td><span class="prio p1">P1</span></td></tr>
+      <tr><td><b>Business-logic encapsulation</b></td><td><span class="pill s-gap">gap</span></td><td>no validation/workflow rules</td><td><span class="prio p1">P1</span></td></tr>
+      <tr><td>Action / kinetic layer</td><td><span class="pill s-gap">gap</span></td><td>decisions described, never executed</td><td><span class="prio p1">P1</span> (slice) · P3</td></tr>
+      <tr><td>Formal semantic schema / typed properties</td><td><span class="pill s-gap">gap</span></td><td>open entity-type list — <span class="mono">constants.py</span></td><td><span class="prio p2">P2</span></td></tr>
+      <tr><td>Cardinality &amp; edge directionality</td><td><span class="pill s-gap">gap</span></td><td>graph effectively undirected — <span class="mono">routes:517</span></td><td><span class="prio p2">P2</span></td></tr>
+      <tr><td>Inference / fact derivation</td><td><span class="pill s-gap">gap</span></td><td>LLM synthesis ≠ entailment</td><td>P3</td></tr>
+      <tr><td>Object-level access control</td><td><span class="pill s-gap">gap</span></td><td>login + workspace only — <span class="mono">auth.py</span></td><td>P3</td></tr>
+      <tr><td>Agent action-discovery</td><td><span class="pill s-gap">gap</span></td><td>MCP exposes queries, not actions</td><td>P3</td></tr>
+      <tr><td>Dynamic workflow generation</td><td><span class="pill s-gap">gap</span></td><td>no planner over typed graph</td><td>P3</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 3 -->
+<section id="p1">
+  <h2><span class="sec-num">03</span> <span class="prio p1">P1</span> Business Rules Engine</h2>
+  <p class="sec-sub">Closing constraint-enforcement + the first slice of the action layer, on CG’s grain.</p>
+
+  <h3>Why this first</h3>
+  <p>It is the single highest-leverage move: it lands three article capabilities at once (constraint enforcement,
+  business-logic encapsulation, and an executable action slice), it has an obvious anchor point in code
+  (<code>emit_decision_trace</code> is already the chokepoint for every decision), and it does not require the full
+  ontology to exist before it pays off. Rules can run against a flat projection of the edge + <code>rc</code> today,
+  and tighten as the ontology (P2) arrives.</p>
+
+  <h3>The library</h3>
+  <p>Proposed foundation: <a href="https://github.com/manfred-kaiser/business-rule-engine" target="_blank" rel="noopener">manfred-kaiser/business-rule-engine</a>
+  — a small, dependency-light Python DSL where each rule is a <code>when … then … end</code> block. Conditions are plain
+  Python boolean expressions over a <code>params</code> dict; <code>then</code> lines call <b>registered functions</b>.
+  This maps cleanly onto CG: <code>params</code> = the decision being recorded, registered functions = our enforcement
+  &amp; side-effect verbs.</p>
+
+  <figure><div class="fig">
+<pre><code><span class="cm"># business_rule_engine — native shape</span>
+<span class="kw">from</span> business_rule_engine <span class="kw">import</span> RuleParser
+
+<span class="kw">def</span> <span class="fn">reject</span>(reason):       <span class="cm"># a registered action verb</span>
+    <span class="kw">raise</span> RuleViolation(reason)
+
+rules = <span class="str">"""
+rule "approval over $10k needs a manager"  priority 10
+when
+    relation_type == "APPROVES"
+    and amount > 10000
+    and approver_role != "manager"
+then
+    reject("Approvals over $10,000 require a manager")
+end
+"""</span>
+
+parser = RuleParser()
+parser.register_function(reject)
+parser.parsestr(rules)
+parser.execute({<span class="str">"relation_type"</span>:<span class="str">"APPROVES"</span>, <span class="str">"amount"</span>:<span class="num">25000</span>, <span class="str">"approver_role"</span>:<span class="str">"analyst"</span>})
+<span class="cm"># → RuleViolation: Approvals over $10,000 require a manager</span></code></pre>
+    <figcaption><b>The article’s worked example</b> — <code>IF order.value &gt; $10k AND role != manager THEN FORBIDDEN</code> — expressed verbatim as a CG rule.</figcaption>
+  </div></figure>
+
+  <h3>How a CG decision becomes rule <code>params</code></h3>
+  <p>The bridge is a deterministic <b>projection</b>: flatten the edge, its <code>RelationContext</code>, and (later)
+  the typed attributes of the head/tail entities into one dict the engine can evaluate. No magic — one function, one
+  table of derived fields, easy to test.</p>
+
+  <figure><div class="fig">
+<pre><code><span class="kw">def</span> <span class="fn">project_decision</span>(src, tgt, relation_type, rc, ontology=<span class="kw">None</span>) -> dict:
+    <span class="kw">return</span> {
+        <span class="str">"src"</span>: src, <span class="str">"tgt"</span>: tgt, <span class="str">"relation_type"</span>: relation_type,
+        <span class="str">"approved_by"</span>: rc.approved_by,
+        <span class="str">"approved_via"</span>: rc.approved_via,
+        <span class="str">"policy_ref"</span>: rc.policy_ref,
+        <span class="str">"confidence"</span>: rc.confidence_score,
+        <span class="str">"valid_from"</span>: rc.valid_from, <span class="str">"valid_until"</span>: rc.valid_until,
+        <span class="str">"is_active"</span>: rc.is_active(),
+        <span class="cm"># parsed numerics from quantitative_data (e.g. "20% discount", "$25,000")</span>
+        <span class="str">"amount"</span>: parse_amount(rc.quantitative_data),
+        <span class="str">"percent"</span>: parse_percent(rc.quantitative_data),
+        <span class="cm"># P2: typed entity attributes &amp; roles, when the ontology exists</span>
+        <span class="str">"approver_role"</span>: (ontology <span class="kw">and</span> ontology.role_of(rc.approved_by)),
+    }</span></code></pre>
+    <figcaption>The projection is the contract between CG’s data model and the rule language. Adding a derived field here is how we widen what rules can express.</figcaption>
+  </div></figure>
+
+  <h3>Where rules fire (enforcement points)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Hook</th><th>When</th><th>Rule kind</th><th>Effect on a trigger</th></tr></thead>
+    <tbody>
+      <tr><td><b>pre-emit gate</b></td><td>inside <code>emit_decision_trace()</code>, before persist</td><td>validation / constraint</td><td><code>reject</code> → 422; or <code>flag</code> → write with <code>needs_review</code></td></tr>
+      <tr><td><b>post-ingest sweep</b></td><td>after document extraction writes edges</td><td>detective</td><td>annotate edge, raise alert, queue for human</td></tr>
+      <tr><td><b>query-time policy</b></td><td>during <code>/cgr3/query</code> assembly</td><td>visibility / advisory</td><td>filter or label non-compliant edges in context</td></tr>
+      <tr><td><b>action verb</b></td><td><code>then</code> calls a side-effecting function</td><td>reactive (action slice)</td><td><code>notify()</code>, <code>open_ticket()</code>, <code>emit_followup_edge()</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout caveat">
+    <div class="clabel">Scope honesty</div>
+    business-rule-engine evaluates <i>Python boolean expressions</i> and triggers actions. That fully covers
+    <b>constraint enforcement</b> and a <b>reactive action slice</b> — it is <i>not</i> an OWL-style entailment/inference
+    engine. True fact-derivation stays in P3 (§08). We should not over-promise “inference” from this component.
+  </div>
+
+  <details class="fold"><summary>A second, CG-native example — discount policy with provenance</summary>
+  <div class="foldbody">
+<pre><code>rule <span class="str">"large discount must name an approver"</span> priority <span class="num">20</span>
+when
+    relation_type == <span class="str">"GRANTS_DISCOUNT"</span>
+    and percent &gt; <span class="num">0.15</span>
+    and approved_by is None
+then
+    flag(<span class="str">"Discount &gt;15% recorded with no approver — needs sign-off"</span>)
+end
+
+rule <span class="str">"expired authority"</span> priority <span class="num">15</span>
+when
+    relation_type == <span class="str">"APPROVES"</span>
+    and is_active == False
+then
+    flag(<span class="str">"Approval references an authority outside its validity window"</span>)
+end</code></pre>
+  <p class="small">Both rules read entirely from fields CG already captures — no ontology required to ship them.</p>
+  </div></details>
+</section>
+
+<!-- 4 -->
+<section id="p1-fuzzy">
+  <h2><span class="sec-num">04</span> <span class="prio p1">P1</span> Fuzzy fact matching — past exact-match brittleness</h2>
+  <p class="sec-sub">The objection that breaks a naïve Business Rules Engine on AI data, and the cheap fix: static-vector similarity as a rule predicate.</p>
+
+  <h3>The flaw</h3>
+  <p>A classic rules engine matches <b>exactly</b>: <code>relation_type == "APPROVES"</code>. But in CG almost every field
+  a rule wants to read is <b>free-text, LLM-extracted, and paraphrased</b> — the same decision surfaces as
+  <code>APPROVES</code>, <code>GRANTED_APPROVAL</code>, <code>"signed off on"</code>, <code>"authorized"</code>. Exact
+  string equality misses all but one spelling, so a hand-written rule silently under-fires. On the data CG actually holds,
+  exact matching is not a minor limitation — it is disqualifying.</p>
+
+  <div class="callout key">
+    <div class="clabel">The matching spectrum</div>
+    Think of three tiers, cheapest first — the engine should use the cheapest that works and escalate only when needed:
+    <b>exact</b> (free, self-explaining, right for numbers/dates/flags) →
+    <b>static-vector similarity</b> (cheap, deterministic, right for free-text categoricals &amp; prose) →
+    <b>LLM judgment</b> (expensive, non-deterministic — escalation only, e.g. near-threshold cases).
+    Today’s gap is the missing <i>middle</i> tier.
+  </div>
+
+  <h3>Why <a href="https://github.com/MinishLab/model2vec" target="_blank" rel="noopener">model2vec</a> is the right middle tier</h3>
+  <p>The rules gate runs <b>synchronously on every decision write</b> (the pre-emit hook, §03). That latency budget is what
+  rules out the alternatives — an LLM judge or an OpenAI-embedding call per field per event is far too slow and (for the
+  LLM) non-deterministic. model2vec is built for exactly this shape:</p>
+  <div class="grid g4" style="margin:14px 0">
+    <div class="stat rules"><div class="v">~500×</div><div class="l">faster than the source sentence-transformer</div></div>
+    <div class="stat"><div class="v">numpy</div><div class="l">only major dep at inference — no torch, runs on CPU</div></div>
+    <div class="stat b"><div class="v">8–30 MB</div><div class="l">on disk (potion-base-8M … 32M)</div></div>
+    <div class="stat c"><div class="v">MIT</div><div class="l">license — matches CG; static = deterministic</div></div>
+  </div>
+  <p class="small">Static embeddings (distilled token vectors, no live transformer pass) make per-event encoding sub-millisecond,
+  so hundreds of rules × a few anchor concepts each cost nothing per write. Candidate models:
+  <code>potion-retrieval-32M</code> (tuned for matching) or <code>potion-base-8M</code> (smallest);
+  <code>potion-multilingual-128M</code> if non-English flows appear.</p>
+
+  <div class="callout ok">
+    <div class="clabel">Built &amp; validated (2026-06-30)</div>
+    The field-level <code>sim()</code> predicate is implemented in the CG-owned package
+    <code>context_graph/rules/</code> (not inside the <code>lightrag</code> dependency), with the Concept Catalog,
+    injectable backend, and <code>business_rule_engine</code> wiring. Empirical check on <code>potion-retrieval-32M</code>
+    (512-dim) confirms the design: a single anchor is polarity-blind — <code>approved~"signed off on"</code> = <b>0.117</b>
+    (synonym) scored <i>below</i> <code>approved~rejected</code> = <b>0.209</b> (antonym). The multi-phrase catalog with
+    max-over-examples fixes it cleanly: matches floor at <b>0.534</b>, non-matches (incl. antonyms) ceil at <b>0.238</b>
+    — the default <code>0.4</code> threshold sits in the gap. 13 tests pass (offline + real-model integration).
+  </div>
+
+  <h3>Integration: <code>sim()</code> as a registered DSL predicate</h3>
+  <p>No fork of the rules engine. business-rule-engine’s <code>when</code> is a Python boolean expression over registered
+  functions, so we simply register a similarity function backed by model2vec — and it becomes available in every rule.
+  It returns a <b>float</b> (not a bool with a hidden threshold) so the threshold stays visible in the rule text, which
+  matters for both the AI author (§05) and human review.</p>
+
+  <figure><div class="fig">
+<pre><code>rule <span class="str">"approval control"</span>
+when
+    sim(relation_type, APPROVAL) &gt; <span class="num">0.62</span>     <span class="cm"># SOFT: free-text relation, paraphrase-tolerant</span>
+    and amount &gt; <span class="num">10000</span>                     <span class="cm"># HARD: structured number — never fuzzy</span>
+    and is_active == True                    <span class="cm"># HARD: structured flag</span>
+then
+    reject(<span class="str">"Approvals over $10k need a manager"</span>)
+end</code></pre>
+    <figcaption>The natural split falls out for free: <b>hard predicates for structured facts</b> (numbers, dates, flags), <b>soft predicates for semantic facts</b> (relation type, decision_trace, channel). You never want fuzzy on <code>amount &gt; 10000</code>.</figcaption>
+  </div></figure>
+
+  <h3>The Concept Catalog — don’t embed ad-hoc strings</h3>
+  <p>Rather than each rule embedding its own anchor phrase, define <b>named concepts</b> per workspace, each backed by a
+  few example phrases and embedded <b>once</b> at compile time (anchors are static; only the incoming fact is embedded
+  per event). Rules reference concepts by name (<code>APPROVAL</code> above). Matching against the <i>max similarity over
+  several examples</i> is far more stable than a single anchor.</p>
+  <figure><div class="fig">
+<pre><code>APPROVAL := [<span class="str">"approved"</span>, <span class="str">"signed off on"</span>, <span class="str">"authorized"</span>, <span class="str">"granted approval"</span>]
+REFUND   := [<span class="str">"refund issued"</span>, <span class="str">"money returned"</span>, <span class="str">"reimbursed"</span>]
+ESCALATE := [<span class="str">"escalated to"</span>, <span class="str">"raised to management"</span>, <span class="str">"flagged for review"</span>]</code></pre>
+    <figcaption>The catalog centralises curation and calibration — and is the <b>natural bridge to P2</b>: ontology link-types / event-types <i>are</i> these concepts. P1 ships a flat catalog; P2 takes ownership of it.</figcaption>
+  </div></figure>
+
+  <h3>Decisions that make or break it</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Concern</th><th>Risk if ignored</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td><b>Thresholds</b></td><td>“0.62” is meaningless to an expert and drifts across phrasings</td><td>Calibrate from the §05 fixtures — pick the threshold separating positive/negative cases; let the agent propose anchor set + threshold</td></tr>
+      <tr><td><b>Determinism</b></td><td>Swapping the model silently flips rule outcomes</td><td>Pin model id+version with each rule set; embeddings are behaviour</td></tr>
+      <tr><td><b>Explainability</b></td><td>Fuzzy matches aren’t self-explaining like <code>amount&gt;10000</code></td><td>Record matched concept + score vs threshold in the eval result: “matched APPROVAL at 0.78 ≥ 0.62”</td></tr>
+      <tr><td><b>Polarity / negation</b></td><td>Static vectors place <i>“not approved”</i> near <i>“approved”</i></td><td>Use similarity for <i>topical routing</i> only; keep yes/no on structured fields</td></tr>
+      <tr><td><b>Two vector spaces</b></td><td>Confusion with the 3072-d <code>decisions_vdb</code> retrieval vectors</td><td>Name them distinctly; model2vec gating vectors are <b>not</b> comparable to retrieval vectors</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout info">
+    <div class="clabel">Recommended path — (A) field-level, with (B) as an optional router</div>
+    <b>(A) Field-level predicate</b> — <code>sim(field, CONCEPT)</code> matches one fact field against a concept. Keeps
+    the boolean DSL intact, composable, fits cleanly. <b>Primary recommendation.</b><br>
+    <b>(B) Whole-event matching</b> — embed the entire decision and match it against labelled prototype events
+    (“fire when this resembles <i>these</i> past cases”). A different, case-based paradigm — closer to the existing
+    <code>find_precedents</code>. <b>Optional later:</b> use (B) as a coarse router that selects <i>which</i> (A)-style
+    rules to evaluate. Not exclusive; start with (A).
+  </div>
+
+  <div class="callout q">
+    <div class="clabel">For discussion</div>
+    Which pretrained model do we standardise on (<code>potion-retrieval-32M</code> vs <code>potion-base-8M</code>), or do
+    we eventually <i>distill</i> a CG-domain static model? Is the concept catalog workspace-scoped from day one? Do we
+    ever escalate near-threshold matches to an LLM judge, or keep the gate purely static for determinism?
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="p1-dsl">
+  <h2><span class="sec-num">05</span> <span class="prio p1">P1</span> AI-generated DSL — a rule author per use case</h2>
+  <p class="sec-sub">The adoption unlock: turn natural-language policy into validated, executable rules.</p>
+
+  <p>Hand-writing DSL is the bottleneck the article’s “expert-authored” principle quietly assumes. We invert it: a
+  domain expert states policy in plain language; an <b>AI agent drafts the DSL</b>, grounded in what fields and verbs
+  actually exist, then we <b>validate before it can ever fire</b>. The agent is constrained, not trusted — every draft
+  passes a parse check and a dry-run on fixtures before a human approves it.</p>
+
+  <h3>Generation loop</h3>
+  <ol class="steps">
+    <li><b>Ground the agent.</b> Hand it the <i>capability manifest</i>: available <code>params</code> fields (from the
+      projection), registered action verbs (<code>reject</code>, <code>flag</code>, <code>notify</code>…), the ontology
+      vocabulary (P2: object types, properties, link types), and a few canonical rule examples.</li>
+    <li><b>Draft.</b> Agent emits one or more <code>when…then…end</code> blocks from the NL policy, restricted to
+      grounded fields and verbs only.</li>
+    <li><b>Validate (hard gate).</b> <code>RuleParser.parsestr()</code> must parse; every referenced field must exist in
+      the projection; every <code>then</code> verb must be registered. Parse/lint failure → auto-repair prompt back to
+      the agent (bounded retries).</li>
+    <li><b>Dry-run.</b> Execute the candidate against <i>fixture decisions</i> (positive + negative cases the agent also
+      proposes). Show the human exactly which fixtures trigger.</li>
+    <li><b>Explain &amp; approve.</b> Agent renders the rule back into NL (“this blocks…”) for review. Human approves →
+      rule is stored, versioned, and enabled per workspace. Rejection feeds back as guidance.</li>
+  </ol>
+
+  <figure><div class="fig">
+<div class="flow">
+  <b>NL policy</b>  →  [ Rule-Author Agent ]  →  <b>DSL draft</b><br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↑ grounded by<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>capability manifest</b> (params · verbs · ontology vocab)<br>
+  <br>
+  <b>DSL draft</b> → parse-check → field/verb lint → <b>dry-run on fixtures</b> → human ✓ → <b>stored rule</b>
+</div>
+    <figcaption>The agent never writes directly to the live rule set; <b>parse + lint + dry-run + human approval</b> sit between draft and enforcement.</figcaption>
+  </div></figure>
+
+  <div class="callout info">
+    <div class="clabel">Example round-trip</div>
+    <b>Expert says:</b> “Flag any discount over 15% that was approved over Slack, so Finance can review it.”<br>
+    <b>Agent drafts</b> — a <i>soft</i> relation match plus <i>hard</i> structured checks:
+<pre style="margin-top:8px"><code>rule <span class="str">"large discount needs finance review"</span>  priority <span class="num">10</span>
+when
+    sim(relation_type, <span class="str">"APPROVAL"</span>) &gt; <span class="num">0.4</span>     <span class="cm"># soft — paraphrase-tolerant</span>
+    and percent &gt; <span class="num">0.15</span>                     <span class="cm"># hard</span>
+    and approved_via == <span class="str">"slack"</span>             <span class="cm"># hard</span>
+then
+    flag(<span class="str">"Discount &gt;15% approved over Slack — route to Finance for review"</span>)
+end</code></pre>
+    <b>Then:</b> parses ✓, concept <code>APPROVAL</code> + fields exist ✓, dry-run <span style="color:#ffce86">flags</span> the
+    negative fixture (20% via Slack) and passes the positive one (10% via Jira) → expert approves.
+    <b>→ §06 traces this exact rule firing on a real decision, end to end.</b>
+  </div>
+
+  <div class="callout q">
+    <div class="clabel">For discussion</div>
+    Reuse the existing CG LLM binding for the agent, or a dedicated stronger model? Where do fixtures come from —
+    expert-authored, sampled from real edges, or agent-synthesised then human-trimmed? Do we let the agent propose
+    <i>new</i> action verbs (needs code) or only compose registered ones (safer)?
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="p1-api">
+  <h2><span class="sec-num">06</span> <span class="prio p1">P1</span> Integration — how the Business Rules Engine works with CG</h2>
+  <p class="sec-sub">The end-to-end picture: where a decision meets the rules gate, and the concrete plan to wire
+    the (already-built) <code>sim()</code> predicate into CG.</p>
+
+  <h3>The whole flow at a glance</h3>
+  <figure><div class="fig">
+  <svg viewBox="0 0 1040 650" role="img" aria-label="Business Rules Engine × CG integration architecture">
+    <defs>
+      <style>
+        .b{font:600 12.5px "Segoe UI",system-ui,sans-serif}
+        .s{font:500 10.5px "Segoe UI",system-ui,sans-serif}
+        .t{font:700 10.5px ui-monospace,monospace;letter-spacing:.03em}
+        text{fill:#e7ebf3} .mut{fill:#aab3c5}
+        .ln{stroke:#8b93a7;stroke-width:1.6;fill:none}
+      </style>
+      <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b93a7"/></marker>
+      <marker id="ar-ok" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#3ecf8e"/></marker>
+      <marker id="ar-am" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#f0a73c"/></marker>
+      <marker id="ar-rd" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#ef5b6e"/></marker>
+      <marker id="ar-pu" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#a974f0"/></marker>
+    </defs>
+
+    <!-- AUTHORING BAND (purple) -->
+    <text x="28" y="26" class="t mut">AUTHORING&#160;·&#160;§05</text>
+    <g>
+      <rect x="28" y="34" width="150" height="52" rx="10" style="fill:rgba(169,116,240,.12);stroke:#a974f0;stroke-width:1.5"/>
+      <text x="103" y="64" text-anchor="middle" class="b">NL policy</text>
+    </g>
+    <g>
+      <rect x="214" y="34" width="170" height="52" rx="10" style="fill:rgba(169,116,240,.12);stroke:#a974f0;stroke-width:1.5"/>
+      <text x="299" y="58" text-anchor="middle" class="b">Rule-Author Agent</text>
+      <text x="299" y="74" text-anchor="middle" class="s mut">NL → DSL draft</text>
+    </g>
+    <g>
+      <rect x="420" y="34" width="168" height="52" rx="10" style="fill:rgba(169,116,240,.12);stroke:#a974f0;stroke-width:1.5"/>
+      <text x="504" y="58" text-anchor="middle" class="b">parse · lint · dry-run</text>
+      <text x="504" y="74" text-anchor="middle" class="s mut">+ human approve</text>
+    </g>
+    <g>
+      <rect x="624" y="34" width="176" height="52" rx="10" style="fill:rgba(169,116,240,.16);stroke:#a974f0;stroke-width:1.7"/>
+      <text x="712" y="58" text-anchor="middle" class="b">Rule Store</text>
+      <text x="712" y="74" text-anchor="middle" class="s mut">per workspace · versioned</text>
+    </g>
+    <path class="ln" d="M178 60 L210 60" marker-end="url(#ar-pu)" style="stroke:#a974f0"/>
+    <path class="ln" d="M384 60 L416 60" marker-end="url(#ar-pu)" style="stroke:#a974f0"/>
+    <path class="ln" d="M588 60 L620 60" marker-end="url(#ar-pu)" style="stroke:#a974f0"/>
+    <!-- Rule Store feeds rules into the engine -->
+    <path class="ln" d="M712 86 C712 150 660 168 640 192" marker-end="url(#ar-pu)" style="stroke:#a974f0;stroke-dasharray:5 4"/>
+
+    <!-- DECISION SOURCE (teal) -->
+    <text x="28" y="152" class="t mut">DECISION SOURCE</text>
+    <g>
+      <rect x="28" y="166" width="200" height="64" rx="10" style="fill:rgba(25,184,154,.12);stroke:#19b89a;stroke-width:1.5"/>
+      <text x="128" y="192" text-anchor="middle" class="b">Document ingestion</text>
+      <text x="128" y="210" text-anchor="middle" class="s mut">→ CG extraction (edge + rc)</text>
+    </g>
+    <g>
+      <rect x="28" y="258" width="200" height="58" rx="10" style="fill:rgba(25,184,154,.12);stroke:#19b89a;stroke-width:1.5"/>
+      <text x="128" y="284" text-anchor="middle" class="b">POST /graph/decision/emit</text>
+      <text x="128" y="301" text-anchor="middle" class="s mut">runtime decision</text>
+    </g>
+
+    <!-- PROJECTION (blue) -->
+    <g>
+      <rect x="280" y="214" width="160" height="92" rx="10" style="fill:rgba(91,141,239,.13);stroke:#5b8def;stroke-width:1.7"/>
+      <text x="360" y="244" text-anchor="middle" class="b">project_decision()</text>
+      <text x="360" y="266" text-anchor="middle" class="s mut">edge + rc (+ ontology)</text>
+      <text x="360" y="282" text-anchor="middle" class="t">→ params { }</text>
+    </g>
+    <path class="ln" d="M228 198 C256 210 256 234 278 244" marker-end="url(#ar)"/>
+    <path class="ln" d="M228 286 C256 282 256 272 278 268" marker-end="url(#ar)"/>
+    <path class="ln" d="M440 260 L482 260" marker-end="url(#ar)"/>
+
+    <!-- RULES ENGINE container (pink) -->
+    <rect x="486" y="150" width="300" height="298" rx="14" style="fill:rgba(239,111,158,.06);stroke:#ef6f9e;stroke-width:1.7"/>
+    <text x="636" y="170" text-anchor="middle" class="t" style="fill:#ff9dc0">RULES ENGINE&#160;·&#160;context_graph/rules</text>
+    <g>
+      <rect x="506" y="186" width="260" height="52" rx="9" style="fill:rgba(239,111,158,.16);stroke:#ef6f9e;stroke-width:1.5"/>
+      <text x="636" y="208" text-anchor="middle" class="b">business_rule_engine</text>
+      <text x="636" y="225" text-anchor="middle" class="t mut">evaluate(params)</text>
+    </g>
+    <g>
+      <rect x="506" y="252" width="260" height="58" rx="9" style="fill:rgba(255,255,255,.03);stroke:#ef6f9e;stroke-width:1.3;stroke-dasharray:5 4"/>
+      <text x="520" y="274" class="t"><tspan style="fill:#19b89a">soft</tspan><tspan class="mut">  sim(field, CONCEPT) &gt; t</tspan></text>
+      <text x="520" y="296" class="t"><tspan style="fill:#f0a73c">hard</tspan><tspan class="mut">  amount / date / flag ==</tspan></text>
+    </g>
+    <g>
+      <rect x="506" y="324" width="260" height="62" rx="9" style="fill:rgba(25,184,154,.13);stroke:#19b89a;stroke-width:1.6"/>
+      <text x="632" y="346" text-anchor="middle" class="b">Concept Catalog → sim() : float</text>
+      <text x="632" y="363" text-anchor="middle" class="s mut">model2vec · potion-retrieval-32M (512-d)</text>
+      <text x="632" y="379" text-anchor="middle" class="t" style="fill:#7ee3b4">✓ built &amp; validated</text>
+    </g>
+    <!-- sim() provides the predicate to the Business Rules Engine -->
+    <path class="ln" d="M520 324 L520 240" marker-end="url(#ar)" style="stroke:#19b89a"/>
+    <text x="524" y="300" class="t" style="fill:#7ee3b4">sim()</text>
+
+    <!-- GATE diamond (pink) -->
+    <path d="M864 226 L900 262 L864 298 L828 262 Z" style="fill:rgba(239,111,158,.16);stroke:#ef6f9e;stroke-width:1.7"/>
+    <text x="864" y="266" text-anchor="middle" class="t" style="fill:#ff9dc0">GATE</text>
+    <path class="ln" d="M786 262 L826 262" marker-end="url(#ar)"/>
+
+    <!-- OUTCOMES -->
+    <g>
+      <rect x="916" y="178" width="116" height="46" rx="9" style="fill:rgba(62,207,142,.14);stroke:#3ecf8e;stroke-width:1.6"/>
+      <text x="974" y="199" text-anchor="middle" class="b" style="fill:#7ee3b4">PASS</text>
+      <text x="974" y="215" text-anchor="middle" class="s mut">persist</text>
+    </g>
+    <g>
+      <rect x="916" y="240" width="116" height="46" rx="9" style="fill:rgba(240,167,60,.14);stroke:#f0a73c;stroke-width:1.6"/>
+      <text x="974" y="261" text-anchor="middle" class="b" style="fill:#ffce86">FLAG</text>
+      <text x="974" y="277" text-anchor="middle" class="s mut">+ needs_review</text>
+    </g>
+    <g>
+      <rect x="916" y="302" width="116" height="46" rx="9" style="fill:rgba(239,91,110,.14);stroke:#ef5b6e;stroke-width:1.6"/>
+      <text x="974" y="323" text-anchor="middle" class="b" style="fill:#ff9aa8">REJECT</text>
+      <text x="974" y="339" text-anchor="middle" class="s mut">422 · blocked</text>
+    </g>
+    <path class="ln" d="M900 254 L914 210" marker-end="url(#ar-ok)" style="stroke:#3ecf8e"/>
+    <path class="ln" d="M900 262 L914 263" marker-end="url(#ar-am)" style="stroke:#f0a73c"/>
+    <path class="ln" d="M900 270 L914 320" marker-end="url(#ar-rd)" style="stroke:#ef5b6e"/>
+
+    <!-- PERSIST (teal) -->
+    <g>
+      <rect x="486" y="520" width="300" height="84" rx="12" style="fill:rgba(25,184,154,.12);stroke:#19b89a;stroke-width:1.6"/>
+      <text x="636" y="550" text-anchor="middle" class="b">Graph edge + decisions_vdb</text>
+      <text x="636" y="572" text-anchor="middle" class="s mut">+ audit record</text>
+      <text x="636" y="589" text-anchor="middle" class="t" style="fill:#aab3c5">matched concept · score · threshold</text>
+    </g>
+    <path class="ln" d="M974 224 C974 470 760 500 712 518" marker-end="url(#ar-ok)" style="stroke:#3ecf8e"/>
+    <path class="ln" d="M974 286 C974 450 700 500 660 518" marker-end="url(#ar-am)" style="stroke:#f0a73c"/>
+    <text x="938" y="372" text-anchor="middle" class="t" style="fill:#ff9aa8">✕ not persisted</text>
+  </svg>
+  </div>
+  <figcaption><b>Runtime path</b> (teal → blue → pink → outcome) meets the <b>authoring path</b> (purple) at the Rule
+    Store. Soft predicates use <span style="color:#7ee3b4">model2vec <code>sim()</code></span>; hard predicates stay exact.
+    The <span style="color:#7ee3b4">green box</span> is shipped; everything else is the wiring plan below.</figcaption>
+  </figure>
+
+  <h3>How a decision finds its edge (and where the two paths converge)</h3>
+  <p>The part worth stating plainly: <b>a CG edge has no separate ID.</b> Its identity <i>is</i> the ordered pair of
+  entity names — <code>(head, tail)</code> = <code>(src, tgt)</code>. “Associating a decision with the existing graph”
+  just means resolving that pair and looking it up. Both inputs do the same four things to get there.</p>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 1000 360" role="img" aria-label="How a decision is matched to an existing graph edge">
+    <defs>
+      <marker id="ar2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b93a7"/></marker>
+    </defs>
+
+    <!-- SOURCES (teal) -->
+    <g>
+      <rect x="14" y="40" width="176" height="58" rx="10" style="fill:rgba(25,184,154,.12);stroke:#19b89a;stroke-width:1.5"/>
+      <text x="102" y="64" text-anchor="middle" class="b">Document chunk(s)</text>
+      <text x="102" y="82" text-anchor="middle" class="s mut">→ CG extraction</text>
+    </g>
+    <g>
+      <rect x="14" y="148" width="176" height="54" rx="10" style="fill:rgba(25,184,154,.12);stroke:#19b89a;stroke-width:1.5"/>
+      <text x="102" y="172" text-anchor="middle" class="b">POST /graph/decision/emit</text>
+      <text x="102" y="189" text-anchor="middle" class="s mut">runtime decision</text>
+    </g>
+    <text x="206" y="116" class="t mut">(src, tgt, rel, rc)</text>
+    <path class="ln" d="M190 69 C212 80 214 100 228 110" marker-end="url(#ar2)"/>
+    <path class="ln" d="M190 175 C212 160 214 134 228 124" marker-end="url(#ar2)"/>
+
+    <!-- STAGE 2: KEY (blue) -->
+    <g>
+      <rect x="230" y="78" width="152" height="92" rx="10" style="fill:rgba(91,141,239,.13);stroke:#5b8def;stroke-width:1.7"/>
+      <text x="306" y="106" text-anchor="middle" class="b">① Resolve key</text>
+      <text x="306" y="128" text-anchor="middle" class="t">(src, tgt)</text>
+      <text x="306" y="148" text-anchor="middle" class="s mut">normalize entity names</text>
+    </g>
+    <path class="ln" d="M382 124 L410 124" marker-end="url(#ar2)"/>
+
+    <!-- STAGE 3: LOOKUP (teal container with graph inset) -->
+    <rect x="412" y="44" width="178" height="150" rx="12" style="fill:rgba(25,184,154,.07);stroke:#19b89a;stroke-width:1.6"/>
+    <text x="501" y="64" text-anchor="middle" class="t" style="fill:#7fe3cf">② Existing graph</text>
+    <line x1="478" y1="110" x2="524" y2="110" style="stroke:#8b93a7;stroke-width:1.6"/>
+    <circle cx="462" cy="110" r="16" style="fill:rgba(91,141,239,.18);stroke:#5b8def;stroke-width:1.6"/>
+    <text x="462" y="114" text-anchor="middle" class="t">h</text>
+    <circle cx="540" cy="110" r="16" style="fill:rgba(91,141,239,.18);stroke:#5b8def;stroke-width:1.6"/>
+    <text x="540" y="114" text-anchor="middle" class="t">t</text>
+    <text x="501" y="150" text-anchor="middle" class="s mut">head / tail entity</text>
+    <text x="501" y="178" text-anchor="middle" class="t">get_edge(src, tgt)</text>
+    <path class="ln" d="M590 118 L614 118" marker-end="url(#ar2)"/>
+
+    <!-- STAGE 4: MERGE (pink) -->
+    <g>
+      <rect x="616" y="78" width="162" height="92" rx="10" style="fill:rgba(239,111,158,.13);stroke:#ef6f9e;stroke-width:1.7"/>
+      <text x="697" y="106" text-anchor="middle" class="b">③ Merge rc</text>
+      <text x="697" y="128" text-anchor="middle" class="t">RelationContext</text>
+      <text x="697" y="147" text-anchor="middle" class="s mut">.merge(existing, new…)</text>
+    </g>
+    <path class="ln" d="M778 124 L806 124" marker-end="url(#ar2)"/>
+
+    <!-- STAGE 5: FINALIZE (purple, highlighted) -->
+    <g>
+      <rect x="808" y="76" width="178" height="96" rx="11" style="fill:rgba(169,116,240,.16);stroke:#a974f0;stroke-width:2.2"/>
+      <text x="897" y="102" text-anchor="middle" class="b">④ Finalize</text>
+      <text x="897" y="123" text-anchor="middle" class="t">upsert_edge(src, tgt)</text>
+      <text x="897" y="148" text-anchor="middle" class="t" style="fill:#ffce86">★ gate sits here</text>
+    </g>
+    <path class="ln" d="M897 172 C897 220 850 246 808 256" marker-end="url(#ar2)"/>
+
+    <!-- PERSIST -->
+    <g>
+      <rect x="616" y="258" width="370" height="46" rx="10" style="fill:rgba(25,184,154,.12);stroke:#19b89a;stroke-width:1.5"/>
+      <text x="801" y="286" text-anchor="middle" class="b">Persisted edge + decisions_vdb + audit</text>
+    </g>
+
+    <!-- LEGEND (bottom-left) -->
+    <rect x="14" y="232" width="384" height="92" rx="10" style="fill:rgba(255,255,255,.02);stroke:#2c3346;stroke-width:1.2"/>
+    <text x="28" y="256" class="s"><tspan style="fill:#7fe3cf">●</tspan> Join key = head + tail entity names — <tspan class="t">no separate edge ID</tspan></text>
+    <text x="28" y="278" class="s"><tspan style="fill:#ff9dc0">●</tspan> Same 4 steps, two code paths:</text>
+    <text x="44" y="296" class="s mut">emit → <tspan class="t">emit_decision_trace()</tspan></text>
+    <text x="44" y="312" class="s mut">ingestion → <tspan class="t">merge_nodes_and_edges()</tspan></text>
+    <text x="232" y="296" class="s"><tspan style="fill:#c4a3f7">●</tspan> both end at</text>
+    <text x="232" y="312" class="t" style="fill:#c4a3f7">upsert_edge()</text>
+  </svg>
+  </div>
+  <figcaption>One <b>(src, tgt)</b> key, one edge. Whether a decision arrives as prose (ingestion) or JSON (emit), it
+    resolves the same key, looks up the same edge, merges into the same <code>rc</code>, and is written by the same
+    <code>upsert_edge</code> — <b>the shared finalization point where the gate belongs.</b></figcaption>
+  </figure>
+
+  <ol class="steps">
+    <li><b>Resolve the key.</b> Entity names are sanitized / normalized / truncated so “Sarah Chen” always lands on the
+      same key; the decision’s identity becomes <code>(src, tgt)</code>.</li>
+    <li><b>Look up the edge.</b> <code>get_edge(src, tgt)</code> — found → it already carries an <code>rc</code>;
+      not found → a new edge (and any missing entity nodes) is created.</li>
+    <li><b>Merge the <code>rc</code>.</b> The incoming context is unioned with whatever the edge already holds via
+      <code>RelationContext.merge()</code> (sentences deduped, first-non-null scalars, max confidence). On ingestion,
+      multiple chunks naming the same pair are merged the same way by <code>_collect_relation_context</code>.</li>
+    <li><b>Finalize.</b> <code>upsert_edge(src, tgt, …)</code> writes the merged edge.</li>
+  </ol>
+
+  <div class="callout key">
+    <div class="clabel">Two code paths, one finalization point</div>
+    Both inputs run the <i>same</i> four steps — in different code. <b>Emit</b> does them inline in
+    <code>emit_decision_trace()</code> (<span class="mono">context_graph.py:700</span>). <b>Ingestion</b> does them in the
+    merge pipeline (<code>merge_nodes_and_edges</code> → <code>_collect_relation_context</code>,
+    <span class="mono">operate.py:1900</span>), which the emit path never touches. They converge on one call —
+    <code>upsert_edge(src, tgt)</code>. That shared point, <i>not</i> <code>emit_decision_trace</code> alone, is where a
+    single <code>project_decision()</code> + gate covers <b>both</b> inputs. Edges are effectively undirected: lookups
+    check <code>(src,tgt)</code> and <code>(tgt,src)</code> (<span class="mono">context_graph_routes.py:517</span>), so
+    the same pair lands on one edge regardless of phrasing order.
+  </div>
+
+  <h3>Runtime: the pre-emit gate, step by step</h3>
+  <p>Every decision — whether extracted from a document or posted to <code>/graph/decision/emit</code> — passes one
+  chokepoint before it is written. That chokepoint is where the rules engine lives.</p>
+  <ol class="steps">
+    <li><b>A decision arrives</b> as <code>(src, tgt, relation_type, rc)</code> — from CG extraction or the emit endpoint.</li>
+    <li><b>Project</b> it to a flat <code>params</code> dict via <code>project_decision()</code> (edge + <code>rc</code> +,
+      later, typed ontology attributes from P2).</li>
+    <li><b>Evaluate</b> the workspace’s rules. Conditions mix <i>soft</i> predicates
+      (<code>sim(relation_type,"APPROVAL") &gt; 0.4</code>, model2vec-backed) and <i>hard</i> ones
+      (<code>amount &gt; 10000</code>, <code>is_active == True</code>).</li>
+    <li><b>Gate the outcome:</b> no rule trips → <span style="color:#7ee3b4">PASS</span> (persist as today);
+      a <code>flag()</code> rule trips → <span style="color:#ffce86">FLAG</span> (persist with
+      <code>needs_review</code>); a <code>reject()</code> rule trips → <span style="color:#ff9aa8">REJECT</span>
+      (HTTP 422, nothing written).</li>
+    <li><b>Record the why.</b> On FLAG/REJECT, the matched concept, score, and threshold are written to the audit
+      record — fuzzy matches stay as explainable as <code>amount &gt; 10000</code>.</li>
+  </ol>
+  <div class="callout key">
+    <div class="clabel">Where the hook goes</div>
+    The gate sits at the <b>shared edge-finalization point</b> — <code>upsert_edge(src,tgt)</code>, reached by
+    <code>emit_decision_trace()</code> for emit and by <code>merge_nodes_and_edges</code> for ingestion (see
+    “How a decision finds its edge” above) — behind a <code>CG_RULES_ENABLED</code> flag. Off by default → zero
+    behaviour change; on → <b>both</b> inputs are gated by one <code>project_decision()</code> + evaluate. Earlier we
+    called this “a single hook in <code>emit_decision_trace</code>”; that covers only the emit path — the accurate
+    statement is one logical gate at the point both paths converge.
+  </div>
+
+  <h3>Wiring plan — next steps to connect <code>sim()</code></h3>
+  <p>The predicate is done; the remaining work is plumbing it into the decision path. Each row is an independent,
+  reviewable PR. <span class="pill s-have">built</span> ships today; <span class="pill s-part">to build</span> is next.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>Component</th><th>Module (CG-owned)</th><th>Responsibility</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Similarity / Concept Catalog</td><td><code>context_graph/rules/similarity.py</code></td><td>The <code>sim()</code> predicate, catalog, model2vec backend.</td><td><span class="pill s-have">built ✓</span></td></tr>
+      <tr><td>2</td><td>Decision projection</td><td><code>context_graph/rules/projection.py</code></td><td><code>project_decision(src,tgt,rel,rc)</code> + <code>project_edge()</code> → <code>params</code> dict; money/percent parsing of <code>quantitative_data</code>. Both write paths proven to project identically.</td><td><span class="pill s-have">built ✓</span></td></tr>
+      <tr><td>3</td><td>Engine wrapper</td><td><code>context_graph/rules/engine.py</code></td><td><code>RulesEngine</code>: compiles a workspace rule set (isolated per-engine functions), binds <code>sim()</code>/<code>similar()</code> + verbs (<code>reject</code>/<code>flag</code>/<code>notify</code>), evaluates rule-by-rule in priority order, fail-open, → <code>EvaluationResult.audit()</code>.</td><td><span class="pill s-have">built ✓</span></td></tr>
+      <tr><td>4</td><td>Rule store</td><td><code>context_graph/rules/store.py</code></td><td><code>RuleBundle</code> (dsl + concepts + version + enabled + pinned model) via <code>JsonRuleStore</code> / <code>InMemoryRuleStore</code>; validates on save (DSL lint + concept-reference check); <code>build_gate(workspace)</code> reconstructs a live gate.</td><td><span class="pill s-have">built ✓</span></td></tr>
+      <tr><td>5</td><td>Pre-emit gate</td><td><code>context_graph/rules/gate.py</code> + hook in <code>emit_decision_trace()</code></td><td><code>RulesGate.check()</code> → <code>GateDecision</code>; REJECT raises <code>RuleViolation</code> (→ 422, nothing written) <i>before</i> any write, FLAG annotates the edge (<code>needs_review</code> + audit), PASS persists. Gate runs on the merged <code>rc</code>.</td><td><span class="pill s-have">built ✓</span></td></tr>
+      <tr><td>6</td><td>NL→DSL agent</td><td><code>context_graph/rules/agent.py</code></td><td><code>RuleAuthor</code>: grounds the LLM in the param/verb/concept manifest, drafts DSL, hard-validates (parse + concept refs), auto-repairs, dry-runs on fixtures. Behind <code>/rules/generate</code>.</td><td><span class="pill s-have">built ✓</span></td></tr>
+      <tr><td>7</td><td>Service + REST router</td><td><code>context_graph/rules/service.py</code> · <code>lightrag/api/routers/rules_routes.py</code></td><td><code>RulesService</code> (store + gate cache + evaluate + attach) and the <code>/rules*</code> endpoints; mounted in the server, gates attached per workspace at startup and on every mutation.</td><td><span class="pill s-have">built ✓</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout caveat">
+    <div class="clabel">Boundary note</div>
+    The hook (5) is the one line that touches the existing decision path (currently in
+    <code>lightrag/context_graph.py</code>). Everything it calls lives in the CG-owned <code>context_graph/</code>
+    package — the engine is a dependency the gate <i>calls into</i>, keeping our code separate from the
+    <code>lightrag</code> library.
+  </div>
+
+  <h3>Endpoints (alongside <code>/graph/decisions*</code>)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill m-get">GET</span></td><td><code>/rules</code></td><td>Workspace summary: enabled, version, concepts, parsed rule list (name + priority). <span class="pill s-have">built ✓</span></td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td><code>/rules</code></td><td>Set/replace the workspace policy (DSL + concepts); validates &amp; attaches the gate live. <span class="pill s-have">built ✓</span></td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td><code>/rules/evaluate</code></td><td>Dry-run the saved policy against a sample decision → outcome + audit + triggered. <span class="pill s-have">built ✓</span></td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td><code>/rules/toggle</code></td><td>Enable / disable the workspace gate without deleting. <span class="pill s-have">built ✓</span></td></tr>
+      <tr><td><span class="pill" style="background:rgba(239,91,110,.14);color:#ff9aa8">DEL</span></td><td><code>/rules</code></td><td>Delete the workspace policy (detaches the gate). <span class="pill s-have">built ✓</span></td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td><code>/rules/generate</code></td><td>NL policy → DSL via the agent; returns draft + dry-run (review-only unless <code>save:true</code>). <span class="pill s-have">built ✓</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout ok">
+    <div class="clabel">Why it fits</div>
+    Every piece parallels something CG already has: per-workspace storage (like <code>decisions_vdb</code>), a
+    <code>503</code>-guarded router family (like <code>context_graph_routes.py</code>), an opt-in env flag (like
+    <code>USE_CONTEXT_GRAPH</code>), and a chokepoint to hook (<code>emit_decision_trace</code>). Low architectural risk.
+  </div>
+
+  <h3>Worked example — one decision, end to end</h3>
+  <p>One concrete decision traced through every step of the diagram above. The numbers are real
+  (<code>sim()</code> measured on <code>potion-retrieval-32M</code>). The rule below was authored earlier via §05; here
+  it <i>fires</i>. Outcome is a <span style="color:#ffce86">FLAG</span> — so the decision persists <b>and</b> leaves an
+  audit trail.</p>
+
+  <div class="card" style="margin:12px 0"><h4 style="margin-top:0">The rule in force (workspace <code>acme</code>)</h4>
+<pre><code>rule <span class="str">"large discount needs finance review"</span>  priority <span class="num">10</span>
+when
+    sim(relation_type, <span class="str">"APPROVAL"</span>) &gt; <span class="num">0.4</span>     <span class="cm"># SOFT — model2vec sim()</span>
+    and percent &gt; <span class="num">0.15</span>                     <span class="cm"># HARD — structured number</span>
+    and approved_via == <span class="str">"slack"</span>             <span class="cm"># HARD — controlled vocabulary</span>
+then
+    flag(<span class="str">"Discount &gt;15% approved over Slack — route to Finance for review"</span>)
+end</code></pre></div>
+
+  <div class="card" style="border-left:3px solid var(--b)"><h4 style="margin-top:0">① Decision source <span class="small">— ingestion <i>or</i> emit; both yield the same shape</span></h4>
+  <p class="small" style="margin:.2em 0">A deal-desk Slack export is ingested; CG extraction reads one line:</p>
+<pre><code><span class="cm"># source chunk (Aug 14)</span>
+Sarah Chen: <span class="str">"Approved the 20% discount for MegaCorp — they were about to churn to
+Salesforce. Good through Q4."</span></code></pre>
+  <p class="small" style="margin:.4em 0 .2em">The equivalent runtime call <code>POST /graph/decision/emit</code> would post the same <code>(src, tgt, relation_type, rc)</code> directly.</p></div>
+
+  <div class="card" style="border-left:3px solid var(--b)"><h4 style="margin-top:0">② Decision arrives — the quadruple <code>(h, r, t, rc)</code></h4>
+<pre><code>{
+  <span class="str">"src"</span>: <span class="str">"Sarah Chen"</span>, <span class="str">"tgt"</span>: <span class="str">"MegaCorp"</span>,
+  <span class="str">"relation_type"</span>: <span class="str">"GRANTED_APPROVAL"</span>,        <span class="cm"># ← paraphrase, NOT the literal "APPROVES"</span>
+  <span class="str">"rc"</span>: {
+    <span class="str">"decision_trace"</span>: <span class="str">"Approved 20% discount; retention risk (Salesforce)"</span>,
+    <span class="str">"quantitative_data"</span>: <span class="str">"20% discount"</span>,
+    <span class="str">"approved_by"</span>: <span class="str">"Sarah Chen"</span>, <span class="str">"approved_via"</span>: <span class="str">"slack"</span>,
+    <span class="str">"valid_until"</span>: <span class="str">"2026-12-31"</span>, <span class="str">"confidence_score"</span>: <span class="num">0.96</span>
+  }
+}</code></pre>
+  <p class="small" style="margin:.2em 0"><b>Why exact match fails here:</b> the relation surfaced as <code>GRANTED_APPROVAL</code>, not <code>APPROVES</code> — <code>relation_type == "APPROVES"</code> would silently miss it.</p></div>
+
+  <div class="card" style="border-left:3px solid var(--a)"><h4 style="margin-top:0">③ <code>project_decision()</code> → flat <code>params</code></h4>
+<pre><code>{
+  <span class="str">"relation_type"</span>: <span class="str">"GRANTED_APPROVAL"</span>,
+  <span class="str">"percent"</span>: <span class="num">0.20</span>,            <span class="cm"># parsed from "20% discount"</span>
+  <span class="str">"approved_by"</span>: <span class="str">"Sarah Chen"</span>,
+  <span class="str">"approved_via"</span>: <span class="str">"slack"</span>,
+  <span class="str">"is_active"</span>: true,           <span class="cm"># valid_until 2026-12-31 ≥ today</span>
+  <span class="str">"confidence"</span>: <span class="num">0.96</span>
+}</code></pre></div>
+
+  <div class="card" style="border-left:3px solid var(--rules)"><h4 style="margin-top:0">④ Rules engine evaluates the <code>when</code> clause</h4>
+  <div class="tablewrap" style="margin:8px 0"><table>
+    <thead><tr><th>Predicate</th><th>Kind</th><th>Resolves to</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td><code>sim(relation_type, "APPROVAL") &gt; 0.4</code></td><td><span style="color:#7ee3b4">soft</span></td><td><b>1.00</b> &gt; 0.4</td><td><span class="pill s-have">✓</span></td></tr>
+      <tr><td><code>percent &gt; 0.15</code></td><td><span style="color:#ffce86">hard</span></td><td>0.20 &gt; 0.15</td><td><span class="pill s-have">✓</span></td></tr>
+      <tr><td><code>approved_via == "slack"</code></td><td><span style="color:#ffce86">hard</span></td><td>"slack" == "slack"</td><td><span class="pill s-have">✓</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="small" style="margin:.2em 0">All true (AND) → the <code>then</code> action <code>flag(...)</code> fires. <code>sim("GRANTED_APPROVAL","APPROVAL")</code> returns <b>1.00</b> — far above the <code>0.40</code> cut (non-matches ceil ~0.12).</p></div>
+
+  <div class="card" style="border-left:3px solid var(--c)"><h4 style="margin-top:0">⑤ Gate → <span style="color:#ffce86">FLAG</span></h4>
+  <p class="small" style="margin:.2em 0">A <code>flag()</code> rule tripped (not <code>reject()</code>), so the decision is <b>persisted with <code>needs_review</code></b> rather than blocked. (Had a <code>reject()</code> rule fired, this would be HTTP&nbsp;422 and nothing written.)</p></div>
+
+  <div class="card" style="border-left:3px solid var(--b)"><h4 style="margin-top:0">⑥ Persisted — graph edge + <code>decisions_vdb</code> + audit record</h4>
+<pre><code><span class="cm"># 1. graph edge (upserted, now carrying the review flag)</span>
+Sarah Chen ─[GRANTED_APPROVAL]→ MegaCorp   needs_review=true
+
+<span class="cm"># 2. decisions_vdb — decision_trace indexed for precedent search (§ find_precedents)</span>
+
+<span class="cm"># 3. audit record — the "why", as explainable as a numeric predicate</span>
+{
+  <span class="str">"rule"</span>: <span class="str">"large discount needs finance review"</span>,
+  <span class="str">"outcome"</span>: <span class="str">"FLAG"</span>,
+  <span class="str">"matched_concept"</span>: <span class="str">"APPROVAL"</span>,   <span class="num">"score"</span>: <span class="num">1.00</span>,   <span class="num">"threshold"</span>: <span class="num">0.40</span>,
+  <span class="str">"reason"</span>: <span class="str">"Discount &gt;15% approved over Slack — route to Finance for review"</span>,
+  <span class="str">"model_id"</span>: <span class="str">"minishlab/potion-retrieval-32M"</span>
+}</code></pre>
+  <div class="callout ok" style="margin-top:10px">
+    <div class="clabel">The payoff</div>
+    The flag is fully traceable — <b>matched concept <code>APPROVAL</code> · score <code>1.00</code> · threshold
+    <code>0.40</code></b> — so a reviewer (or auditor) sees exactly <i>why</i> the rule fired, and pinning
+    <code>model_id</code> guarantees the same input flags the same way tomorrow. A fuzzy match ends up as accountable as
+    <code>percent &gt; 0.15</code>.
+  </div></div>
+</section>
+
+<!-- 6 -->
+<section id="p2">
+  <h2><span class="sec-num">07</span> <span class="prio p2">P2</span> Ontology creation</h2>
+  <p class="sec-sub">Give the rules — and the graph — a typed vocabulary to stand on.</p>
+
+  <p>Today CG extracts against an <i>open</i> list of entity types (<span class="mono">constants.py</span>), relation
+  “types” are free-text keywords, properties are untyped, and edges are effectively undirected (the edge-context route
+  has to probe both directions — <span class="mono">context_graph_routes.py:517</span>). P2 introduces a real schema so
+  that rules can reference <code>Order.value</code> or <code>Employee.role</code> with confidence, and so extraction can
+  be validated rather than trusted.</p>
+
+  <h3>What the schema layer defines</h3>
+  <div class="grid g2">
+    <div class="card"><h4>Object types &amp; typed properties</h4><p class="small">e.g. <code>Order{ value:money, status:enum }</code>, <code>Employee{ role:enum }</code>. Resurrects the today-unused <code>ContextNode.attributes</code> as typed, persisted state.</p></div>
+    <div class="card"><h4>Link types &amp; directionality</h4><p class="small">A catalogue of allowed relations (<code>Customer →places→ Order</code>) with a real head→tail direction, fixing the undirected-edge gap.</p></div>
+    <div class="card"><h4>Cardinality</h4><p class="small">1:N / N:M declarations the article calls out — enables validation (“an Order has exactly one Customer”).</p></div>
+    <div class="card"><h4>Extraction validation</h4><p class="small">Extracted entities/relations checked against the schema; violations flagged with confidence, not silently kept.</p></div>
+  </div>
+
+  <h3>Authoring: top-down + AI-assisted (hybrid)</h3>
+  <p>The article’s principle is “expert-defined before extraction.” We keep the expert in charge but let an agent do the
+  heavy lifting — symmetric with the P1 DSL author:</p>
+  <ul>
+    <li><b>Seed</b> from existing signals: the current entity-type list, a sample of extracted edges, and (optionally) an imported DB schema.</li>
+    <li><b>Draft</b> an ontology (types, properties, link types, cardinality) with an agent; expert edits and confirms.</li>
+    <li><b>Bind</b> extraction prompts to the confirmed schema so future ingestion is schema-aware.</li>
+  </ul>
+
+  <div class="callout key">
+    <div class="clabel">P1 ↔ P2 dependency</div>
+    P1 ships <i>without</i> P2 (rules over flat <code>rc</code> fields). But P2 makes P1 dramatically stronger: typed
+    properties and roles become first-class <code>params</code>, so rules graduate from “read what the LLM happened to
+    extract” to “reason over a validated object model.” Build P1 first; design its projection so P2 fields slot in.
+  </div>
+
+  <div class="callout ok">
+    <div class="clabel">Decided ✓ · CG-native schema</div>
+    Resolved: build a <b>CG-native schema</b> (dataclasses/JSON), standards-export later — not RDF/OWL up front.
+
+    <div style="margin-top:8px"><b>Built (step 1 of P2):</b> the schema model ships in <code>context_graph/ontology/schema.py</code> —
+    <code>Property</code> (9 typed kinds incl. <code>MONEY</code>/<code>PERCENT</code>, reusing the P1 parsers),
+    <code>ObjectType</code>, directed <code>LinkType</code> with <code>Cardinality</code> (1:1 · 1:N · N:1 · N:M), and
+    <code>Ontology</code> with <b>coercing validation</b> (<code>"$25,000"</code> → <code>25000.0</code>),
+    self-consistency <code>lint()</code>, and JSON round-trip. <b>Step 2:</b> per-workspace
+    <code>context_graph/ontology/store.py</code> (<code>JsonOntologyStore</code> / <code>InMemoryOntologyStore</code>,
+    validate-on-save, version bump). 43 ontology tests; ruff clean.</div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section id="p3">
+  <h2><span class="sec-num">08</span> <span class="prio p3">P3</span> Backlog gaps — documented for future discussion</h2>
+  <p class="sec-sub">Captured so they are not lost. Each is a later conversation, not a current commitment.</p>
+
+  <div class="grid g2">
+    <div class="card">
+      <h4>Full action / kinetic layer <span class="pill s-gap">gap</span></h4>
+      <p class="small">Beyond P1’s reactive verbs: a registry of executable operations bound to object types
+      (<code>ApproveOrder()</code>, <code>CancelShipment()</code>) with handlers and side effects.
+      <code>emit_decision_trace</code> becomes the <i>audit record</i> of an executed action.
+      <b>Depends on:</b> P2 (object types). <b>Builds on:</b> P1 verbs.</p>
+    </div>
+    <div class="card">
+      <h4>Inference / fact derivation <span class="pill s-gap">gap</span></h4>
+      <p class="small">Deterministic entailment (“if A owns B and B owns C…”), distinct from P1’s boolean triggers and
+      from LLM synthesis. Likely a separate rule/reasoner (e.g. SHACL/datalog-style) over the P2 schema.
+      <b>Depends on:</b> P2.</p>
+    </div>
+    <div class="card">
+      <h4>Object-level access control <span class="pill s-gap">gap</span></h4>
+      <p class="small">Permissions bound to ontology objects/edges, beyond today’s login + workspace isolation
+      (<span class="mono">auth.py</span>). Who may read which decisions / fire which rules / invoke which actions.
+      <b>Depends on:</b> P2 + action layer.</p>
+    </div>
+    <div class="card">
+      <h4>Agent action-discovery <span class="pill s-gap">gap</span></h4>
+      <p class="small">Expose the action catalogue over MCP so an agent can discover <i>permitted</i> operations, not just
+      query tools. <b>Depends on:</b> action layer + RBAC.</p>
+    </div>
+    <div class="card">
+      <h4>Dynamic workflow generation <span class="pill s-gap">gap</span></h4>
+      <p class="small">A planner that traverses the typed graph to assemble multi-step execution plans
+      (the article’s “30 seconds vs 6 hours” claim). <b>Depends on:</b> action-discovery.</p>
+    </div>
+    <div class="card">
+      <h4>Graph-wide temporal “as-of” <span class="pill s-part">partial</span></h4>
+      <p class="small">Lift per-edge <code>is_active()</code> to a whole-graph as-of query (bitemporal view).
+      Independent of P1; small, high-value follow-on to P2.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section id="roadmap">
+  <h2><span class="sec-num">09</span> Sequencing &amp; dependencies</h2>
+  <p class="sec-sub">Proposed order. Each phase ships something usable on its own.</p>
+  <figure><div class="fig">
+<div class="flow">
+  <b>Phase 1 · P1 core</b>  engine + projection + pre-emit gate + <code>/rules</code> CRUD &nbsp;<span style="color:var(--ok)">▮ ships constraint enforcement</span><br>
+  &nbsp;&nbsp;&nbsp;&nbsp;│<br>
+  <b>Phase 2 · P1 agent</b>  NL→DSL generation + validation + dry-run + <code>/rules/generate</code> &nbsp;<span style="color:var(--ok)">▮ ships authoring UX</span><br>
+  &nbsp;&nbsp;&nbsp;&nbsp;│<br>
+  <b>Phase 3 · P2 schema</b>  object types · typed props · link types · cardinality · extraction validation<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;│  (feeds richer <code>params</code> back into P1 rules)<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;▼<br>
+  <b>Phase 4+ · P3 backlog</b>  action layer → inference → object RBAC → action-discovery → workflow planner
+</div>
+    <figcaption>P1 is independent and first. P2 deepens P1. P3 items mostly depend on P2 and on each other — sequenced, not parallel.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 9 -->
+<section id="questions">
+  <h2><span class="sec-num">10</span> Open questions to resolve before building</h2>
+  <p class="sec-sub">The decisions that change the design. Let’s answer these in the discussion log below.</p>
+  <ol>
+    <li><b>Enforcement default:</b> should the pre-emit gate <i>reject</i> (hard 422) or <i>flag</i> (write + <code>needs_review</code>) by default? Per-rule severity?</li>
+    <li><b>Rule scope:</b> rules per-workspace only, or also global/shared templates inherited by workspaces?</li>
+    <li><b>Agent trust boundary:</b> may the rule-author agent propose new action verbs (code), or only compose registered ones?</li>
+    <li><b>Fixtures:</b> expert-authored, sampled from live edges, or agent-synthesised-then-trimmed?</li>
+    <li><b>Numeric parsing:</b> how robust must <code>parse_amount/parse_percent</code> be over free-text <code>quantitative_data</code> before P2 gives us typed numbers? Risk of mis-enforcement.</li>
+    <li><b>Ontology standard:</b> RDF/OWL+SHACL vs CG-native schema (lean: native first).</li>
+    <li><b>Model:</b> reuse CG’s LLM binding for both agents, or a dedicated authoring model?</li>
+  </ol>
+</section>
+
+<!-- 10 -->
+<section id="log">
+  <h2><span class="sec-num">11</span> Discussion log</h2>
+  <p class="sec-sub">Append decisions and notes here as we talk. Newest at the bottom.</p>
+
+  <div class="disc">
+    <div class="who">2026-06-30 · seed</div>
+    Document created from the blog gap analysis. Priorities set: <b>P1</b> Business Rules Engine (on
+    <a href="https://github.com/manfred-kaiser/business-rule-engine" target="_blank" rel="noopener">business-rule-engine</a>)
+    with AI-generated DSL per use case; <b>P2</b> Ontology creation; <b>P3</b> remaining gaps documented above.
+  </div>
+
+  <div class="disc">
+    <div class="who">2026-06-30 · fuzzy matching</div>
+    Identified exact-match as the disqualifying flaw for a Business Rules Engine over CG’s free-text, LLM-extracted fields. Decision:
+    add a <b>static-vector similarity</b> tier via <a href="https://github.com/MinishLab/model2vec" target="_blank" rel="noopener">model2vec</a>
+    (numpy-only, MIT, CPU sub-ms) exposed as a <code>sim()</code> DSL predicate, backed by a workspace
+    <b>Concept Catalog</b> (bridge to P2). Hard predicates stay exact for numbers/dates/flags. See §04.
+    Recommended path: <b>(A) field-level</b> predicate now, <b>(B) whole-event routing</b> later. Open:
+    model choice, LLM escalation for near-threshold cases.
+  </div>
+
+  <div class="disc">
+    <div class="who">2026-06-30 · decisions + first build</div>
+    Locked: model = <b>potion-retrieval-32M</b>; build the <b>(A) field-level</b> <code>sim()</code> predicate first.
+    CG code now lives in a top-level <b><code>context_graph/</code></b> package — <code>lightrag</code> is a reused
+    dependency, our work is separate. Shipped <code>context_graph/rules/similarity.py</code> (Concept Catalog, injectable
+    backend, <code>sim()</code> / <code>similar()</code> predicates), tests in <code>context_graph/tests/</code>,
+    <code>[rules]</code> extra in pyproject. Validated end-to-end (see §04). Next: wire <code>sim()</code> into the
+    pre-emit gate + the rest of the engine (projection, store, <code>/rules</code> API).
+  </div>
+
+  <div class="disc">
+    <div class="who">2026-06-30 · integration architecture</div>
+    Documented the full Business Rules Engine × CG integration in §06: a colour-coded diagram (runtime decision path meets the authoring
+    path at the Rule Store), the pre-emit gate walk-through (PASS / FLAG / REJECT), and the 7-step wiring plan with
+    build status — step 1 (<code>sim()</code>) shipped, steps 2–7 (<code>projection</code>, <code>engine</code>,
+    <code>store</code>, gate hook, NL→DSL <code>agent</code>, <code>/rules</code> router) queued. The single hook is
+    one line in <code>emit_decision_trace()</code> behind <code>CG_RULES_ENABLED</code>.
+  </div>
+
+  <div class="disc">
+    <div class="who">2026-06-30 · wiring step 2 built</div>
+    Shipped <code>context_graph/rules/projection.py</code> — <code>project_decision(src,tgt,rel,rc)</code> +
+    <code>project_edge(edge)</code>, with best-effort money/percent parsing of <code>quantitative_data</code>
+    (<code>"20% discount"</code> → percent 0.20, amount None; <code>"$25,000"</code> → 25000). A test proves the
+    <b>emit tuple</b> and the <b>stored-edge dict</b> project to identical <code>params</code> — the convergence the
+    §06 "How a decision finds its edge" diagram describes. 39 CG rules tests pass; ruff clean. Next: step 3, the
+    engine wrapper (<code>engine.py</code>) that registers <code>sim()</code> + action verbs and runs
+    <code>evaluate(params)</code>.
+  </div>
+
+  <div class="disc">
+    <div class="who">2026-06-30 · wiring step 3 built</div>
+    Shipped <code>context_graph/rules/engine.py</code> — <code>RulesEngine</code> evaluates rules <b>one at a time in
+    priority order</b> (clean per-rule audit attribution), is <b>fail-open</b> (a rule that errors on a missing numeric
+    or unknown concept is skipped with a warning, not fatal), and produces <code>EvaluationResult.audit()</code> with
+    outcome + matched concept/score/threshold. Workspace isolation handled around a real
+    <code>business_rule_engine</code> trap: it registers functions on a <i>class-level</i> dict shared by every parser,
+    so each engine assigns its own functions to each parsed rule. 49 CG rules tests pass; the real-model §06 worked
+    example reproduces (<code>FLAG</code>, APPROVAL, threshold 0.40).
+    <br><b>Footgun found →</b> <code>business_rule_engine</code> silently parses <code>when &lt;cond&gt;</code> (condition
+    on the same line as <code>when</code>) as an <i>empty</i> condition — no parse error, blows up at eval. Added a
+    <b>load-time lint</b> that rejects empty conditions loudly; this is concrete work for the §05 “parse · lint” step
+    and a rule the NL→DSL agent (step 6) must always satisfy.
+  </div>
+
+  <div class="disc">
+    <div class="who">2026-06-30 · wiring step 5 built — the gate is live</div>
+    Shipped <code>context_graph/rules/gate.py</code> (<code>RulesGate</code> · <code>GateDecision</code> ·
+    <code>RuleViolation</code>) plus a guarded hook in <code>emit_decision_trace()</code>. Order was restructured so the
+    gate evaluates the <b>merged</b> <code>rc</code> and runs <i>before</i> any write: <b>REJECT</b> raises
+    <code>RuleViolation</code> (the emit route maps it to <b>HTTP 422</b>, nothing persisted), <b>FLAG</b> persists the
+    edge annotated with <code>needs_review</code> + the audit JSON, <b>PASS</b> persists unchanged. The emit response now
+    surfaces <code>outcome</code> + <code>audit</code>. Attach per instance via <code>cg.rules_gate = RulesGate(...)</code>
+    (config/store wiring is steps 4 &amp; 7). 56 CG tests + 44 existing CG tests pass (no regression from the reorder);
+    ruff clean. Note: this covers the <b>emit</b> path; gating <b>ingestion</b> means hooking the same logic at
+    <code>merge_nodes_and_edges</code>’ <code>upsert_edge</code> — a follow-on.
+  </div>
+
+  <div class="disc">
+    <div class="who">2026-06-30 · wiring step 4 built</div>
+    Shipped <code>context_graph/rules/store.py</code> — a <code>RuleBundle</code> (DSL + concept catalog + version +
+    enabled + pinned <code>model_id</code>) persisted by <code>JsonRuleStore</code> (one file/workspace, atomic write)
+    or <code>InMemoryRuleStore</code>. <b>save() validates before persisting</b>: DSL must parse with non-empty
+    conditions (reuses step-3 lint) and every concept a rule references must be defined — a broken policy is rejected at
+    author time. <code>build_gate(workspace)</code> reconstructs a live <code>RulesGate</code> from a bundle (or
+    <code>None</code> when absent/disabled), closing the loop to step 5. 78 CG tests pass; ruff clean. Next: step 7,
+    the <code>/rules</code> API, then step 6, the NL→DSL agent.
+  </div>
+
+  <div class="disc">
+    <div class="who">2026-06-30 · wiring step 7 built — rules are live over REST</div>
+    Shipped <code>context_graph/rules/service.py</code> (<code>RulesService</code>: store + per-workspace gate cache
+    keyed by bundle version + dry-run evaluate + <code>attach</code>) and <code>lightrag/api/routers/rules_routes.py</code>
+    (<code>GET/POST/DELETE /rules</code>, <code>/rules/evaluate</code>, <code>/rules/toggle</code>;
+    <code>/rules/generate</code> → 501 until step 6). Mounted in <code>lightrag_server.py</code> when
+    <code>USE_CONTEXT_GRAPH=true</code>; gates are attached to the live workspace instance on every mutation and for all
+    stored workspaces at startup (so <code>emit</code> enforces persisted policy after a restart). Per-workspace via the
+    <code>LIGHTRAG-WORKSPACE</code> header (the <code>WorkspaceProxy</code> forwards <code>rules_gate</code> assignment to
+    the real instance). 85 CG tests + 80 existing CG tests pass; ruff clean. <b>The gate is now end-to-end:</b> author a
+    policy over REST → it enforces on the next decision.
+    <br><b>Remaining:</b> step 6 — the NL→DSL agent behind <code>/rules/generate</code>.
+  </div>
+
+  <div class="disc">
+    <div class="who">2026-06-30 · wiring step 6 built — P1 is complete</div>
+    Shipped <code>context_graph/rules/agent.py</code> (<code>RuleAuthor</code>) and implemented
+    <code>POST /rules/generate</code>. The agent is grounded in a capability manifest (the param fields from
+    <code>projection</code>, the action verbs from <code>engine</code>, the workspace's concepts) and the strict DSL
+    grammar — including the <code>when</code>/<code>then</code>-on-own-lines rule. It drafts → <b>hard-validates</b>
+    (reusing the store's parse + concept-reference check) → <b>auto-repairs</b> on failure (bounded) → <b>dry-runs</b>
+    the draft against fixtures, returning the outcome per fixture. Review-only by default; <code>save:true</code>
+    persists + attaches. Provider-agnostic (uses the workspace's <code>llm_model_func</code>). 91 CG tests pass; ruff
+    clean. <b>All seven P1 wiring steps are now built</b> — sim · projection · engine · store · gate · API · agent.
+  </div>
+
+  <div class="disc">
+    <div class="who">2026-07-01 · P2 started — ontology schema model</div>
+    Resumed the gaps project (P1 complete). Decisions locked: <b>CG-native schema</b> (dataclasses/JSON, standards-export
+    later), and <b>build the schema model first</b>. Shipped <code>context_graph/ontology/</code> — <code>Property</code>
+    (typed kinds, enum, numeric bounds, coercion), <code>ObjectType</code>, directed <code>LinkType</code> +
+    <code>Cardinality</code>, and <code>Ontology</code> (validate entity/relation, <code>lint()</code>, JSON round-trip).
+    Money/percent validation reuses the P1 <code>projection</code> parsers so both layers read free-text numbers the same
+    way. 30 ontology tests (121 CG tests total); ruff clean. <b>Next P2 steps:</b> ontology store (per-workspace, like the
+    rules store) → extraction validation (check LLM output against the schema) → AI-assisted authoring → API → wire typed
+    properties into <code>projection</code> so rules gain typed params.
+  </div>
+
+  <div class="disc">
+    <div class="who">2026-07-01 · P2 step 2 — ontology store</div>
+    Shipped <code>context_graph/ontology/store.py</code> — per-workspace persistence mirroring the rules store
+    (<code>JsonOntologyStore</code> / <code>InMemoryOntologyStore</code>, atomic write). <b>Validate-on-save</b> runs the
+    ontology's <code>lint()</code> (rejects links referencing undefined object types before persisting) and bumps
+    version without mutating the caller's object. 43 ontology tests (134 CG total); ruff clean. <b>Next:</b> extraction
+    validation — check LLM-extracted entities/relations against the stored ontology and flag violations.
+  </div>
+
+  <div class="disc" style="border-left-color:var(--line);opacity:.7">
+    <div class="who">— · your turn</div>
+    <i>Add the next note here: pick a stance on any open question in §10, or scope Phase&nbsp;1.</i>
+  </div>
+</section>
+
+</main>
+</div>
+
+<footer class="footer">
+  Context Graph — “Closing the Gaps” working document. Companion to the
+  <a href="CONTEXT_GRAPH_OVERVIEW.html">Technical Field Guide</a> and
+  <a href="BLOG_THE_FOURTH_ELEMENT.html">The Fourth Element</a>. Rule DSL based on
+  <a href="https://github.com/manfred-kaiser/business-rule-engine" target="_blank" rel="noopener">manfred-kaiser/business-rule-engine</a>.
+  Code paths and payloads are illustrative — confirm against source before implementing.
+</footer>
+
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('nav.toc a')), map={};
+  links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id); if(el)map[id]=a;});
+  var obs=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},
+    {rootMargin:'-20% 0px -70% 0px',threshold:0});
+  Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});
+  var btt=document.getElementById('btt');
+  window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});
+})();
+</script>
+</body>
+</html>
