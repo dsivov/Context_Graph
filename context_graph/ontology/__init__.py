@@ -34,6 +34,10 @@ from context_graph.ontology.validate import (
     ExtractionReport,
     ItemValidation,
 )
+from context_graph.ontology.agent import (
+    OntologyAuthor,
+    OntologyGenerationResult,
+)
 
 __all__ = [
     "PropertyKind",
@@ -52,4 +56,6 @@ __all__ = [
     "ExtractionValidator",
     "ExtractionReport",
     "ItemValidation",
+    "OntologyAuthor",
+    "OntologyGenerationResult",
 ]
