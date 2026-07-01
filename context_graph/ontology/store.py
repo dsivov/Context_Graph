@@ -66,6 +66,14 @@ class OntologyStore(ABC):
             return None
         return Ontology.from_dict(raw["ontology"])
 
+    def meta(self, workspace: str) -> Optional[Dict[str, Any]]:
+        """Stored metadata (workspace, updated_at) without deserializing the ontology."""
+        raw = self._read_raw(workspace)
+        if raw is None:
+            return None
+        return {"workspace": raw.get("workspace", workspace),
+                "updated_at": raw.get("updated_at")}
+
     def delete(self, workspace: str) -> bool:
         return self._delete_raw(workspace)
 

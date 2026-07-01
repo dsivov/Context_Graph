@@ -366,6 +366,18 @@ def create_app(args):
         except Exception as e:  # pragma: no cover - never block server start
             logger.warning(f"Rules service unavailable: {e}")
 
+    # Ontology service (per-workspace typed schema). Only meaningful in CG mode.
+    ontology_service = None
+    if getattr(args, "use_context_graph", False):
+        try:
+            from context_graph.ontology import OntologyService, JsonOntologyStore
+
+            ontology_service = OntologyService(
+                JsonOntologyStore(os.path.join(str(args.working_dir), "ontology"))
+            )
+        except Exception as e:  # pragma: no cover - never block server start
+            logger.warning(f"Ontology service unavailable: {e}")
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Lifespan context manager for startup and shutdown events"""
@@ -1197,6 +1209,12 @@ def create_app(args):
         from lightrag.api.routers.rules_routes import create_rules_routes
 
         app.include_router(create_rules_routes(rag, rules_service, api_key=api_key))
+
+    # Ontology API (manage the per-workspace typed schema).
+    if ontology_service is not None:
+        from lightrag.api.routers.ontology_routes import create_ontology_routes
+
+        app.include_router(create_ontology_routes(rag, ontology_service, api_key=api_key))
 
     # Web-ingest API (crawl a website into the Context Graph).
     try:

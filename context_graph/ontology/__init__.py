@@ -38,6 +38,7 @@ from context_graph.ontology.agent import (
     OntologyAuthor,
     OntologyGenerationResult,
 )
+from context_graph.ontology.service import OntologyService
 
 __all__ = [
     "PropertyKind",
@@ -58,4 +59,5 @@ __all__ = [
     "ItemValidation",
     "OntologyAuthor",
     "OntologyGenerationResult",
+    "OntologyService",
 ]
