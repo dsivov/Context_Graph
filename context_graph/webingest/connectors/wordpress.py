@@ -27,6 +27,11 @@ _DOC_MIME = ("pdf", "msword", "officedocument", "ms-excel", "ms-powerpoint", "rt
 
 class WordPressConnector(Connector):
     name = "wordpress"
+    description = (
+        "WordPress sites (any). Signs: a <link rel='https://api.w.org/'> tag, "
+        "/wp-json/ requests, or <meta name='generator' content='WordPress...'>. "
+        "Pulls documents from the wp/v2/media REST API."
+    )
 
     def __init__(self, *, max_files: int = 500, per_page: int = 100,
                  max_pages: int = 50) -> None:

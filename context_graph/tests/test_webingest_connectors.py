@@ -7,6 +7,7 @@ import json
 import pytest
 
 from context_graph.webingest.connectors import (
+    BoardDocsConnector,
     ExampleConnector,
     FinalsiteConnector,
     WordPressConnector,
@@ -132,6 +133,84 @@ async def test_wordpress_resolve_pages_media_and_filters_docs():
     assert got[0].filename == "Handbook" and got[0].content == b"%PDF-handbook"
 
 
+# ── BoardDocs ────────────────────────────────────────────────────────────────
+
+
+class _BDTextResp:
+    def __init__(self, text, status=200):
+        self._text, self.status = text, status
+
+    async def text(self):
+        return self._text
+
+
+class _BDCtx:
+    def __init__(self, meetings_json, agenda_by_id, files):
+        self.meetings_json, self.agenda_by_id, self.files = meetings_json, agenda_by_id, files
+
+    async def post(self, url, data, headers):
+        if url.endswith("BD-GetMeetingsList"):
+            return _BDTextResp(json.dumps(self.meetings_json))
+        if url.endswith("BD-GetAgenda"):
+            import re
+            mid = re.search(r"id=([A-Za-z0-9]+)", data).group(1)
+            return _BDTextResp(self.agenda_by_id.get(mid, ""))
+        return _BDTextResp("", status=404)
+
+    async def get(self, url):
+        return _Resp(body=self.files.get(url, b""), status=200,
+                     headers={"content-type": "application/pdf"})
+
+
+BD_HOST = "https://go.boarddocs.com"
+BD_BASE = f"{BD_HOST}/pa/nebr/Board.nsf"
+
+
+@pytest.mark.offline
+def test_boarddocs_detect_from_request_and_from_page():
+    # from a captured BD- request (base + committee id come verbatim)
+    req = [_Req(f"{BD_BASE}/BD-GetMeetingsList", "current_committee_id=A8F3")]
+    t = _detect(BoardDocsConnector(), requests=req, page_url=f"{BD_BASE}/Public")
+    assert t == {"base": BD_BASE, "cid": "A8F3"}
+    # from the page URL + committee id embedded in the JS
+    html = '<script>PublicPortal({ current_committee_id: "B9K2" })</script>'
+    t2 = _detect(BoardDocsConnector(), page_url=f"{BD_BASE}/Public", html=html)
+    assert t2 == {"base": BD_BASE, "cid": "B9K2"}
+    # non-BoardDocs site → None
+    assert _detect(BoardDocsConnector(), page_url="https://example.org/x") is None
+
+
+@pytest.mark.offline
+@pytest.mark.asyncio
+async def test_boarddocs_resolve_walks_meetings_to_files():
+    meetings = [{"unique": "M1", "name": "Sept Board Meeting"},
+                {"unique": "M2", "name": "Oct Board Meeting"}]
+    agendas = {
+        "M1": f'<a href="{BD_BASE}/files/AB12/$file/Budget.pdf">Budget</a>',
+        "M2": '<a href="/pa/nebr/Board.nsf/files/CD34/$FILE/Minutes.pdf">Minutes</a>',
+    }
+    files = {f"{BD_BASE}/files/AB12/$file/Budget.pdf": b"%PDF-budget",
+             f"{BD_HOST}/pa/nebr/Board.nsf/files/CD34/$FILE/Minutes.pdf": b"%PDF-min"}
+    got = await BoardDocsConnector().resolve(
+        _BDCtx(meetings, agendas, files), {"base": BD_BASE, "cid": "A8F3"})
+    names = {f.filename for f in got}
+    assert names == {"Budget.pdf", "Minutes.pdf"}
+    assert all(f.content.startswith(b"%PDF") for f in got)
+
+
+@pytest.mark.offline
+@pytest.mark.asyncio
+async def test_boarddocs_resolve_respects_cap():
+    meetings = [{"unique": "M1"}]
+    agendas = {"M1": f'<a href="{BD_BASE}/files/A/$file/one.pdf">1</a>'
+                     f'<a href="{BD_BASE}/files/B/$file/two.pdf">2</a>'}
+    files = {f"{BD_BASE}/files/A/$file/one.pdf": b"%PDF-1",
+             f"{BD_BASE}/files/B/$file/two.pdf": b"%PDF-2"}
+    got = await BoardDocsConnector().resolve(
+        _BDCtx(meetings, agendas, files), {"base": BD_BASE, "cid": "X"}, max_files=1)
+    assert len(got) == 1
+
+
 # ── Example template ─────────────────────────────────────────────────────────
 
 
@@ -151,3 +230,60 @@ async def test_example_connector_detect_and_resolve():
     assert t == {"list_url": "https://s/api/docs/list"}
     files = await conn.resolve(_ExCtx(), t)
     assert len(files) == 1 and files[0].filename == "Doc One"
+
+
+# ── LLM connector selection ──────────────────────────────────────────────────
+
+from context_graph.webingest.connectors.select import (  # noqa: E402
+    LLMConnectorSelector,
+    signals_from,
+)
+
+
+def _scripted_llm(reply):
+    async def _llm(prompt, system_prompt=None, **kw):
+        _llm.prompt = prompt
+        return reply
+    return _llm
+
+
+@pytest.mark.offline
+def test_signals_from_extracts_generator_markers_and_api_urls():
+    html = ('<meta name="generator" content="WordPress 6.5" />'
+            '<link rel="https://api.w.org/" href="https://b.org/wp-json/" />')
+    reqs = [_Req("https://b.org/wp-json/wp/v2/posts"),
+            _Req("https://b.org/style.css"),          # asset → dropped
+            _Req("https://b.org/logo.png")]           # asset → dropped
+    sig = signals_from("https://b.org/", html, reqs, [])
+    assert sig["generator"] == "WordPress 6.5"
+    assert any("api.w.org" in m for m in sig["markers"])
+    assert sig["api_request_samples"] == ["https://b.org/wp-json/wp/v2/posts"]
+
+
+@pytest.mark.offline
+@pytest.mark.asyncio
+async def test_selector_picks_named_connector():
+    conns = [FinalsiteConnector(), WordPressConnector()]
+    sel = LLMConnectorSelector(_scripted_llm('{"connectors": ["wordpress"], "reason": "wp-json"}'))
+    chosen = await sel.select({"generator": "WordPress"}, conns)
+    assert [c.name for c in chosen] == ["wordpress"]
+
+
+@pytest.mark.offline
+@pytest.mark.asyncio
+async def test_selector_empty_list_is_honoured():
+    conns = [FinalsiteConnector(), WordPressConnector()]
+    sel = LLMConnectorSelector(_scripted_llm('{"connectors": [], "reason": "static site"}'))
+    assert await sel.select({}, conns) == []
+
+
+@pytest.mark.offline
+@pytest.mark.asyncio
+async def test_selector_falls_back_to_all_when_llm_unparseable_or_errors():
+    conns = [FinalsiteConnector(), WordPressConnector()]
+    bad = LLMConnectorSelector(_scripted_llm("not json at all"))
+    assert len(await bad.select({}, conns)) == 2
+
+    async def _boom(prompt, system_prompt=None, **kw):
+        raise RuntimeError("llm down")
+    assert len(await LLMConnectorSelector(_boom).select({}, conns)) == 2

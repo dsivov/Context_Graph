@@ -32,6 +32,9 @@ class Connector(ABC):
     """A pluggable resolver for documents hidden behind a site platform's API."""
 
     name: str = "connector"
+    # One line describing the platform + how to recognise it. Shown to the LLM
+    # site-technology selector so it can pick the right plugin for a real site.
+    description: str = ""
 
     @abstractmethod
     def detect(self, *, requests: List[Any], responses: List[Any],

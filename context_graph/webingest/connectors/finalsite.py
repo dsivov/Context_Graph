@@ -20,6 +20,11 @@ from context_graph.webingest.fetch import FetchResult
 
 class FinalsiteConnector(Connector):
     name = "finalsite"
+    description = (
+        "Finalsite / Blackboard Web Community Manager CMS (common on K-12 district "
+        "sites). Signs: requests to ContentItemSvc.asmx (GetItemList), a "
+        "'Document Container' widget, or /cms/One.aspx pages."
+    )
 
     def __init__(self, *, max_files: int = 500, max_folders: int = 400) -> None:
         self._max_files = max_files

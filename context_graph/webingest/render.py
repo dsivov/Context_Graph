@@ -51,6 +51,7 @@ class PlaywrightFetcher:
         max_captures: int = 100,
         max_bytes: int = 40 * 1024 * 1024,
         connectors: Any = None,            # pluggable resolvers for API-driven widgets
+        connector_selector: Any = None,    # LLM picks which connectors apply to the site
         max_documents: Optional[int] = None,   # per-run cap passed to connectors
     ) -> None:
         self._static = static
@@ -66,6 +67,7 @@ class PlaywrightFetcher:
             from context_graph.webingest.connectors import DEFAULT_CONNECTORS
             connectors = DEFAULT_CONNECTORS
         self._connectors = connectors
+        self._connector_selector = connector_selector
         self._pw = None
         self._browser = None
         self._ctx = None
@@ -98,7 +100,18 @@ class PlaywrightFetcher:
             captured = await self._read_captures(responses) if self._capture else []
             # Connectors: resolve data hidden behind JS document widgets (e.g. a
             # Finalsite container that lists files only via a recursive API).
-            for conn in self._connectors:
+            # The LLM selector picks which connector(s) fit THIS real site; without
+            # a selector we try all (each connector's detect() safely self-gates).
+            chosen = self._connectors
+            if self._connector_selector is not None:
+                from context_graph.webingest.connectors.select import signals_from
+                signals = signals_from(page.url, html, requests, responses)
+                try:
+                    chosen = await self._connector_selector.select(signals, self._connectors)
+                except Exception as e:
+                    logger.warning(f"connector selector failed: {e}; trying all")
+                    chosen = self._connectors
+            for conn in chosen:
                 template = conn.detect(requests=requests, responses=responses,
                                        page_url=page.url, html=html)
                 if template:

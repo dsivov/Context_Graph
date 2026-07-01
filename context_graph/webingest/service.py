@@ -64,15 +64,23 @@ class WebIngestService:
         token = _current_workspace.set(workspace)
         try:
             download_dir = self._input_dir_for(workspace) if self._input_dir_for else None
-            # Optional LLM site analyst (relevance filter + document-URL extraction).
+            # Optional LLM smarts: a site analyst (relevance filter + document-URL
+            # extraction) and an LLM connector selector (picks the right plugin for
+            # the real site's platform, rather than trying all by config).
             analyst = None
+            connector_selector = None
             if params.pop("analyze", False):
                 llm = getattr(self._rag, "llm_model_func", None)
                 if llm is not None:
                     from context_graph.webingest.analyst import SiteAnalyst
+                    from context_graph.webingest.connectors.select import (
+                        LLMConnectorSelector,
+                    )
                     analyst = SiteAnalyst(llm)
+                    connector_selector = LLMConnectorSelector(llm)
             summary = await WebIngestor(self._rag).ingest_site(
-                fetcher=self._fetcher, download_dir=download_dir, analyst=analyst, **params
+                fetcher=self._fetcher, download_dir=download_dir, analyst=analyst,
+                connector_selector=connector_selector, **params
             )
             job["summary"] = summary.to_dict()
             # Data files were saved to the input dir → run CG's scan to ingest them.

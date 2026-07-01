@@ -98,6 +98,7 @@ class WebIngestor:
         user_agent: str = DEFAULT_USER_AGENT,
         download_dir: Optional[Path] = None,
         analyst: Any = None,
+        connector_selector: Any = None,
         fetcher: Optional[StaticFetcher] = None,
         client: Any = None,
     ) -> IngestSummary:
@@ -120,7 +121,9 @@ class WebIngestor:
             )
             if render_js:
                 from context_graph.webingest.render import PlaywrightFetcher
-                fetcher = own_render = PlaywrightFetcher(static, max_documents=max_documents)
+                fetcher = own_render = PlaywrightFetcher(
+                    static, max_documents=max_documents,
+                    connector_selector=connector_selector)
             else:
                 fetcher = static
 
