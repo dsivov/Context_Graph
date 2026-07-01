@@ -94,6 +94,12 @@ api = [
     "python-pptx>=0.6.21,<2.0.0",  # PPTX processing
 ]
 
+# Context Graph rules engine — fuzzy fact matching (field-level sim() predicate)
+rules = [
+    "model2vec>=0.3.0",
+    "business_rule_engine>=1.0.0",
+]
+
 # Advanced document processing engine (optional)
 docling = [
     # On macOS, pytorch and frameworks use Objective-C are not fork-safe,
@@ -164,8 +170,8 @@ Repository = "https://github.com/HKUDS/LightRAG"
 "Bug Tracker" = "https://github.com/HKUDS/LightRAG/issues"
 
 [tool.setuptools.packages.find]
-include = ["lightrag*"]
-exclude = ["data*", "tests*", "scripts*", "examples*", "dickens*", "reproduce*", "output_complete*", "rag_storage*", "inputs*"]
+include = ["lightrag*", "context_graph*"]
+exclude = ["data*", "tests*", "context_graph.tests*", "scripts*", "examples*", "dickens*", "reproduce*", "output_complete*", "rag_storage*", "inputs*"]
 
 [tool.setuptools]
 include-package-data = true
@@ -179,10 +185,16 @@ lightrag = ["api/webui/**/*", "api/static/**/*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["tests"]
+testpaths = ["tests", "context_graph/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "offline: marks tests as offline (no external dependencies)",
+    "integration: marks tests requiring external services (skipped by default)",
+    "requires_db: marks tests requiring database",
+    "requires_api: marks tests requiring LightRAG API server",
+]
 
 [tool.ruff]
 target-version = "py310"

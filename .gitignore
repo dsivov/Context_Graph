@@ -80,3 +80,8 @@ CLAUDE.md
 
 # local test venv
 .venv-cg/
+
+# Session artifacts / secret backups
+.env.bak*
+*.out
+lightrag-server.out
