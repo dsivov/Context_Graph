@@ -354,6 +354,18 @@ def create_app(args):
     # Initialize document manager with workspace support for data isolation
     doc_manager = DocumentManager(args.input_dir, workspace=args.workspace)
 
+    # Business-rules gate service (per-workspace). Only meaningful in CG mode.
+    rules_service = None
+    if getattr(args, "use_context_graph", False):
+        try:
+            from context_graph.rules import RulesService, JsonRuleStore
+
+            rules_service = RulesService(
+                JsonRuleStore(os.path.join(str(args.working_dir), "rules"))
+            )
+        except Exception as e:  # pragma: no cover - never block server start
+            logger.warning(f"Rules service unavailable: {e}")
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Lifespan context manager for startup and shutdown events"""
@@ -364,6 +376,16 @@ def create_app(args):
             try:
                 # Complete async initialization of the seeded default workspace
                 await workspace_pool.finalize_seed(default_workspace)
+
+                # Attach business-rules gates for workspaces with a saved policy,
+                # so emit enforces persisted rules immediately after a restart.
+                if rules_service is not None:
+                    try:
+                        for ws in rules_service.store.list_workspaces():
+                            inst = await workspace_pool.get_rag(ws)
+                            rules_service.attach(inst, ws)
+                    except Exception as e:
+                        logger.warning(f"Rules gate startup attach failed: {e}")
 
                 # Initialize MCP session manager (if MCP server is configured)
                 if hasattr(app.state, "mcp_server"):
@@ -1169,6 +1191,36 @@ def create_app(args):
             top_k=args.top_k,
         )
     )
+
+    # Business Rules API (manage + dry-run the per-workspace gate).
+    if rules_service is not None:
+        from lightrag.api.routers.rules_routes import create_rules_routes
+
+        app.include_router(create_rules_routes(rag, rules_service, api_key=api_key))
+
+    # Web-ingest API (crawl a website into the Context Graph).
+    try:
+        from context_graph.webingest.service import WebIngestService
+        from lightrag.api.routers.webingest_routes import create_webingest_routes
+        from lightrag.api.routers.document_routes import run_scanning_process
+
+        def _doc_manager_for(ws: str):
+            # Match the app's workspace→input-dir convention (default → base dir).
+            ws_arg = "" if ws in ("", "default") else ws
+            return DocumentManager(str(args.input_dir), workspace=ws_arg)
+
+        async def _scan_trigger(ws: str) -> None:
+            # rag resolves to the workspace via the contextvar set by the job.
+            await run_scanning_process(rag, _doc_manager_for(ws))
+
+        webingest_service = WebIngestService(
+            rag,
+            input_dir_for=lambda ws: _doc_manager_for(ws).input_dir,
+            scan_trigger=_scan_trigger,
+        )
+        app.include_router(create_webingest_routes(rag, webingest_service, api_key=api_key))
+    except Exception as e:  # pragma: no cover - never block server start
+        logger.warning(f"Web-ingest API unavailable: {e}")
 
     # Add Ollama API routes
     ollama_api = OllamaAPI(rag, top_k=args.top_k, api_key=api_key)

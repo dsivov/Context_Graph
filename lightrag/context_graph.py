@@ -49,7 +49,6 @@ from lightrag.namespace import NameSpace
 from lightrag.operate import (
     _handle_single_entity_extraction,
     _truncate_entity_identifier,
-    merge_nodes_and_edges,
 )
 from lightrag.prompt import PROMPTS
 from lightrag.utils import (
@@ -569,6 +568,9 @@ class ContextGraph(LightRAG):
             embedding_func=self.embedding_func,
             meta_fields={"src_id", "tgt_id"},
         )
+        # Optional pre-emit rules gate (context_graph.rules.RulesGate). When set,
+        # emit_decision_trace evaluates it before persisting. None → no-op.
+        self.rules_gate = None
 
     async def initialize_storages(self) -> None:
         await super().initialize_storages()
@@ -667,7 +669,7 @@ class ContextGraph(LightRAG):
         rc: RelationContext,
         *,
         upsert: bool = True,
-    ) -> None:
+    ) -> Optional[Any]:
         """Record a decision trace directly into the graph at execution time.
 
         Unlike ``ainsert()`` which extracts context from prose, this writes a
@@ -681,7 +683,37 @@ class ContextGraph(LightRAG):
             rc: The :class:`RelationContext` capturing the decision.
             upsert: If True and the edge already exists, merge the new RC with
                 the existing one rather than overwriting it.
+
+        Returns:
+            The :class:`~context_graph.rules.gate.GateDecision` if a
+            ``rules_gate`` is attached (outcome PASS/FLAG and its audit record),
+            else ``None``. On FLAG the edge is persisted with ``needs_review``.
+
+        Raises:
+            RuleViolation: if the attached gate REJECTs the decision (nothing is
+                persisted). Callers/endpoints should map this to HTTP 422.
         """
+        # Merge with existing RC when upsert=True. Done first (read-only) so the
+        # gate below evaluates the FINAL context the edge will carry.
+        if upsert and await self.chunk_entity_relation_graph.has_edge(src, tgt):
+            existing = await self.chunk_entity_relation_graph.get_edge(src, tgt)
+            if existing and existing.get("relation_context"):
+                existing_rc = RelationContext.from_json(existing["relation_context"])
+                rc = RelationContext.merge([existing_rc, rc])
+
+        # ── Pre-emit rules gate (wiring step 5) ──────────────────────────────
+        # If a RulesGate is attached, evaluate before any write. REJECT raises
+        # here (nothing persisted); FLAG annotates the edge with needs_review.
+        # Guarded by isinstance so a default/mocked attribute is a no-op.
+        gate_decision = None
+        gate = getattr(self, "rules_gate", None)
+        from context_graph.rules.gate import RulesGate, RuleViolation
+
+        if isinstance(gate, RulesGate):
+            gate_decision = gate.check(src, tgt, relation_type, rc)
+            if gate_decision.blocked:
+                raise RuleViolation(gate_decision)
+
         # Ensure nodes exist in the graph with all fields the merge pipeline expects
         provenance = rc.provenance or "agent_runtime"
         for name in (src, tgt):
@@ -696,13 +728,6 @@ class ContextGraph(LightRAG):
                 },
             )
 
-        # Merge with existing RC when upsert=True
-        if upsert and await self.chunk_entity_relation_graph.has_edge(src, tgt):
-            existing = await self.chunk_entity_relation_graph.get_edge(src, tgt)
-            if existing and existing.get("relation_context"):
-                existing_rc = RelationContext.from_json(existing["relation_context"])
-                rc = RelationContext.merge([existing_rc, rc])
-
         edge_data = dict(
             keywords=relation_type,
             description=rc.decision_trace or relation_type,
@@ -712,6 +737,9 @@ class ContextGraph(LightRAG):
             timestamp=int(time.time()),
             relation_context=rc.to_json(),
         )
+        if gate_decision is not None and gate_decision.flagged:
+            edge_data["needs_review"] = True
+            edge_data["rules_audit"] = json.dumps(gate_decision.audit, ensure_ascii=False)
         await self.chunk_entity_relation_graph.upsert_edge(src, tgt, edge_data=edge_data)
 
         # Index decision_trace text in decisions_vdb for later precedent search
@@ -726,6 +754,8 @@ class ContextGraph(LightRAG):
                     }
                 }
             )
+
+        return gate_decision
 
     # ------------------------------------------------------------------
     # Decision summary ingestion (makes decisions visible to /query)

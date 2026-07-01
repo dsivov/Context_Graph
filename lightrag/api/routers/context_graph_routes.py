@@ -13,7 +13,6 @@ USE_CONTEXT_GRAPH is not enabled), so clients can detect capability at runtime.
 
 from __future__ import annotations
 
-import json
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -201,6 +200,14 @@ class EmitDecisionResponse(BaseModel):
 
     status: str = Field(description="'ok' on success.")
     edge: str = Field(description="Edge identifier in 'src -> tgt' form.")
+    outcome: Optional[str] = Field(
+        default=None,
+        description="Rules-gate outcome ('PASS'/'FLAG') when a gate is active; null otherwise.",
+    )
+    audit: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Rules-gate audit record (matched concept, score, threshold) when a gate is active.",
+    )
 
 
 class DecisionResult(BaseModel):
@@ -670,6 +677,28 @@ def create_context_graph_routes(
                         "example": {
                             "status": "ok",
                             "edge": "Sarah Chen -> MegaCorp",
+                            "outcome": "FLAG",
+                            "audit": {
+                                "outcome": "FLAG",
+                                "rule": "large discount needs finance review",
+                                "matched_concept": "APPROVAL",
+                                "score": 1.0,
+                                "threshold": 0.4,
+                            },
+                        }
+                    }
+                },
+            },
+            422: {
+                "description": "A business rule REJECTed the decision; nothing was persisted.",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "detail": {
+                                "status": "rejected",
+                                "outcome": "REJECT",
+                                "audit": {"outcome": "REJECT", "rule": "discount cap"},
+                            }
                         }
                     }
                 },
@@ -696,9 +725,11 @@ def create_context_graph_routes(
         **Requires:** `USE_CONTEXT_GRAPH=true` in server configuration.
         """
         _require_context_graph(rag)
+        from context_graph.rules.gate import RuleViolation
+
         try:
             rc = _pydantic_to_rc(request.relation_context)
-            await rag.emit_decision_trace(
+            decision = await rag.emit_decision_trace(
                 src=request.src,
                 tgt=request.tgt,
                 relation_type=request.relation_type,
@@ -707,6 +738,14 @@ def create_context_graph_routes(
             return EmitDecisionResponse(
                 status="ok",
                 edge=f"{request.src} -> {request.tgt}",
+                outcome=decision.outcome if decision is not None else None,
+                audit=decision.audit if decision is not None else None,
+            )
+        except RuleViolation as e:
+            # A business rule REJECTed the decision — nothing was persisted.
+            raise HTTPException(
+                status_code=422,
+                detail={"status": "rejected", "outcome": "REJECT", "audit": e.decision.audit},
             )
         except HTTPException:
             raise
