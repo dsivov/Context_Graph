@@ -27,6 +27,13 @@ from context_graph.ontology.store import (
     InMemoryOntologyStore,
     validate_ontology,
 )
+from context_graph.ontology.validate import (
+    ExtractedEntity,
+    ExtractedRelation,
+    ExtractionValidator,
+    ExtractionReport,
+    ItemValidation,
+)
 
 __all__ = [
     "PropertyKind",
@@ -40,4 +47,9 @@ __all__ = [
     "JsonOntologyStore",
     "InMemoryOntologyStore",
     "validate_ontology",
+    "ExtractedEntity",
+    "ExtractedRelation",
+    "ExtractionValidator",
+    "ExtractionReport",
+    "ItemValidation",
 ]
