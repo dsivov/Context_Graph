@@ -44,6 +44,27 @@ Auth: `--api-key` or `LIGHTRAG_API_KEY`. Ontology/rules/actions
 replace-and-version on re-run; seed creation tolerates "already exists". The
 installer is generic — it only reads which files a preset provides.
 
+## Onboarding an existing project
+
+Two paths turn a live workspace on:
+
+- **Tailored** — `POST /onboard` with a plain-English description. The NL authors
+  (OntologyAuthor / RuleAuthor) draft a project-specific ontology + rules, save
+  them, seed Role nodes, and return a role-scoped manifest per role. Single-agent
+  is zero-config (no roles, no RBAC).
+- **Preset** — `python presets/install.py --workspace <ws>` applies a fixed pack.
+
+For a project that predates the flow, **backfill** its history so a fresh
+workspace already knows the reality:
+
+```bash
+python presets/backfill_git.py --repo /path/to/project --workspace <ws>
+```
+
+Deterministic (no LLM): source dirs → `Module` (`Developer -owns-> Module`),
+module dependencies, the git author → `Developer`, and recent commits →
+`Commit` with `Commit -touches-> Module` from the files each commit changed.
+
 ## Authoring a new preset
 
 1. `mkdir presets/<name>/` and add an `ontology.json` (start there — everything

@@ -596,18 +596,18 @@ end</code></pre>
       <tr><td>Methodology enforcement</td><td><span class="pill now">ready</span></td><td>Rules gate (advise/flag/block) + governed actions.</td></tr>
       <tr><td>Whole-picture &amp; per-module views</td><td><span class="pill now">ready</span></td><td>Query modes + CGR3; workspace isolation per project.</td></tr>
       <tr><td>Agent sync channel</td><td><span class="pill now">ready</span></td><td>MCP server exposes CG to each role.</td></tr>
-      <tr><td>Per-role permissions (who may do what)</td><td><span class="pill soon">next P3</span></td><td>Object-level RBAC — not built. Today: record + advise, not hard-gate by role.</td></tr>
-      <tr><td>Task lifecycle as a real workflow</td><td><span class="pill soon">next P3</span></td><td>Actions are single ops; multi-step orchestration is the agent's job for now.</td></tr>
+      <tr><td>Per-role permissions (who may do what)</td><td><span class="pill now">shipped ✓</span></td><td>Object-level RBAC — opt-in, deny-by-default, gates <code>/actions/invoke</code> (403). <a href="#gaps">Gap 1</a>.</td></tr>
+      <tr><td>Task lifecycle as a real workflow</td><td><span class="pill now">shipped ✓</span></td><td>Declarative state machines; transition actions checked + applied on the node (illegal → 409). <a href="#gaps">Gap 2</a>.</td></tr>
       <tr><td>Deterministic inference (entailment)</td><td><span class="pill gap">gap</span></td><td>"A depends on B, B exposes X…" is LLM synthesis today, not derivation.</td></tr>
       <tr><td>Auto code/API extraction</td><td><span class="pill gap">feed from below</span></td><td>CG won't parse the repo — by design. Feed <code>API</code>/<code>Module</code> objects from a deterministic <b>structural index</b> (tree-sitter / CodeGraph-style), and reserve LLM extraction for the decisions.</td></tr>
     </tbody>
   </table>
   </div>
   <div class="callout ok">
-    <div class="clabel">The read</div>
-    Six of the load-bearing capabilities are already here. The two "next P3" items (per-role RBAC, workflow
-    orchestration) are exactly the ones your distinct-roles + enforcement choices point at — so this use case doubles as
-    a forcing function for the roadmap's next steps.
+    <div class="clabel">The read — updated</div>
+    Every load-bearing capability is now here. The two former "next P3" items (per-role RBAC, the lifecycle layer) that
+    this use case forced are <b>both shipped</b> — so the whole chain <b>RBAC → lifecycle → rules gate → side effect</b>
+    runs end-to-end, and a role-scoped <a href="#playbook">manifest</a> advertises exactly the actions a role may invoke.
   </div>
 </section>
 
@@ -618,7 +618,13 @@ end</code></pre>
   <p class="lead-p">A running analysis of the missing pieces this use case needs, settled one at a time. Each is a
   design sketch and a recommendation, not a committed build.</p>
 
-  <h3>Gap 1 — Object-level RBAC <span class="pill soon">discussed</span></h3>
+  <h3>Gap 1 — Object-level RBAC <span class="pill now">shipped ✓</span></h3>
+  <div class="callout ok">
+    <div class="clabel">✓ Built</div>
+    Shipped as <code>context_graph/rbac/</code> + <code>/rbac</code>, gating <code>/actions/invoke</code> (403).
+    Opt-in &amp; deny-by-default; wildcard grants; principal from the JWT. The design below is what got built; only
+    <b>ReBAC</b> (relationship-derived grants) remains deferred — parsed &amp; stored, enforcement is the next increment.
+  </div>
   <p>Your two firm choices — <b>distinct roles</b> and <b>enforcement</b> — both point straight at role-gated actions:
   "the architect may <code>ApproveArchitecture</code>; the developer may not." That is the sharpest gap, because the
   <i>tempting</i> shortcut is actively unsafe.</p>
@@ -747,7 +753,14 @@ end</code></pre>
 
   <hr class="soft">
 
-  <h3>Gap 2 — Workflow orchestration <span class="pill win">locked</span></h3>
+  <h3>Gap 2 — Workflow orchestration <span class="pill now">shipped ✓</span></h3>
+  <div class="callout ok">
+    <div class="clabel">✓ Built</div>
+    The lifecycle layer shipped as <code>context_graph/lifecycle/</code> + <code>/lifecycle</code>: declarative state
+    machines per object type, a transition action checked (legal move? role allowed?) and applied to the object's node,
+    illegal jumps → 409. The planner was <i>not</i> built, by design. Cross-object <code>requires</code> guards are
+    parsed &amp; stored, enforcement deferred.
+  </div>
   <p>"Workflow orchestration" is really <b>two</b> gaps, and conflating them is how a project builds the wrong, enormous
   thing:</p>
   <div class="grid g2">
