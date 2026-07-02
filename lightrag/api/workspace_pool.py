@@ -159,43 +159,52 @@ class WorkspaceProxy:
 
 
 def get_workspace_middleware(pool: WorkspacePool, default_workspace: str = "default"):
-    """Return a Starlette middleware that sets up the workspace context per request."""
+    """Return a **pure ASGI** middleware that sets the workspace context per request.
 
-    from starlette.middleware.base import BaseHTTPMiddleware
-    from starlette.requests import Request
+    Deliberately not a ``BaseHTTPMiddleware``: that wraps the ASGI receive channel
+    and corrupts request-body streaming for mounted sub-apps (notably the MCP
+    Streamable-HTTP transport — large bodies would truncate at a chunk boundary).
+    This one reads only the ``LIGHTRAG-WORKSPACE`` header from ``scope`` and never
+    touches ``receive``/``send``, so the body streams through untouched.
+    """
+
     from starlette.responses import JSONResponse
 
-    class WorkspaceMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):
-            workspace = request.headers.get("LIGHTRAG-WORKSPACE", "").strip()
+    class WorkspaceMiddleware:
+        def __init__(self, app):
+            self.app = app
+
+        async def __call__(self, scope, receive, send):
+            if scope.get("type") != "http":
+                await self.app(scope, receive, send)
+                return
+
+            headers = dict(scope.get("headers") or [])
+            workspace = headers.get(b"lightrag-workspace", b"").decode("latin-1").strip()
             if not workspace:
                 workspace = default_workspace
 
-            # Validate workspace name
             if not _WORKSPACE_RE.match(workspace):
-                return JSONResponse(
+                resp = JSONResponse(
                     status_code=400,
-                    content={
-                        "detail": f"Invalid workspace name '{workspace}'. "
-                        "Only a-z, A-Z, 0-9, and _ are allowed."
-                    },
-                )
+                    content={"detail": f"Invalid workspace name '{workspace}'. "
+                             "Only a-z, A-Z, 0-9, and _ are allowed."})
+                await resp(scope, receive, send)
+                return
 
-            # Ensure workspace instance is initialized
             try:
                 await pool.get_rag(workspace)
             except Exception as e:
                 logger.error(f"Failed to initialize workspace '{workspace}': {e}")
-                return JSONResponse(
+                resp = JSONResponse(
                     status_code=500,
-                    content={"detail": f"Failed to initialize workspace: {e}"},
-                )
+                    content={"detail": f"Failed to initialize workspace: {e}"})
+                await resp(scope, receive, send)
+                return
 
-            # Set contextvar for this request
             token = _current_workspace.set(workspace)
             try:
-                response = await call_next(request)
-                return response
+                await self.app(scope, receive, send)
             finally:
                 _current_workspace.reset(token)
 

@@ -184,12 +184,20 @@ class ActionService:
         if action.effect:
             trace += f" — {action.effect}"
 
+        # Substantive text arguments (e.g. a decision's rationale / impact) are the
+        # decision's supporting evidence — so evidence_count reflects them and rules
+        # that check for rationale don't misfire when it was actually provided.
+        evidence = [f"{name}: {coerced[name]}"
+                    for name, param in action.params.items()
+                    if name in coerced and param.kind == "text" and str(coerced[name]).strip()]
+
         return RelationContext(
             decision_trace=trace,
             approved_by=actor,
             approved_via="system",
             provenance=f"action:{action.name}",
             quantitative_data="; ".join(quant_bits) or None,
+            supporting_sentences=evidence,
             policy_ref=action.policy_ref,
             confidence_score=1.0,
         )

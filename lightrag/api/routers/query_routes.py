@@ -277,11 +277,17 @@ async def classify_query_mode(
     if not llm_func:
         llm_func = rag.llm_model_func
 
-    # Step 0: Check catalog size — skip graph for small catalogs
-    catalog_size, catalog_text = get_catalog_info(rag)
-    if 0 < catalog_size < SMALL_CATALOG_THRESHOLD and catalog_text:
-        logger.info(f"[auto] Small catalog ({catalog_size} products) — bypassing graph, sending full catalog to LLM")
-        return "catalog_bypass", f"small catalog ({catalog_size} products < {SMALL_CATALOG_THRESHOLD} threshold), full catalog sent to LLM"
+    # Step 0: small-catalog bypass — a product-catalog optimization (send the whole
+    # catalog to the LLM instead of retrieving). Opt-in only: for a general knowledge
+    # base (code, docs, decisions) "few documents" does NOT mean "dump them all", and
+    # bypassing the graph gives wrong answers. Enable with AUTO_CATALOG_BYPASS=true.
+    from lightrag.api.config import get_env_value
+
+    if get_env_value("AUTO_CATALOG_BYPASS", False, bool):
+        catalog_size, catalog_text = get_catalog_info(rag)
+        if 0 < catalog_size < SMALL_CATALOG_THRESHOLD and catalog_text:
+            logger.info(f"[auto] Small catalog ({catalog_size} items) — bypassing graph, sending full catalog to LLM")
+            return "catalog_bypass", f"small catalog ({catalog_size} items < {SMALL_CATALOG_THRESHOLD} threshold), full catalog sent to LLM"
 
     # Step 1: Classify query to pick optimal mode
     classification_prompt = MODE_CLASSIFICATION_PROMPT.format(query=query)
