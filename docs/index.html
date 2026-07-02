@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context Graph — Documentation</title>
+<meta name="description" content="Documentation for Context Graph: a decision-aware knowledge-graph system built on LightRAG that extends triples (h,r,t) into contextual quadruples (h,r,t,rc).">
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1080px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(25,184,154,.10), transparent 60%),
+    radial-gradient(900px 520px at -12% 6%, rgba(91,141,239,.09), transparent 55%),
+    radial-gradient(800px 500px at 50% 120%, rgba(169,116,240,.07), transparent 60%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,.mono{font-family:var(--mono)}
+
+.hero{padding:78px 22px 30px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(25,184,154,.07),transparent)}
+.hero-inner{max-width:var(--maxw);margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(34px,6vw,60px);line-height:1.02;margin:.28em 0 .2em;
+  background:linear-gradient(92deg,#cfe0ff,#8fd9c9 50%,#ffd79a);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,22px);color:var(--ink-soft);max-width:760px}
+.lede code{color:#8fd9c9;font-size:.92em}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}
+.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.wrap{max-width:var(--maxw);margin:0 auto;padding:40px 22px 90px}
+section{margin:0 0 46px}
+.kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--b);font-weight:700;margin-bottom:4px}
+h2{font-size:clamp(21px,3vw,27px);margin:0 0 4px;line-height:1.15}
+.sec-sub{color:var(--ink-faint);font-size:14.5px;margin:0 0 18px}
+
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:820px){.g2,.g3{grid-template-columns:1fr}}
+
+.doc{display:block;position:relative;overflow:hidden;background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--radius);padding:20px 20px 20px 24px;box-shadow:var(--shadow);
+  transition:transform .16s ease,border-color .16s ease,background .16s ease}
+.doc::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--a)}
+.doc.b::before{background:var(--b)} .doc.c::before{background:var(--c)} .doc.ctrl::before{background:var(--ctrl)}
+.doc:hover{transform:translateY(-3px);border-color:var(--line);background:var(--panel2);text-decoration:none}
+.doc .eyebrow-sm{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);font-weight:700}
+.doc h3{margin:6px 0 6px;font-size:20px;color:var(--ink)}
+.doc.a h3 span,.doc h3 .arrow{color:var(--a)} .doc.b h3 .arrow{color:var(--b)} .doc.c h3 .arrow{color:var(--c)} .doc.ctrl h3 .arrow{color:var(--ctrl)}
+.doc p{margin:0;color:var(--ink-soft);font-size:14.5px;line-height:1.55}
+.doc.big h3{font-size:23px}
+
+.reflist{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:6px 4px}
+.reflist a{display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+  padding:11px 16px;border-radius:9px;color:var(--ink-soft);border-bottom:1px solid var(--line-soft)}
+.reflist a:last-child{border-bottom:none}
+.reflist a:hover{background:var(--panel2);color:#fff;text-decoration:none}
+.reflist .rt{font-weight:600;color:var(--ink)} .reflist a:hover .rt{color:#fff}
+.reflist .rd{color:var(--ink-faint);font-size:13px;text-align:right}
+.reflist .fname{font-family:var(--mono);font-size:12px;color:var(--ink-faint)}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid rgba(91,141,239,.5);background:rgba(91,141,239,.08);margin:8px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;color:#9cc0ff}
+
+.footer{max-width:var(--maxw);margin:0 auto;padding:26px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Documentation</div>
+    <h1>Context Graph</h1>
+    <p class="lede">A decision-aware knowledge-graph system built on LightRAG. It extends triples <code>(h, r, t)</code>
+      into contextual quadruples <code>(h, r, t, rc)</code> — attaching the decision record (who, why, when, under which
+      policy) to every edge — and adds CGR3 reasoning, a business rules engine, a typed ontology, and web ingestion.</p>
+    <div class="byline">Built on <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a>
+      (HKUDS) · source on <a href="https://github.com/dsivov/Context_Graph" target="_blank" rel="noopener">GitHub</a> ·
+      supported by <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a></div>
+    <div class="hero-tags">
+      <span class="tag"><b>(h, r, t, rc)</b> quadruples</span>
+      <span class="tag"><b>CGR3</b> reasoning</span>
+      <span class="tag"><b>rules</b> &amp; ontology</span>
+      <span class="tag"><b>web</b> ingester</span>
+      <span class="tag"><b>MCP</b> + REST</span>
+      <span class="tag">multi-tenant</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- Start here -->
+  <section>
+    <div class="kicker">Start here</div>
+    <h2>Read these first</h2>
+    <p class="sec-sub">The idea in narrative form, and the complete technical reference.</p>
+    <div class="grid g2">
+      <a class="doc b big" href="BLOG_THE_FOURTH_ELEMENT.html">
+        <div class="eyebrow-sm">Narrative intro</div>
+        <h3>The Fourth Element <span class="arrow">→</span></h3>
+        <p>Why decisions — not just facts — belong in the graph. A developer's tour of contextual quadruples and the CGR3
+          reasoning loop, with diagrams.</p>
+      </a>
+      <a class="doc a big" href="CONTEXT_GRAPH_OVERVIEW.html">
+        <div class="eyebrow-sm">Technical field guide</div>
+        <h3>Context Graph Overview <span class="arrow">→</span></h3>
+        <p>The full reference: architecture, the quadruple, ingestion, querying &amp; CGR3, the REST API, MCP, storage,
+          and multi-tenancy — self-contained, illustrated.</p>
+      </a>
+    </div>
+  </section>
+
+  <!-- Feature guides -->
+  <section>
+    <div class="kicker">Feature guides</div>
+    <h2>The productisation layer</h2>
+    <p class="sec-sub">Governance and ingestion — each with its own illustrated walkthrough.</p>
+    <div class="grid g3">
+      <a class="doc c" href="RULES_ENGINE.html">
+        <div class="eyebrow-sm">Governance</div>
+        <h3>Business Rules Engine <span class="arrow">→</span></h3>
+        <p>A pre-emit gate over every decision. A DSL with semantic <code>sim()</code> matching, PASS / FLAG / REJECT
+          outcomes, and a plain-English policy author.</p>
+      </a>
+      <a class="doc ctrl" href="ONTOLOGY.html">
+        <div class="eyebrow-sm">Typed schema</div>
+        <h3>Ontology <span class="arrow">→</span></h3>
+        <p>Object types, link types, and typed properties that every extraction is validated — and coerced — against.
+          Open- or closed-world, with an NL schema author.</p>
+      </a>
+      <a class="doc a" href="SCRAPER.html">
+        <div class="eyebrow-sm">Ingestion</div>
+        <h3>Web Ingester <span class="arrow">→</span></h3>
+        <p>Point it at any site. A polite crawler, pluggable platform connectors, and LLM-guided acquisition — with the
+          source URL carried through as provenance.</p>
+      </a>
+    </div>
+  </section>
+
+  <!-- Deep dives -->
+  <section>
+    <div class="kicker">Deep dives &amp; reference</div>
+    <h2>Design, architecture, operations</h2>
+    <p class="sec-sub">The build log and the long-form reference docs. Markdown files open on GitHub.</p>
+    <div class="grid g2" style="margin-bottom:16px">
+      <a class="doc ctrl" href="CLOSING_THE_GAPS.html">
+        <div class="eyebrow-sm">Working document</div>
+        <h3>Closing the Gaps <span class="arrow">→</span></h3>
+        <p>The full gap analysis, architecture decisions, and build log behind the rules engine, ontology, and web
+          ingester — including the decision-matching and gate-flow diagrams.</p>
+      </a>
+      <a class="doc b" href="https://github.com/dsivov/Context_Graph/blob/main/docs/CONTEXTGRAPH_PAPER.md" target="_blank" rel="noopener">
+        <div class="eyebrow-sm">Long-form design paper</div>
+        <h3>Context Graph Paper <span class="arrow">→</span></h3>
+        <p>The complete design rationale and formal treatment of contextual quadruples and CGR3.</p>
+      </a>
+    </div>
+
+    <div class="reflist">
+      <a href="https://github.com/dsivov/Context_Graph/blob/main/docs/architecture.md" target="_blank" rel="noopener">
+        <span><span class="rt">Architecture</span> — <span class="fname">architecture.md</span></span>
+        <span class="rd">layers · data flow · storage · multi-tenancy</span></a>
+      <a href="https://github.com/dsivov/Context_Graph/blob/main/docs/data-model.md" target="_blank" rel="noopener">
+        <span><span class="rt">Data model</span> — <span class="fname">data-model.md</span></span>
+        <span class="rd">the quadruple · 11-field RelationContext</span></a>
+      <a href="https://github.com/dsivov/Context_Graph/blob/main/docs/ingestion-and-querying.md" target="_blank" rel="noopener">
+        <span><span class="rt">Ingestion &amp; querying</span> — <span class="fname">ingestion-and-querying.md</span></span>
+        <span class="rd">extraction &amp; emission · query modes · CGR3</span></a>
+      <a href="https://github.com/dsivov/Context_Graph/blob/main/docs/api-reference.md" target="_blank" rel="noopener">
+        <span><span class="rt">API reference</span> — <span class="fname">api-reference.md</span></span>
+        <span class="rd">REST endpoints · MCP tools · auth · workspaces</span></a>
+      <a href="https://github.com/dsivov/Context_Graph/blob/main/docs/configuration.md" target="_blank" rel="noopener">
+        <span><span class="rt">Configuration</span> — <span class="fname">configuration.md</span></span>
+        <span class="rd">env vars · storage backends · LLM providers</span></a>
+      <a href="https://github.com/dsivov/Context_Graph/blob/main/docs/PaperComparison.md" target="_blank" rel="noopener">
+        <span><span class="rt">Paper comparison</span> — <span class="fname">PaperComparison.md</span></span>
+        <span class="rd">alignment with the CGR3 paper (Liang et al., 2024)</span></a>
+      <a href="https://github.com/dsivov/Context_Graph/blob/main/docs/DockerDeployment.md" target="_blank" rel="noopener">
+        <span><span class="rt">Deployment</span> — <span class="fname">DockerDeployment.md · OfflineDeployment.md</span></span>
+        <span class="rd">Docker &amp; offline operations</span></a>
+      <a href="https://github.com/dsivov/Context_Graph/blob/main/docs/FrontendBuildGuide.md" target="_blank" rel="noopener">
+        <span><span class="rt">WebUI build</span> — <span class="fname">FrontendBuildGuide.md</span></span>
+        <span class="rd">building the web interface</span></a>
+    </div>
+  </section>
+
+  <div class="callout">
+    <div class="clabel">Getting started</div>
+    Set <code>USE_CONTEXT_GRAPH=true</code>, start <code>lightrag-server</code> (port 9621), and open the WebUI — the
+    <b>Rules</b> and <b>Ontology</b> tabs manage governance, and <code>POST /scrape</code> pulls a website into the
+    graph. Full setup lives in the <a href="https://github.com/dsivov/Context_Graph#readme" target="_blank" rel="noopener">README</a>.
+  </div>
+
+</div>
+
+<footer class="footer">
+  Context Graph documentation — contextual quadruples <code>(h, r, t, rc)</code> and the CGR3 reasoning loop. Built on
+  <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a> (HKUDS), implementing the
+  <a href="https://arxiv.org/abs/2406.11160" target="_blank" rel="noopener">CGR3 paradigm</a> (Liang et al., 2024).
+  Supported by <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>.
+</footer>
+
+</body>
+</html>
