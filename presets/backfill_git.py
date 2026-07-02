@@ -22,6 +22,7 @@ so keywords that aren't in the ontology are warnings, not errors.
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import subprocess
@@ -31,6 +32,17 @@ import urllib.request
 
 def git(repo, *args):
     return subprocess.check_output(["git", "-C", repo, *args], text=True).strip()
+
+
+def gather_docs(repo, limit):
+    """Markdown docs worth ingesting for the semantic layer (README + docs/)."""
+    patterns = ["README.md", "*.md", "docs/*.md", "docs/**/*.md"]
+    out = {}
+    for pat in patterns:
+        for p in sorted(glob.glob(os.path.join(repo, pat), recursive=True)):
+            if os.path.isfile(p):
+                out[os.path.relpath(p, repo)] = p
+    return dict(list(out.items())[:limit])
 
 
 def detect_modules(repo):
@@ -56,6 +68,9 @@ def main() -> int:
     ap.add_argument("--api-key", default=os.environ.get("LIGHTRAG_API_KEY"))
     ap.add_argument("--commits", type=int, default=15)
     ap.add_argument("--modules", nargs="*", help="Override auto-detected module dirs.")
+    ap.add_argument("--no-docs", action="store_true",
+                    help="Skip ingesting README/docs (skip the semantic layer).")
+    ap.add_argument("--max-docs", type=int, default=25)
     args = ap.parse_args()
 
     repo = os.path.abspath(args.repo)
@@ -112,6 +127,23 @@ def main() -> int:
 
     print(f"backfilled '{args.workspace}': {author} (developer), "
           f"{len(modules)} modules {modules}, {ncommits} commits", flush=True)
+
+    # --- semantic layer: ingest README/docs so the graph is query-able and the
+    #     "why" (architecture / decisions in prose) is extracted with provenance.
+    if not args.no_docs:
+        docs = gather_docs(repo, args.max_docs)
+        texts, sources = [], []
+        for rel, path in docs.items():
+            try:
+                txt = open(path, encoding="utf-8", errors="ignore").read()
+            except OSError:
+                continue
+            if txt.strip() and len(txt) <= 400_000:
+                texts.append(txt)
+                sources.append(rel)
+        if texts and post("/documents/texts", {"texts": texts, "file_sources": sources}):
+            print(f"queued {len(texts)} docs for extraction (async — poll "
+                  f"/documents/pipeline_status): {sources}", flush=True)
     return 0
 
 

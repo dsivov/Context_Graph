@@ -61,9 +61,16 @@ workspace already knows the reality:
 python presets/backfill_git.py --repo /path/to/project --workspace <ws>
 ```
 
-Deterministic (no LLM): source dirs → `Module` (`Developer -owns-> Module`),
-module dependencies, the git author → `Developer`, and recent commits →
-`Commit` with `Commit -touches-> Module` from the files each commit changed.
+Two layers:
+
+- **Structural** (deterministic, no LLM): source dirs → `Module`
+  (`Developer -owns-> Module`), module dependencies, the git author →
+  `Developer`, and recent commits → `Commit` with `Commit -touches-> Module`
+  from the files each commit changed.
+- **Semantic** (LLM extraction): `README` + `docs/*.md` are ingested through the
+  normal pipeline, so the graph gains embedded, query-able chunks and the "why"
+  (architecture, design records) is extracted with per-file provenance. Skip
+  with `--no-docs`; cap with `--max-docs`.
 
 ## Authoring a new preset
 
