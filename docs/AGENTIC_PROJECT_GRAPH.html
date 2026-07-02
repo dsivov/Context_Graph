@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Project Graph — Context Graph as the Methodology Actor</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.10), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(169,116,240,.08), transparent 55%),
+    radial-gradient(800px 500px at 50% 118%, rgba(25,184,154,.06), transparent 60%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(91,141,239,.07),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(32px,5.5vw,54px);line-height:1.04;margin:.3em 0 .25em;
+  background:linear-gradient(92deg,#cfe0ff,#d9c8ff 45%,#8fd9c9);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}
+.byline a{color:var(--ink-soft)}
+.status{margin-top:16px;display:inline-flex;gap:8px;align-items:center;border:1px solid rgba(240,167,60,.5);
+  background:rgba(240,167,60,.08);color:#ffce86;padding:5px 12px;border-radius:999px;font-size:12.5px;font-weight:600}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:236px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(91,141,239,.18),transparent);color:#fff;border-left:2px solid var(--a)}
+
+main{min-width:0;max-width:770px}
+article section{margin:0 0 52px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}
+p{margin:.7em 0}
+.lead-p{font-size:19px;color:var(--ink)}
+.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--a);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)} .callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)} .callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.10)} .callout.key .clabel{color:#9cc0ff}
+.callout.q{border-color:rgba(169,116,240,.5);background:rgba(169,116,240,.08)} .callout.q .clabel{color:#cdb1f7}
+
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--a)}
+.stat.b::after{background:var(--b)} .stat.c::after{background:var(--c)} .stat.ctrl::after{background:var(--ctrl)}
+.stat .v{font-size:26px;font-weight:800;letter-spacing:-.02em} .stat .l{color:var(--ink-faint);font-size:13px;margin-top:3px}
+
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:540px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+.pill.now{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.gap{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+.pill.soon{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+
+figure{margin:22px 0}
+figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px} figcaption b{color:var(--ink-soft)}
+
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}
+.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);
+  border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+.lean{border-left:3px solid var(--ctrl);padding:2px 0 2px 14px;margin:10px 0;color:var(--ink-soft);font-size:14.5px}
+.lean b{color:#cdb1f7}
+b.hl{color:#8fd9c9}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Discussion &amp; Analysis · Working Document</div>
+    <h1>The Project Graph</h1>
+    <p class="lede">What if Context Graph didn't just <i>index</i> an agentic project, but <i>ran</i> its methodology —
+      tracking every decision and its reasoning, holding the current state, keeping specialised agents in sync, and
+      refusing the moves that break the process?</p>
+    <div class="byline">Context Graph as the methodology <b>actor</b> for multi-agent software development ·
+      a working analysis, not a spec</div>
+    <div class="status">● Open discussion — leanings recorded, questions unresolved</div>
+    <div class="hero-tags">
+      <span class="tag">decisions worth remembering</span>
+      <span class="tag"><b>distinct</b> agent roles</span>
+      <span class="tag">CG as <b>gatekeeper</b></span>
+      <span class="tag">reuse, don't rebuild</span>
+      <span class="tag">methodology <b>as data</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this document</div>
+  <ol>
+    <li><a href="#problem">The problem</a></li>
+    <li><a href="#thesis">Actor, not index</a></li>
+    <li><a href="#grounding">Grounding: the setup</a></li>
+    <li><a href="#ontology">The project ontology</a></li>
+    <li><a href="#granularity">What's worth remembering</a></li>
+    <li><a href="#roles">Roles as identities</a></li>
+    <li><a href="#methodology">Methodology as data</a></li>
+    <li><a href="#example">Worked example: reuse</a></li>
+    <li><a href="#sync">The sync bus</a></li>
+    <li><a href="#readiness">Ready vs missing</a></li>
+    <li><a href="#gaps">Closing the gaps</a></li>
+    <li><a href="#questions">Open questions &amp; log</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="problem">
+  <div class="kicker">The gap</div>
+  <h2>The problem: agentic projects forget the <i>why</i></h2>
+  <p class="lead-p">A multi-agent development setup produces a mountain of artifacts — PRDs, change requests, tasks,
+  architecture docs, changelogs, commits. Most tooling captures <i>what exists</i>. Almost none captures <i>why each
+  step was taken</i> — and that is exactly the memory a team of agents needs to stay coherent.</p>
+
+  <p>Three failure modes fall out of that gap, and every one of them is a lost-context problem:</p>
+  <div class="grid g3">
+    <div class="card"><b>Rebuilding what exists.</b> A developer agent writes a new API because it never learned one
+      already covers the case. Duplication, drift, wasted turns.</div>
+    <div class="card"><b>Drift between roles.</b> Manager, architect, developer, and integrator sync through shared
+      files (changelogs, task lists). Files go stale; an agent reads yesterday's truth.</div>
+    <div class="card"><b>Amnesia about decisions.</b> "Why did we choose Postgres over Mongo here?" The rationale lived
+      in a discussion that no artifact preserved. The next agent re-litigates it.</div>
+  </div>
+
+  <div class="pull">The scarce resource isn't the code or the task list. It's the <i>reasoning</i> — and the reasoning
+  is precisely what a normal knowledge graph, and a pile of shared files, throw away.</div>
+</section>
+
+<!-- 2 -->
+<section id="thesis">
+  <div class="kicker">The reframing</div>
+  <h2>Actor, not index</h2>
+  <p>Context Graph's whole thesis is the <b>fourth element</b>: every edge carries a <code>RelationContext</code> —
+  <i>who</i> decided, <i>why</i>, via <i>which</i> channel, under <i>which</i> policy, valid <i>until</i> when. So the
+  thing you called most important — the reason behind each step — isn't a feature to bolt on. It's the native unit of
+  storage.</p>
+
+  <p>That flips the ambition. Not <i>"an index of progress and code"</i> but a <b>decision-and-state substrate</b> your
+  agents read from and write to — one that can also <i>act</i>: define the methodology, hold current state, surface
+  precedent, and refuse illegal moves.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th></th><th>CG as index (passive)</th><th>CG as actor (this proposal)</th></tr></thead>
+    <tbody>
+      <tr><td>Role</td><td>A queryable mirror of files &amp; code</td><td>Source of truth for decisions &amp; state</td></tr>
+      <tr><td>Writes</td><td>Synced after the fact</td><td>Agents change state <i>through</i> CG</td></tr>
+      <tr><td>Methodology</td><td>Lives in prompts &amp; humans</td><td>Encoded as ontology + rules + actions</td></tr>
+      <tr><td>On a bad move</td><td>Records it</td><td>Flags or blocks it, with the reason</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">◆ The working thesis</div>
+    Git stays the source of truth for <b>code</b>. Context Graph becomes the source of truth for <b>decisions,
+    relationships, and state</b> — and, through the rules gate and the action layer, an <b>actor</b> that shapes how the
+    agents behave rather than merely recording what they did.
+  </div>
+
+  <h3>What CG is <i>not</i> — and what it sits on</h3>
+  <p>A crowded adjacent category is the <b>structural code graph</b> — tools like
+  <a href="https://medium.com/kd-agentic/codegraph-the-open-source-knowledge-graph-that-makes-ai-coding-tools-dramatically-cheaper-190f8b89f8a7" target="_blank" rel="noopener">CodeGraph</a> that index symbols,
+  calls, and imports with tree-sitter to make an agent's <i>reading</i> of a codebase cheaper (real, measurable token
+  savings). CG is not that, and shouldn't try to be. The distinction is sharp — it's <b>recoverable vs irrecoverable
+  information</b>:</p>
+  <div class="grid g2">
+    <div class="card"><b>Structural graph — recoverable.</b> A deterministic projection of the code. Delete it, re-run
+      tree-sitter, get it back byte-for-byte. A cache. Never truly lost.</div>
+    <div class="card"><b>Context Graph — irrecoverable.</b> <i>Why</i> Postgres over Mongo, <i>who</i> approved the
+      exception, which API was deprecated on purpose. The AST holds none of it. Once the discussion scrolls off, it's
+      gone. The scarce layer.</div>
+  </div>
+  <p>Two more axes: CG is <b>active</b> (it gates, flags, records) where a code graph is <b>descriptive</b> (a map you
+  read); and CG is <b>generic</b> (sales, compliance, agentic dev — code is one config) where a code graph is
+  code-only. So the two <b>stack</b>: a structural index is the ideal <i>feeder</i> for CG's <code>API</code>/<code>Module</code>
+  objects — giving the "don't rebuild that API" check a complete, exact inventory to govern against.</p>
+
+  <div class="callout info">
+    <div class="clabel">◆ Positioning, one line</div>
+    A structural code graph makes an agent's <b>reading of the code</b> cheaper. Context Graph makes a <b>team of
+    agents' decisions</b> coherent and governed. Same neighbourhood, different floor — and CG rides <i>above</i> the
+    structural one, it doesn't replace it.
+  </div>
+</section>
+
+<!-- 2b -->
+<section id="grounding">
+  <div class="kicker">The concrete setup we're mapping</div>
+  <h2>Grounding: an existing AI dev team</h2>
+  <p class="lead-p">This isn't hypothetical. The analysis maps onto a working methodology —
+  <a href="https://github.com/dsivov/ai_development_team/" target="_blank" rel="noopener">dsivov/ai_development_team</a>
+  — so every proposal below has something real to answer to. (The setup evolves; treat it as the reference for
+  <i>principles</i>, not a frozen spec.)</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>In the current setup</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td><b>Six roles</b></td><td>Manager · Architect · Developer · Integrator · DevOp · Production Engineer — each with distinct permissions and <code>roles/&lt;role&gt;/CLAUDE.md</code> instructions.</td></tr>
+      <tr><td><b>Hand-off</b></td><td>Markdown <code>queue/*.md</code> for inter-agent messaging, plus <code>TASKS.md</code>, <code>CHANGELOG.md</code>, <code>CHANGEREQUESTS.md</code>.</td></tr>
+      <tr><td><b>Enforcement (already exists)</b></td><td><code>hooks/role_enforcer.py</code> validates operations via PreToolUse hooks; git <b>branch-level restrictions</b> enforce role boundaries.</td></tr>
+      <tr><td><b>Lifecycle</b></td><td>init → manager tasks → architect decomposition → developer impl → integrator test/commit → production-engineer release.</td></tr>
+      <tr><td><b>Multi-project · skills</b></td><td><code>projects/&lt;name&gt;/</code> isolation; each role has ~3 skills that auto-activate by context.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">◆ Two things this pins down</div>
+    <b>(1)</b> The role list is already <i>six, not four</i>, and it changes over time — proof that roles are
+    <b>preset data, never core code</b> (§ staying generic). <b>(2)</b> Role enforcement <i>already exists</i> in the
+    harness. So CG doesn't introduce access control — it moves the <i>state-changing</i> slice of it into a shared,
+    auditable place. More on that in the RBAC gap.
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="ontology">
+  <div class="kicker">What the graph contains</div>
+  <h2>The project ontology</h2>
+  <p>The <a href="ONTOLOGY.html">ontology layer</a> already lets us declare a typed schema per workspace. A project
+  graph is just the right object and link types for software delivery:</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 300" role="img" aria-label="The project ontology graph">
+      <defs>
+        <marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
+      </defs>
+      <style>
+        .n{rx:9;stroke-width:1.4} .t{fill:#e7ebf3;font:600 12.5px "Segoe UI",sans-serif;text-anchor:middle}
+        .e{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#pa)} .el{fill:#8fd9c9;font:10.5px var(--mono),monospace;text-anchor:middle}
+      </style>
+      <rect class="n" x="20" y="20" width="130" height="40" fill="rgba(91,141,239,.14)" stroke="#5b8def"/><text class="t" x="85" y="45">Discussion</text>
+      <rect class="n" x="20" y="130" width="130" height="40" fill="rgba(169,116,240,.16)" stroke="#a974f0"/><text class="t" x="85" y="155">Decision (ADR)</text>
+      <rect class="n" x="270" y="20" width="130" height="40" fill="rgba(91,141,239,.14)" stroke="#5b8def"/><text class="t" x="335" y="45">Feature / PRD</text>
+      <rect class="n" x="270" y="130" width="130" height="40" fill="rgba(240,167,60,.14)" stroke="#f0a73c"/><text class="t" x="335" y="155">Task</text>
+      <rect class="n" x="270" y="240" width="130" height="40" fill="rgba(62,207,142,.14)" stroke="#3ecf8e"/><text class="t" x="335" y="265">Commit</text>
+      <rect class="n" x="540" y="75" width="130" height="40" fill="rgba(25,184,154,.14)" stroke="#19b89a"/><text class="t" x="605" y="100">Module</text>
+      <rect class="n" x="540" y="185" width="130" height="40" fill="rgba(25,184,154,.14)" stroke="#19b89a"/><text class="t" x="605" y="210">API / Interface</text>
+      <path class="e" d="M85 60 L85 128"/><text class="el" x="52" y="98">produces</text>
+      <path class="e" d="M150 150 L268 145"/><text class="el" x="205" y="138">motivates</text>
+      <path class="e" d="M335 60 L335 128"/><text class="el" x="368" y="98">requires</text>
+      <path class="e" d="M335 170 L335 238"/><text class="el" x="372" y="208">closed_by</text>
+      <path class="e" d="M400 150 L538 105"/><text class="el" x="470" y="120">touches</text>
+      <path class="e" d="M605 115 L605 183"/><text class="el" x="640" y="152">exposes</text>
+      <path class="e" d="M400 45 L538 90" /><text class="el" x="470" y="55">delivers_to</text>
+      <path class="e" d="M400 260 L672 214"/><text class="el" x="540" y="255">reuses</text>
+    </svg>
+    <figcaption><b>Objects</b> are typed nodes; <b>links</b> are the relationships. Every link edge carries a
+      RelationContext — the who/why/when of that connection.</figcaption>
+  </div></figure>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Object types</th><th>Link types (each edge → an rc)</th></tr></thead>
+    <tbody>
+      <tr><td><code>Discussion</code>, <code>Decision</code>, <code>Feature</code>, <code>ChangeRequest</code>,
+        <code>Task</code>, <code>Module</code>, <code>API</code>, <code>Commit</code>, <code>Skill</code>,
+        <code>Role</code></td>
+        <td><code>Discussion —produces→ Decision</code>, <code>Decision —motivates→ Feature/Task</code>,
+        <code>Feature —requires→ Task</code>, <code>Task —closed_by→ Commit</code>, <code>Module —exposes→ API</code>,
+        <code>Task —reuses→ API</code>, <code>CR —supersedes→ Decision</code>, <code>Role —owns→ Module</code>,
+        <code>Skill —applies_to→ Module</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p class="small">Typed properties matter here too: a <code>Decision</code> has <code>status</code> (enum: proposed ·
+  accepted · superseded), an <code>API</code> has a <code>signature</code> and <code>stability</code>, a
+  <code>Task</code> has <code>state</code>. Those typed values are what the rules gate and precedent search reason over.</p>
+</section>
+
+<!-- 4 -->
+<section id="granularity">
+  <div class="kicker">Going deeper (your open question)</div>
+  <h2>What's worth remembering</h2>
+  <p class="lead-p">You leaned toward <i>"decisions worth remembering,"</i> not every keystroke — but weren't sure where
+  the line falls. Here's a proposal for a principled line, and it comes straight out of CG's own design.</p>
+
+  <p>A <code>RelationContext</code> has content only if it can name a <b>rationale</b> and (usually) an <b>actor</b> —
+  CG even has an <code>is_empty()</code> check for exactly this. So use that as the filter:</p>
+
+  <div class="pull">If you can't say <i>who</i> did it and <i>why</i>, it's telemetry — not memory. Capture the event as
+  a graph edge only when it carries a decision.</div>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Event</th><th>Capture?</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Architecture / tech choice, API contract, a rejected option</td><td><span class="pill win">yes — node+rc</span></td><td>Pure decision, with rationale. The crown jewels.</td></tr>
+      <tr><td>State transition (task → in-progress → done; feature → accepted)</td><td><span class="pill win">yes — edge+rc</span></td><td>A decision with an actor and a reason ("moved to done: tests pass, integrator signed off").</td></tr>
+      <tr><td>Artifact created (PRD, architecture doc, discussion)</td><td><span class="pill c">node, ingested</span></td><td>Node for the artifact; its <i>content</i> is extracted via ingestion, its <i>decisions</i> emitted.</td></tr>
+      <tr><td>Commit</td><td><span class="pill c">edge, thin rc</span></td><td>Evidence, not rationale — <code>Task —closed_by→ Commit</code>. The <i>why</i> lives on the decision it implements.</td></tr>
+      <tr><td>File save, lint run, every keystroke</td><td><span class="pill danger">no</span></td><td>Telemetry. Empty rc. Belongs in logs, not the graph.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout info">
+    <div class="clabel">Two capture paths, matched to the event</div>
+    <b>Ingestion</b> (<code>ainsert</code>) for prose artifacts — point CG at the discussion HTML or the architecture
+    doc and let extraction pull entities + decisions out. <b>Runtime emission</b>
+    (<code>emit_decision_trace</code>) for structured moments — an agent finishing a task calls it directly with a clean,
+    typed RelationContext. The methodology decides which events get the structured path.
+  </div>
+
+  <div class="lean"><b>Current lean:</b> "decisions &amp; state transitions," filtered by the can-you-name-the-why
+  test — but this is <b>still open</b>; we may want commits captured richer if git-blame-style provenance proves useful.</div>
+</section>
+
+<!-- 5 -->
+<section id="roles">
+  <div class="kicker">Your decision: distinct</div>
+  <h2>Roles as first-class identities</h2>
+  <p>The roles are <b>distinct</b>, each with its own skills and sessions. The exact set is <b>preset data, not core
+  code</b> — the <a href="#grounding">current setup</a> has six (manager, architect, developer, integrator, devop,
+  production-engineer), and it will keep changing. Whatever the list, being distinct has three clean consequences in the
+  graph:</p>
+
+  <div class="grid g3">
+    <div class="card"><b>Provenance of behaviour.</b> <code>approved_by</code> / <code>approved_via</code> on every
+      decision records <i>which agent</i> made it. "Why is this API shaped this way? — the architect decided it in
+      session 42." Debuggable agents.</div>
+    <div class="card"><b>Skills as edges.</b> <code>Role —has_skill→ Skill —applies_to→ Module</code>. Ask CG "what does
+      the developer need to touch the billing module?" and it answers from the graph, not a static prompt.</div>
+    <div class="card"><b>Sessions as provenance.</b> A session is a provenance source; all decisions in it share a
+      thread, so you can replay "what did the integrator conclude this session?"</div>
+  </div>
+
+  <div class="callout caveat">
+    <div class="clabel">◆ The honest catch — CG-side RBAC isn't built yet</div>
+    Distinct roles naturally want <i>"the architect may <code>ApproveArchitecture</code>; the developer may not."</i>
+    The harness already enforces roles for local tool/git use (<code>role_enforcer.py</code> + branch rules); what CG
+    lacks is the <b>shared, auditable</b> layer for project-<i>state</i> actions — object-level access control, the next
+    P3 item. The design, and the two-layer split, are worked out in <a href="#gaps">Closing the gaps · Gap 1</a>.
+  </div>
+</section>
+
+<!-- 6 -->
+<section id="methodology">
+  <div class="kicker">Your decision: enforcement</div>
+  <h2>Methodology as data</h2>
+  <p class="lead-p">You chose the <b>actor / enforcement</b> model — CG shapes agent behaviour, not just records it. The
+  way that becomes real: encode the methodology in the three layers we already have, so the process is <i>data</i>, not
+  prose in a system prompt.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Methodology as…</th><th>Layer</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td>What states &amp; objects are legal</td><td><a href="ONTOLOGY.html">Ontology</a></td><td>A <code>Task</code> may be <code>proposed｜active｜done</code>; a <code>Decision</code> may be <code>superseded</code>.</td></tr>
+      <tr><td>What transitions &amp; moves are allowed</td><td><a href="RULES_ENGINE.html">Rules</a></td><td>"No <code>Task</code> without a linked <code>Feature</code>." "Flag an <code>API</code> that duplicates an existing one."</td></tr>
+      <tr><td>What an agent may actually do</td><td><a href="ACTIONS.html">Actions</a></td><td><code>ProposeAPI</code>, <code>CreateTask</code>, <code>ApproveArchitecture</code>, <code>MergeIntegration</code>.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>Together those three are a <b>state machine over the project graph</b>: agents advance the project only through
+  governed actions, and the pre-emit gate refuses illegal moves — surfacing the reason. That is the "actor" in concrete
+  terms.</p>
+
+  <pre><code><span class="cm"># methodology rule: a new API that looks like an existing one gets flagged, not built</span>
+rule <span class="str">"reuse before you build"</span>  priority <span class="num">20</span>
+when
+    sim(relation_type, <span class="str">"CREATE_API"</span>) &gt; <span class="num">0.4</span>
+    and similar(decision_trace, <span class="str">"EXISTING_CAPABILITY"</span>, <span class="num">0.55</span>)
+then
+    flag(<span class="str">"A similar capability already exists — cite it or justify the new API"</span>)
+end</code></pre>
+
+  <div class="lean"><b>Current lean:</b> advise <i>and</i> enforce — hard-block the structural rules (no orphan tasks),
+  flag the judgement calls (possible duplicate). Exact split is <b>open</b>.</div>
+</section>
+
+<!-- 7 -->
+<section id="example">
+  <div class="kicker">End to end</div>
+  <h2>Worked example: "don't rebuild that API"</h2>
+  <p>The single use case that ties every layer together — a developer agent about to build something that already
+  exists:</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 210" role="img" aria-label="Reuse enforcement flow">
+      <defs><marker id="ra" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.bx{rx:10;stroke:#39425a;stroke-width:1}.t{fill:#e7ebf3;font:12.5px "Segoe UI",sans-serif}.ts{fill:#aab3c5;font:10.5px "Segoe UI",sans-serif}.ln{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#ra)}</style>
+      <rect class="bx" x="8" y="80" width="150" height="46" fill="#22314f"/><text class="t" x="83" y="100" text-anchor="middle">developer agent</text><text class="ts" x="83" y="116" text-anchor="middle">ProposeAPI(refund)</text>
+      <line class="ln" x1="158" y1="103" x2="200" y2="103"/>
+      <rect class="bx" x="202" y="72" width="160" height="62" fill="#3a2f17"/><text class="t" x="282" y="94" text-anchor="middle">rules gate</text><text class="ts" x="282" y="112" text-anchor="middle">sim() vs existing APIs</text><text class="ts" x="282" y="126" text-anchor="middle">+ precedent search</text>
+      <line class="ln" x1="362" y1="90" x2="470" y2="40"/><line class="ln" x1="362" y1="116" x2="470" y2="165"/>
+      <rect class="bx" x="472" y="18" width="240" height="46" fill="#3a1a20"/><text class="t" x="592" y="38" text-anchor="middle">FLAG: "PaymentService.refund()</text><text class="ts" x="592" y="54" text-anchor="middle">already exists — reuse or justify"</text>
+      <rect class="bx" x="472" y="146" width="240" height="46" fill="#13251f"/><text class="t" x="592" y="166" text-anchor="middle">PASS: genuinely new</text><text class="ts" x="592" y="182" text-anchor="middle">audit edge: Role —created→ API</text>
+    </svg>
+    <figcaption>The proposal is judged <b>before code is written</b>. A duplicate is flagged with the precedent cited; a
+      genuinely new API is recorded, attributed to the role that made it.</figcaption>
+  </div></figure>
+
+  <ol>
+    <li>Developer agent, before coding, invokes <code>ProposeAPI(name, description, module)</code>.</li>
+    <li>The gate runs <code>sim()</code> over the descriptions of existing <code>API</code> objects and does a
+      <b>precedent search</b> over past decisions.</li>
+    <li><b>Duplicate?</b> → <code>FLAG</code> with the match cited. The agent reads the reason and reuses instead.</li>
+    <li><b>Novel?</b> → <code>PASS</code>; an audit edge records the new API, attributed to the role and session.</li>
+    <li>Either way the <i>reasoning</i> is now in the graph — the next agent inherits it for free.</li>
+  </ol>
+  <p class="small">This is <a href="ONTOLOGY.html">ontology</a> (API objects) + <a href="RULES_ENGINE.html">rules</a>
+  (the duplicate check) + <a href="ACTIONS.html">actions</a> (governed ProposeAPI) + precedent search, composed.</p>
+</section>
+
+<!-- 8 -->
+<section id="sync">
+  <div class="kicker">Keeping agents in sync</div>
+  <h2>The sync bus: CG replaces shared files</h2>
+  <p>Today the four roles coordinate through shared files — changelogs, task lists, architecture docs — which go stale
+  the moment they're written. Replace the file hand-off with a <b>live query</b> against CG over the MCP server: each
+  agent reads current state on demand and writes decisions back.</p>
+
+  <div class="grid g2">
+    <div class="card"><b>Read the picture, at the right altitude.</b> <code>local</code> mode for a single module's
+      detail; <code>global</code>/<code>mix</code> for the whole-project map; <b>CGR3</b> for multi-hop questions ("what
+      depends on the auth module, and who approved the last change to it?").</div>
+    <div class="card"><b>Write decisions back.</b> Each role emits its conclusions as it works, so the next agent — in a
+      different session — sees today's truth, not yesterday's changelog. No merge conflicts on a markdown file.</div>
+  </div>
+
+  <div class="callout info">
+    <div class="clabel">MCP is the wire</div>
+    The roles already have a channel: the <b>MCP server</b> exposes CG as tools. Manager, architect, developer, and
+    integrator each get the query + emit + (governed) action tools their skills need — a shared, decision-aware working
+    memory instead of a shared folder.
+  </div>
+</section>
+
+<!-- 9 -->
+<section id="readiness">
+  <div class="kicker">Honesty check</div>
+  <h2>Ready vs missing</h2>
+  <p>What this use case can stand on today, and what it's waiting on — mapped to the real state of the codebase.</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Capability</th><th>Status</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>Typed project schema</td><td><span class="pill now">ready</span></td><td>Ontology layer — declare the object/link types above.</td></tr>
+      <tr><td>Decision + reasoning capture</td><td><span class="pill now">ready</span></td><td>RelationContext + <code>emit_decision_trace</code> + ingestion.</td></tr>
+      <tr><td>Reuse / precedent search</td><td><span class="pill now">ready</span></td><td><code>find_precedents</code> + <code>sim()</code> in a rule.</td></tr>
+      <tr><td>Methodology enforcement</td><td><span class="pill now">ready</span></td><td>Rules gate (advise/flag/block) + governed actions.</td></tr>
+      <tr><td>Whole-picture &amp; per-module views</td><td><span class="pill now">ready</span></td><td>Query modes + CGR3; workspace isolation per project.</td></tr>
+      <tr><td>Agent sync channel</td><td><span class="pill now">ready</span></td><td>MCP server exposes CG to each role.</td></tr>
+      <tr><td>Per-role permissions (who may do what)</td><td><span class="pill soon">next P3</span></td><td>Object-level RBAC — not built. Today: record + advise, not hard-gate by role.</td></tr>
+      <tr><td>Task lifecycle as a real workflow</td><td><span class="pill soon">next P3</span></td><td>Actions are single ops; multi-step orchestration is the agent's job for now.</td></tr>
+      <tr><td>Deterministic inference (entailment)</td><td><span class="pill gap">gap</span></td><td>"A depends on B, B exposes X…" is LLM synthesis today, not derivation.</td></tr>
+      <tr><td>Auto code/API extraction</td><td><span class="pill gap">feed from below</span></td><td>CG won't parse the repo — by design. Feed <code>API</code>/<code>Module</code> objects from a deterministic <b>structural index</b> (tree-sitter / CodeGraph-style), and reserve LLM extraction for the decisions.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="callout ok">
+    <div class="clabel">The read</div>
+    Six of the load-bearing capabilities are already here. The two "next P3" items (per-role RBAC, workflow
+    orchestration) are exactly the ones your distinct-roles + enforcement choices point at — so this use case doubles as
+    a forcing function for the roadmap's next steps.
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="gaps">
+  <div class="kicker">Working the gaps, one at a time</div>
+  <h2>Closing the gaps</h2>
+  <p class="lead-p">A running analysis of the missing pieces this use case needs, settled one at a time. Each is a
+  design sketch and a recommendation, not a committed build.</p>
+
+  <h3>Gap 1 — Object-level RBAC <span class="pill soon">discussed</span></h3>
+  <p>Your two firm choices — <b>distinct roles</b> and <b>enforcement</b> — both point straight at role-gated actions:
+  "the architect may <code>ApproveArchitecture</code>; the developer may not." That is the sharpest gap, because the
+  <i>tempting</i> shortcut is actively unsafe.</p>
+
+  <p><b>What's missing today.</b> Access control stops at the <b>workspace boundary</b> (authenticate in
+  <code>auth.py</code>, then you get the whole tenant). Inside a workspace there is no <i>principal</i> who can do some
+  things and not others. Three pieces are absent:</p>
+  <ul>
+    <li>a <b>principal within the workspace</b> — the four roles as distinct, <i>authenticated</i> identities;</li>
+    <li><b>permissions bound to objects/actions</b> — role → which verbs, on which object types or actions;</li>
+    <li>an <b>enforcement point</b> that runs before a state change.</li>
+  </ul>
+
+  <h3>Two layers, not one — CG complements the harness</h3>
+  <p>Crucially, the <a href="#grounding">current setup</a> <i>already</i> enforces roles — in the agent harness
+  (<code>role_enforcer.py</code> PreToolUse hooks + git branch rules). CG must not try to replace that. The clean
+  division of labour:</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Layer</th><th>Governs</th><th>Where</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill a">Harness hooks</span> <span class="small">(exists today)</span></td><td>local tool use — file edits, git, branches</td><td>per-agent, PreToolUse</td><td>"developer can't push to main"</td></tr>
+      <tr><td><span class="pill ctrl">CG RBAC</span> <span class="small">(proposed)</span></td><td>project-<i>state</i> actions on the shared graph</td><td>server-side, <code>/actions/invoke</code></td><td>"only the manager may create a CR"</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>So CG doesn't introduce access control from scratch — it moves the <b>state-changing</b> slice of it out of each
+  agent's scattered hook config into one <b>shared, auditable</b> place. The reframing: not "close a security hole" but
+  "centralize and audit what's already enforced per-agent." (The trap below still applies to <i>that</i> CG-side layer.)</p>
+
+  <div class="callout caveat">
+    <div class="clabel">◆ The trap — don't fake RBAC with rules</div>
+    Approximating it with a rule that checks <code>approved_by</code> is a security hole. (1) <b>It's spoofable</b> —
+    <code>approved_by</code> is data the caller supplies; a developer agent can invoke a merge claiming
+    <code>approved_by:&nbsp;"integrator"</code> and sail through. (2) <b>It conflates two concerns</b> — rules answer
+    "is this decision allowed by <i>policy</i>?"; access control answers "is this principal allowed to <i>attempt</i>
+    it at all?" <b>RBAC that trusts a client-supplied field — or a <code>LIGHTRAG-ROLE</code> header — is theater.</b>
+    The principal must bind to the <i>authenticated</i> identity (a role claim on the JWT / account), never to
+    something the agent sets in its own request.
+  </div>
+
+  <h3>The minimal design — a fourth policy layer</h3>
+  <p>The shape is already familiar: a per-workspace policy next to rules / ontology / actions, enforced at the chokepoint
+  the action layer already gives us.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 132" role="img" aria-label="RBAC inserted into the invoke pipeline">
+      <defs><marker id="ga" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.bx{rx:9;stroke-width:1.3}.t{fill:#e7ebf3;font:600 12px "Segoe UI",sans-serif;text-anchor:middle}.ts{fill:#aab3c5;font:10px "Segoe UI",sans-serif;text-anchor:middle}.ln{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#ga)}</style>
+      <rect class="bx" x="10" y="48" width="130" height="40" fill="rgba(91,141,239,.14)" stroke="#5b8def"/><text class="t" x="75" y="65">principal</text><text class="ts" x="75" y="80">role from token</text>
+      <line class="ln" x1="140" y1="68" x2="176" y2="68"/>
+      <rect class="bx" x="178" y="44" width="140" height="48" fill="rgba(169,116,240,.18)" stroke="#a974f0"/><text class="t" x="248" y="63">RBAC check ★</text><text class="ts" x="248" y="80">deny-by-default → 403</text>
+      <line class="ln" x1="318" y1="68" x2="354" y2="68"/>
+      <rect class="bx" x="356" y="44" width="140" height="48" fill="rgba(240,167,60,.14)" stroke="#f0a73c"/><text class="t" x="426" y="63">rules gate</text><text class="ts" x="426" y="80">policy → FLAG/REJECT</text>
+      <line class="ln" x1="496" y1="68" x2="532" y2="68"/>
+      <rect class="bx" x="534" y="48" width="176" height="40" fill="rgba(62,207,142,.14)" stroke="#3ecf8e"/><text class="t" x="622" y="65">side effect + audit edge</text>
+    </svg>
+    <figcaption><b>RBAC is a new first stage</b> — "may this principal even attempt it?" — before the rules gate ever
+      asks "is the decision allowed?". Two separate questions, two separate layers.</figcaption>
+  </div></figure>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Piece</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Role policy — <code>role → grants</code> (verb × object_type / action)</td><td><code>context_graph/rbac/</code> — per-workspace JSON, versioned (same store pattern)</td></tr>
+      <tr><td>Principal resolution — the role claim</td><td><code>auth.py</code> — from the JWT / account, <b>not</b> a header</td></tr>
+      <tr><td>Enforcement — the check</td><td>A pre-gate stage in <code>/actions/invoke</code>: resolve → <b>RBAC</b> → rules gate → side effect</td></tr>
+      <tr><td>Default posture</td><td>Two-level — <b>opt-in</b> (no policy = permissive), then <b>deny-by-default</b> within a policy; wildcard grants keep it terse</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Opt-in by default — it scales to zero</h3>
+  <p>The requirement that CG stay simple for <b>single-agent projects</b> (including CG's own development) is met by the
+  same pattern every other layer uses: <b>absent means permissive.</b> No rules → no gate; no ontology → no validation;
+  and now <b>no RBAC policy → allow everything.</b> RBAC exists only where a workspace installs a policy.</p>
+  <div class="grid g2">
+    <div class="card"><b>Single agent = zero config.</b> One agent does everything, exactly as today — no roles, no
+      principals, no claims. Deployment is unchanged: RBAC is invisible until a workspace opts in.</div>
+    <div class="card"><b>Two-level posture, no theater.</b> <i>Presence</i> is opt-in (scales to zero), but once a
+      policy exists it is <b>deny-by-default</b> — a real control. <b>Wildcard grants</b> keep it ergonomic: the central
+      role is one line, <code>manager: *</code>; you enumerate only the <i>restricted</i> roles.</div>
+  </div>
+
+  <div class="callout ok">
+    <div class="clabel">The central role stays a config, not a concept</div>
+    A hub coordinator — your <b>manager</b> — is just a role with a broad/wildcard grant plus the coordination actions
+    (create CR, assign work). Core never learns the word "manager"; a different preset's hub might be "incident
+    commander." And CG-as-substrate <i>shrinks</i> that role: the store does the state-sync, so the manager stops
+    shuttling changelogs and is left with the coordination <i>decisions</i> — which CG governs and audits.
+  </div>
+  <p class="small"><b>Deployment stays identical</b> — no external authorization service, no Zanzibar to stand up. RBAC
+  is one more per-workspace JSON policy on the existing store; ReBAC reuses the graph. Single binary, same as today.</p>
+
+  <h3>The CG-native upgrade — permissions from the graph (ReBAC)</h3>
+  <p>Static <code>role → actions</code> works, but the project graph already encodes <b>ownership</b>:
+  <code>Role —owns→ Module —exposes→ API</code>. So a grant can be <i>relationship-derived</i> — "a role may modify the
+  APIs of modules it owns" — resolved by a graph query at check time. That is <b>ReBAC</b> (relationship-based, à la
+  Google Zanzibar), and CG is unusually well-placed for it because the relationships are already first-class.
+  Permissions then evolve <i>with</i> the project instead of living in a separate static table.</p>
+
+  <div class="callout key">
+    <div class="clabel">◆ Recommendation</div>
+    <b>Pull it forward (option c), in two steps.</b> Ship <b>static role→action RBAC</b> first — small, mirrors code we
+    already have, and it closes the spoofing hole that blocks your distinct-roles setup. Then layer <b>ReBAC</b> on top
+    as the differentiated version once ownership edges are populated. Do <b>not</b> ship the rules-based approximation,
+    even as a stopgap — it advertises a control that isn't there.
+  </div>
+
+  <div class="callout ok">
+    <div class="clabel">✓ Settled (this thread)</div>
+    <b>Default posture</b> — no policy = fully permissive; single-agent projects are zero-config. ·
+    <b>Single-agent shape</b> — run with <i>no RBAC</i> by default; an optional one-line <code>admin: *</code> policy is
+    offered for those who want a uniform audit trail. ·
+    <b>Principal grain (lean)</b> — role = principal (one credential per role); <code>account → role</code> stays an
+    optional refinement for per-individual audit.
+  </div>
+  <div class="callout q">
+    <div class="clabel">Still open</div>
+    <b>Scope</b> — gate <i>writes/invokes</i> only to start, or also <i>reads</i> (a developer can't even see the
+    manager's strategic decisions)? Read-filtering is much costlier — lean: defer it.<br>
+    <b>ReBAC appetite</b> — is "permissions derived from ownership edges" the target, or is static role→action enough
+    for your methodology?
+  </div>
+
+  <hr class="soft">
+
+  <h3>Gap 2 — Workflow orchestration <span class="pill win">locked</span></h3>
+  <p>"Workflow orchestration" is really <b>two</b> gaps, and conflating them is how a project builds the wrong, enormous
+  thing:</p>
+  <div class="grid g2">
+    <div class="card"><b>(A) A declarative lifecycle</b> — a state machine over an object type. <code>Task: proposed →
+      active → done | blocked</code>; the <a href="#grounding">setup's</a> macro pipeline (init → tasks → decomposition
+      → impl → test/commit → release). Legal transitions, guards, entry conditions.</div>
+    <div class="card"><b>(B) A dynamic planner</b> — <i>generate</i> the steps to reach a goal by traversing the graph.
+      The "30 seconds vs 6 hours" P3 item.</div>
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">◆ Decision — build (A), skip (B)</div>
+    Build the <b>generic lifecycle layer</b>. <i>Don't</i> build the planner: your agents already plan (the manager
+    decomposes; the architect designs). A CG planner would fight the agents' planning <i>and</i> be domain-specific —
+    failing the "stays generic" test. CG's job is to hold the <b>state machine and the guards</b>; the agents plan over
+    them. The lifecycle expresses <b>both</b> levels the setup already has: a macro <b>phase</b> lifecycle and per-object
+    <b>status</b> (Task, Feature).
+  </div>
+
+  <h3>What the lifecycle layer is</h3>
+  <p>Mostly composable from what exists, plus <b>one</b> new declarative primitive:</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Piece</th><th>Layer</th></tr></thead>
+    <tbody>
+      <tr><td>State values (<code>Task.state</code>)</td><td><a href="ONTOLOGY.html">Ontology</a> enum — <span class="pill now">ready</span></td></tr>
+      <tr><td>Transitions (<code>AdvanceTask(to:"done")</code>)</td><td><a href="ACTIONS.html">Actions</a> — <span class="pill now">ready</span></td></tr>
+      <tr><td>Guards / entry conditions</td><td><a href="RULES_ENGINE.html">Rules</a> — <span class="pill now">ready</span>, but hand-written &amp; scattered today</td></tr>
+      <tr><td><b>New:</b> a named state machine — legal transitions auto-derived, current state + history first-class</td><td><code>context_graph/lifecycle/</code> — <span class="pill soon">to build</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>A transition becomes one guarded action: <code>AdvanceTask(to:"done")</code> → <b>RBAC</b> (may this role?) →
+  <b>lifecycle check</b> (is active→done legal?) → <b>rules gate</b> (policy: passing commit + integrator sign-off?) →
+  apply + <b>audit edge</b> (who moved it, why, evidence). The richer part is <b>cross-object entry conditions</b> — "a
+  <code>Feature</code> can't enter <code>in_progress</code> until an accepted <code>Decision</code> motivates it" — a
+  guard expressed as a <b>graph query</b>. That is what makes CG's version beat a standalone FSM library.</p>
+
+  <div class="callout ok">
+    <div class="clabel">✓ Settled</div>
+    <b>Build A, skip B.</b> · Lifecycle expresses <b>both</b> macro-phase and per-object state machines. ·
+    Enforcement <b>advisory-by-default in CG, hard where it's a true invariant</b> — the harness already hard-gates the
+    git/branch side, so CG leans to FLAG-and-explain except for genuine invariants (no illegal state jumps). ·
+    <b>Depends on RBAC</b> (role-gated transitions) → confirms the sequence: RBAC, then lifecycle.
+  </div>
+  <div class="callout caveat">
+    <div class="clabel">◆ Scope discipline</div>
+    Keep it a <i>thin declarative FSM + guards</i>. The moment it grows timers, parallel branches, and compensation
+    logic, it's a BPMN engine — a multi-year tar pit. The value is governance, not general workflow.
+  </div>
+</section>
+
+<!-- 11 -->
+<section id="questions">
+  <div class="kicker">Where we are</div>
+  <h2>Open questions &amp; decision log</h2>
+
+  <h3>Decided (this session)</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Question</th><th>Lean</th></tr></thead>
+    <tbody>
+      <tr><td>Granularity</td><td><span class="pill c">tentative</span> "decisions &amp; state transitions," via the can-you-name-the-why filter. Revisit commit richness.</td></tr>
+      <tr><td>Roles</td><td><span class="pill win">decided</span> distinct identities, each with own skills + sessions.</td></tr>
+      <tr><td>Enforcement</td><td><span class="pill win">decided</span> actor / enforcement model — CG shapes behaviour (advise + block).</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Still open — for the next round</h3>
+  <div class="callout q">
+    <div class="clabel">Q1 · Source of truth</div>
+    Confirm the hybrid: git owns code, CG owns decisions/state. Or does CG own <i>more</i> (e.g. task assignment,
+    sprint state) — becoming the project's operational DB?
+  </div>
+  <div class="callout ok">
+    <div class="clabel">Q2 · The RBAC gap — resolved</div>
+    Option <b>(c)</b>: pull a generic RBAC layer forward — static role→action first, ReBAC later — opt-in and permissive
+    by default so single-agent stays zero-config. The rules-based approximation (b) is rejected as spoofable theater.
+    Full design in <a href="#gaps">Closing the gaps · Gap 1</a>; only <i>read-scope</i> and <i>ReBAC appetite</i>
+    remain open.
+  </div>
+  <div class="callout q">
+    <div class="clabel">Q3 · Enforcement split</div>
+    Which methodology rules are hard <code>REJECT</code> vs soft <code>FLAG</code>? Getting this wrong makes CG either a
+    nag or a roadblock. Draft the first rule set together?
+  </div>
+  <div class="callout q">
+    <div class="clabel">Q4 · Bootstrapping</div>
+    How does an <i>existing</i> project get into the graph? Backfill from git history + docs via ingestion, or start
+    fresh and only capture forward from adoption?
+  </div>
+  <div class="callout ok">
+    <div class="clabel">Q5 · The methodology pipeline — resolved</div>
+    Yes — modelled as the <b>macro-phase lifecycle</b> in <a href="#gaps">Gap 2</a>: a stage's entry condition is a
+    cross-object guard ("design can't start until architecture decisions exist"), advisory by default and hard for true
+    invariants.
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">◆ Suggested next step</div>
+    Pick one thread to make concrete: draft the <b>project ontology</b> (the exact object/link types + properties), or
+    draft the <b>first methodology rule set</b> (the 5–10 rules that encode your process). Either gives us something
+    runnable to react to. Related reading: <a href="ONTOLOGY.html">Ontology</a> ·
+    <a href="RULES_ENGINE.html">Rules</a> · <a href="ACTIONS.html">Actions</a> ·
+    <a href="BLOG_THE_FOURTH_ELEMENT.html">The Fourth Element</a>.
+  </div>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  A working analysis — Context Graph as the methodology actor for multi-agent development. Decisions and leanings are
+  provisional; the open questions drive the next discussion. Part of the
+  <a href="index.html">Context Graph documentation</a>.
+</footer>
+
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('nav.toc a')), map={};
+  links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id); if(el)map[id]=a;});
+  var obs=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}
+  });},{rootMargin:'-20% 0px -70% 0px',threshold:0});
+  Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});
+  var btt=document.getElementById('btt');
+  window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});
+})();
+</script>
+</body>
+</html>
