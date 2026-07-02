@@ -1057,3 +1057,169 @@ export const queryCGR3 = async (request: CGR3QueryRequest): Promise<CGR3QueryRes
   const response = await axiosInstance.post('/cgr3/query', request)
   return response.data
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rules & Ontology (Context Graph governance) — workspace-scoped
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type RuleInfo = { name: string; priority: number }
+export type RulesSummary = {
+  workspace: string
+  exists: boolean
+  enabled: boolean
+  version?: number
+  model_id?: string | null
+  updated_at?: number | null
+  concepts: string[]
+  rules: RuleInfo[]
+}
+
+export const getRules = async (): Promise<RulesSummary> =>
+  (await axiosInstance.get('/rules')).data
+
+export const setRules = async (
+  dsl: string,
+  concepts: Record<string, string[]>,
+  enabled = true
+): Promise<RulesSummary> =>
+  (await axiosInstance.post('/rules', { dsl, concepts, enabled })).data
+
+export const toggleRules = async (enabled: boolean): Promise<RulesSummary> =>
+  (await axiosInstance.post('/rules/toggle', { enabled })).data
+
+export const deleteRules = async (): Promise<{ deleted: boolean; workspace: string }> =>
+  (await axiosInstance.delete('/rules')).data
+
+export type RuleEvaluateRequest = {
+  src: string
+  tgt: string
+  relation_type: string
+  relation_context: Record<string, any>
+  as_of?: string
+}
+export type RuleEvaluateResponse = {
+  active: boolean
+  outcome?: string | null
+  audit?: Record<string, any> | null
+  triggered: Array<Record<string, any>>
+  warnings: string[]
+  notes: string[]
+}
+export const evaluateRules = async (
+  req: RuleEvaluateRequest
+): Promise<RuleEvaluateResponse> =>
+  (await axiosInstance.post('/rules/evaluate', req)).data
+
+export type RuleGenerateRequest = {
+  policy: string
+  concepts?: Record<string, string[]>
+  use_stored_concepts?: boolean
+  max_repairs?: number
+  save?: boolean
+}
+export type RuleGenerateResponse = {
+  valid: boolean
+  dsl: string
+  concepts: Record<string, string[]>
+  fixtures: Array<Record<string, any>>
+  dry_run: Array<Record<string, any>>
+  explanation: string
+  errors: string[]
+  attempts: number
+  saved: boolean
+}
+export const generateRules = async (
+  req: RuleGenerateRequest
+): Promise<RuleGenerateResponse> =>
+  (await axiosInstance.post('/rules/generate', req)).data
+
+// -- Ontology -----------------------------------------------------------------
+
+export type OntologyProperty = {
+  name: string
+  kind: string
+  required?: boolean
+  description?: string
+  enum_values?: string[] | null
+  minimum?: number | null
+  maximum?: number | null
+}
+export type OntologyObjectType = {
+  name: string
+  description?: string
+  properties: OntologyProperty[]
+}
+export type OntologyLinkType = {
+  name: string
+  source_types: string[]
+  target_types: string[]
+  cardinality: string
+  description?: string
+  properties?: OntologyProperty[]
+}
+export type OntologyDoc = {
+  name: string
+  version?: number
+  object_types: OntologyObjectType[]
+  link_types: OntologyLinkType[]
+}
+export type OntologySummary = {
+  workspace: string
+  exists: boolean
+  name?: string | null
+  version?: number | null
+  updated_at?: number | null
+  object_types: Array<{ name: string; description?: string; properties: Array<{ name: string; kind: string; required?: boolean }> }>
+  link_types: Array<{ name: string; source_types: string[]; target_types: string[]; cardinality: string; property_count?: number }>
+  lint: string[]
+  ontology?: OntologyDoc | null
+}
+
+export const getOntology = async (): Promise<OntologySummary> =>
+  (await axiosInstance.get('/ontology')).data
+
+export const setOntology = async (ontology: OntologyDoc): Promise<OntologySummary> =>
+  (await axiosInstance.post('/ontology', { ontology })).data
+
+export const deleteOntology = async (): Promise<{ deleted: boolean; workspace: string }> =>
+  (await axiosInstance.delete('/ontology')).data
+
+export type OntologyGenerateRequest = {
+  description: string
+  extend?: boolean
+  max_repairs?: number
+  save?: boolean
+}
+export type OntologyGenerateResponse = {
+  valid: boolean
+  ontology: OntologyDoc
+  lint: string[]
+  samples: Record<string, any>
+  dry_run: Record<string, any>
+  explanation: string
+  errors: string[]
+  attempts: number
+  saved: boolean
+}
+export const generateOntology = async (
+  req: OntologyGenerateRequest
+): Promise<OntologyGenerateResponse> =>
+  (await axiosInstance.post('/ontology/generate', req)).data
+
+export type OntologyValidateResponse = {
+  exists: boolean
+  ok?: boolean
+  total?: number
+  conforming?: number
+  violations?: number
+  unknown_types?: string[]
+  by_status?: Record<string, number>
+  policy?: string
+  items?: Array<{ kind: string; ref: string; status: string; ok: boolean; errors: string[]; warnings: string[] }>
+}
+export const validateExtraction = async (
+  entities: Array<Record<string, any>>,
+  relations: Array<Record<string, any>>,
+  closedWorld = false
+): Promise<OntologyValidateResponse> =>
+  (await axiosInstance.post('/ontology/validate', { entities, relations, closed_world: closedWorld })).data

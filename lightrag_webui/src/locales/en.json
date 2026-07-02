@@ -10,6 +10,8 @@
     "documents": "Documents",
     "knowledgeGraph": "Knowledge Graph",
     "retrieval": "Retrieval",
+    "rules": "Rules",
+    "ontology": "Ontology",
     "api": "API",
     "projectRepository": "Project Repository",
     "logout": "Logout",
