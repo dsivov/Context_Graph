@@ -1,7 +1,8 @@
 """
 MCP (Model Context Protocol) server — Context Graph tools for conversation agents.
 
-Exposes 10 MCP tools that map to existing Context Graph API calls.
+Exposes 12 MCP tools that map to existing Context Graph API calls
+(query/precedent/decision tools + invoke_action + get_manifest).
 Embedded in the FastAPI server as a Starlette sub-app via Streamable HTTP transport.
 
 Created for CR-018.
@@ -106,6 +107,12 @@ def create_mcp_server(
     api_key: str | None = None,
     top_k: int = 60,
     cgr3_max_iterations: int = 3,
+    *,
+    action_service=None,
+    rbac_service=None,
+    lifecycle_service=None,
+    ontology_service=None,
+    rules_service=None,
 ) -> tuple[FastMCP, Starlette]:
     """Create and return (mcp_server, mcp_starlette_app).
 
@@ -497,13 +504,66 @@ def create_mcp_server(
             logger.error(f"MCP query_auto error: {e}", exc_info=True)
             raise ToolError(str(e))
 
+    # ── Tool 11: invoke_action ────────────────────────────────────────
+
+    @mcp.tool()
+    async def invoke_action(
+        action: str,
+        object_ref: str,
+        args: Optional[dict] = None,
+        actor: str = "agent",
+    ) -> dict:
+        """Invoke a governed action on this workspace (validate args → RBAC → lifecycle → rules gate → audit edge). Use for typed operations such as AdvanceTask, ProposeModule (reuse-checked — may FLAG), RecordDecision, CreateChangeRequest. `object_ref` is the object acted upon; `args` are the action's typed arguments. Returns the outcome (PASS/FLAG/RECORDED), the edge written, and any gate audit. An illegal state transition, a gate rejection, or bad arguments raise an error. Call get_manifest first to see available actions and their params."""
+        _require_context_graph(rag)
+        if action_service is None:
+            raise ToolError("Actions are not available on this server.")
+        from lightrag.api.workspace_pool import _current_workspace
+
+        ws = _current_workspace.get() or "default"
+        # MCP carries no authenticated role, so RBAC only permits where no policy
+        # restricts the action (single-agent workspaces stay permissive).
+        if rbac_service is not None:
+            d = rbac_service.check(ws, None, "invoke", action, object_ref=object_ref, rag=rag)
+            if not d.allowed:
+                raise ToolError(f"forbidden: {d.reason}")
+        try:
+            result = await action_service.invoke(
+                rag, ws, action, actor=actor, object_ref=object_ref,
+                args=args or {}, principal_role=None, lifecycle=lifecycle_service)
+        except ToolError:
+            raise
+        except Exception as e:
+            logger.error(f"MCP invoke_action error: {e}", exc_info=True)
+            raise ToolError(str(e))
+        if not result.get("ok"):
+            err = result.get("error", "error")
+            detail = result.get("reason") or "; ".join(result.get("errors", [])) or err
+            raise ToolError(f"{err}: {detail}")
+        return result
+
+    # ── Tool 12: get_manifest ─────────────────────────────────────────
+
+    @mcp.tool()
+    async def get_manifest(role: Optional[str] = None) -> dict:
+        """Use this to discover what you can do in this workspace before acting. Returns the operating manifest: the object types it defines, the actions you may invoke (filtered by the role's RBAC grants when a policy exists), the guardrails (rules) that may flag a decision, the lifecycle state machines, and skills."""
+        _require_context_graph(rag)
+        from lightrag.api.routers.workspace_routes import build_manifest
+        from lightrag.api.workspace_pool import _current_workspace
+
+        ws = _current_workspace.get() or "default"
+        return await build_manifest(
+            rag, ws, role,
+            ontology_service=ontology_service, action_service=action_service,
+            rules_service=rules_service, lifecycle_service=lifecycle_service,
+            rbac_service=rbac_service)
+
     # ── Build Starlette app with auth middleware ──────────────────────
 
     mcp_app = mcp.streamable_http_app()
 
     if api_key:
+        from starlette.middleware.base import BaseHTTPMiddleware
 
-        @mcp_app.middleware("http")
         async def mcp_auth_middleware(request: Request, call_next):
             """Validate X-API-Key header — same auth as REST endpoints."""
             key = request.headers.get("X-API-Key", "")
@@ -513,5 +573,8 @@ def create_mcp_server(
                     content={"detail": "Invalid API key"},
                 )
             return await call_next(request)
+
+        # Starlette apps expose add_middleware, not a `.middleware` decorator.
+        mcp_app.add_middleware(BaseHTTPMiddleware, dispatch=mcp_auth_middleware)
 
     return mcp, mcp_app

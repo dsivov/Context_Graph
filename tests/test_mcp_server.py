@@ -33,6 +33,8 @@ EXPECTED_TOOLS = [
     "ingest_decision_summary",
     "query_data",
     "query_auto",
+    "invoke_action",
+    "get_manifest",
 ]
 
 
@@ -76,10 +78,10 @@ def mcp_with_auth():
 
 
 class TestToolRegistration:
-    def test_exactly_10_tools_registered(self, mcp_no_auth):
+    def test_all_tools_registered(self, mcp_no_auth):
         mcp, _, _ = mcp_no_auth
         tools = mcp._tool_manager.list_tools()
-        assert len(tools) == 10
+        assert len(tools) == len(EXPECTED_TOOLS)
 
     def test_tool_names_match(self, mcp_no_auth):
         mcp, _, _ = mcp_no_auth

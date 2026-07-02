@@ -1633,6 +1633,11 @@ def create_app(args):
             api_key=api_key,
             top_k=args.top_k,
             cgr3_max_iterations=cgr3_max_iterations,
+            action_service=action_service,
+            rbac_service=rbac_service,
+            lifecycle_service=lifecycle_service,
+            ontology_service=ontology_service,
+            rules_service=rules_service,
         )
         app.state.mcp_server = mcp_server
         app.mount("", mcp_app)  # MCP endpoint at POST /mcp
