@@ -62,7 +62,6 @@
       "name": "Module",
       "description": "A code module / component. Fed from a structural index (tree-sitter), not parsed by CG.",
       "properties": [
-        { "name": "name", "kind": "string", "required": true },
         { "name": "path", "kind": "string" },
         { "name": "maturity", "kind": "enum", "enum_values": ["experimental", "active", "deprecated"] }
       ]
@@ -71,7 +70,6 @@
       "name": "API",
       "description": "A public interface exposed by a module — the anchor of the 'don't rebuild it' check.",
       "properties": [
-        { "name": "name", "kind": "string", "required": true },
         { "name": "signature", "kind": "string" },
         { "name": "stability", "kind": "enum", "enum_values": ["experimental", "stable", "deprecated"] },
         { "name": "description", "kind": "text" }
@@ -90,7 +88,6 @@
       "name": "Skill",
       "description": "A capability a role carries and applies to a module.",
       "properties": [
-        { "name": "name", "kind": "string", "required": true },
         { "name": "description", "kind": "text" }
       ]
     }

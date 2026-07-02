@@ -1,0 +1,341 @@
+{
+  "_comment": "Agentic-dev preset - seed data (piece 4). Installer POSTs entities to /graph/entity/create then relations to /graph/relation/create. The six Roles + Skills are methodology fixtures; the Modules/APIs are a small SAMPLE project so a fresh workspace has an inventory to reason over (real projects feed Module/API from a structural index).",
+  "entities": [
+    {
+      "entity_name": "manager",
+      "entity_data": {
+        "entity_type": "Role",
+        "description": "Project oversight, task creation, approvals, change requests",
+        "active": true
+      }
+    },
+    {
+      "entity_name": "architect",
+      "entity_data": {
+        "entity_type": "Role",
+        "description": "System design, code review, architecture documentation",
+        "active": true
+      }
+    },
+    {
+      "entity_name": "developer",
+      "entity_data": {
+        "entity_type": "Role",
+        "description": "Feature implementation and bug fixes",
+        "active": true
+      }
+    },
+    {
+      "entity_name": "integrator",
+      "entity_data": {
+        "entity_type": "Role",
+        "description": "Testing and commits to feature/development branches",
+        "active": true
+      }
+    },
+    {
+      "entity_name": "devop",
+      "entity_data": {
+        "entity_type": "Role",
+        "description": "Infrastructure configuration and CI/CD pipelines",
+        "active": true
+      }
+    },
+    {
+      "entity_name": "production-engineer",
+      "entity_data": {
+        "entity_type": "Role",
+        "description": "Release validation and merges to main",
+        "active": true
+      }
+    },
+    {
+      "entity_name": "system-design",
+      "entity_data": {
+        "entity_type": "Skill",
+        "description": "Architecture and system design"
+      }
+    },
+    {
+      "entity_name": "clean-code",
+      "entity_data": {
+        "entity_type": "Skill",
+        "description": "Clean-code practices and refactoring"
+      }
+    },
+    {
+      "entity_name": "debugging",
+      "entity_data": {
+        "entity_type": "Skill",
+        "description": "Debugging methodology"
+      }
+    },
+    {
+      "entity_name": "testing",
+      "entity_data": {
+        "entity_type": "Skill",
+        "description": "Test design and coverage"
+      }
+    },
+    {
+      "entity_name": "ci-cd",
+      "entity_data": {
+        "entity_type": "Skill",
+        "description": "CI/CD pipeline configuration"
+      }
+    },
+    {
+      "entity_name": "release-management",
+      "entity_data": {
+        "entity_type": "Skill",
+        "description": "Release validation and rollout"
+      }
+    },
+    {
+      "entity_name": "auth",
+      "entity_data": {
+        "entity_type": "Module",
+        "maturity": "active"
+      }
+    },
+    {
+      "entity_name": "billing",
+      "entity_data": {
+        "entity_type": "Module",
+        "maturity": "active"
+      }
+    },
+    {
+      "entity_name": "api-gateway",
+      "entity_data": {
+        "entity_type": "Module",
+        "maturity": "active"
+      }
+    },
+    {
+      "entity_name": "notifications",
+      "entity_data": {
+        "entity_type": "Module",
+        "maturity": "experimental"
+      }
+    },
+    {
+      "entity_name": "login",
+      "entity_data": {
+        "entity_type": "API",
+        "stability": "stable",
+        "signature": "login(credentials) -> Session"
+      }
+    },
+    {
+      "entity_name": "issueToken",
+      "entity_data": {
+        "entity_type": "API",
+        "stability": "stable",
+        "signature": "issueToken(userId) -> Token"
+      }
+    },
+    {
+      "entity_name": "createInvoice",
+      "entity_data": {
+        "entity_type": "API",
+        "stability": "stable",
+        "signature": "createInvoice(order) -> Invoice"
+      }
+    },
+    {
+      "entity_name": "refund",
+      "entity_data": {
+        "entity_type": "API",
+        "stability": "stable",
+        "signature": "refund(invoiceId, amount) -> Refund"
+      }
+    },
+    {
+      "entity_name": "routeRequest",
+      "entity_data": {
+        "entity_type": "API",
+        "stability": "stable",
+        "signature": "routeRequest(req) -> Response"
+      }
+    },
+    {
+      "entity_name": "sendEmail",
+      "entity_data": {
+        "entity_type": "API",
+        "stability": "experimental",
+        "signature": "sendEmail(to, template) -> void"
+      }
+    }
+  ],
+  "relations": [
+    {
+      "source_entity": "architect",
+      "target_entity": "api-gateway",
+      "relation_data": {
+        "keywords": "owns",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "developer",
+      "target_entity": "auth",
+      "relation_data": {
+        "keywords": "owns",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "developer",
+      "target_entity": "billing",
+      "relation_data": {
+        "keywords": "owns",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "devop",
+      "target_entity": "notifications",
+      "relation_data": {
+        "keywords": "owns",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "auth",
+      "target_entity": "login",
+      "relation_data": {
+        "keywords": "exposes",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "auth",
+      "target_entity": "issueToken",
+      "relation_data": {
+        "keywords": "exposes",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "billing",
+      "target_entity": "createInvoice",
+      "relation_data": {
+        "keywords": "exposes",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "billing",
+      "target_entity": "refund",
+      "relation_data": {
+        "keywords": "exposes",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "api-gateway",
+      "target_entity": "routeRequest",
+      "relation_data": {
+        "keywords": "exposes",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "notifications",
+      "target_entity": "sendEmail",
+      "relation_data": {
+        "keywords": "exposes",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "api-gateway",
+      "target_entity": "auth",
+      "relation_data": {
+        "keywords": "depends_on",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "billing",
+      "target_entity": "notifications",
+      "relation_data": {
+        "keywords": "depends_on",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "architect",
+      "target_entity": "system-design",
+      "relation_data": {
+        "keywords": "has_skill",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "developer",
+      "target_entity": "clean-code",
+      "relation_data": {
+        "keywords": "has_skill",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "developer",
+      "target_entity": "debugging",
+      "relation_data": {
+        "keywords": "has_skill",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "integrator",
+      "target_entity": "testing",
+      "relation_data": {
+        "keywords": "has_skill",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "devop",
+      "target_entity": "ci-cd",
+      "relation_data": {
+        "keywords": "has_skill",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "production-engineer",
+      "target_entity": "release-management",
+      "relation_data": {
+        "keywords": "has_skill",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "system-design",
+      "target_entity": "api-gateway",
+      "relation_data": {
+        "keywords": "applies_to",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "clean-code",
+      "target_entity": "billing",
+      "relation_data": {
+        "keywords": "applies_to",
+        "weight": 1.0
+      }
+    },
+    {
+      "source_entity": "testing",
+      "target_entity": "auth",
+      "relation_data": {
+        "keywords": "applies_to",
+        "weight": 1.0
+      }
+    }
+  ]
+}
