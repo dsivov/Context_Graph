@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Project Graph — Onboarding, Flow &amp; Data</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(25,184,154,.10), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(91,141,239,.08), transparent 55%),
+    radial-gradient(800px 500px at 50% 120%, rgba(240,167,60,.05), transparent 60%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(25,184,154,.07),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(32px,5.5vw,54px);line-height:1.04;margin:.3em 0 .25em;
+  background:linear-gradient(92deg,#8fd9c9,#cfe0ff 45%,#ffd79a);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}
+.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:230px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(25,184,154,.18),transparent);color:#fff;border-left:2px solid var(--b)}
+
+main{min-width:0;max-width:820px}
+article section{margin:0 0 56px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--b);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:26px 0 8px}
+p{margin:.7em 0}
+.lead-p{font-size:19px;color:var(--ink)}
+.small{font-size:14px;color:var(--ink-faint)}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.key{border-color:rgba(25,184,154,.55);background:rgba(25,184,154,.10)} .callout.key .clabel{color:#7fe3cf}
+
+figure{margin:18px 0}
+figure .fig{background:linear-gradient(180deg,#12151d,#0e1016);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:10px} figcaption b{color:var(--ink-soft)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--ink-soft)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);
+  border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+
+/* shared svg text helpers */
+svg text{font-family:"Segoe UI",system-ui,sans-serif}
+.nt{font-weight:600;font-size:12.5px;fill:#e7ebf3;text-anchor:middle}
+.ns{font-size:10.5px;fill:#aab3c5;text-anchor:middle}
+.badge{font-weight:800;font-size:13px;fill:#0e1016;text-anchor:middle}
+.el{font-family:var(--mono),monospace;font-size:10px;fill:#8fd9c9;text-anchor:middle}
+.rolelbl{font-weight:700;font-size:10px;text-anchor:middle;text-transform:uppercase;letter-spacing:.04em}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Agentic Dev preset · Visual walkthrough</div>
+    <h1>Onboarding, Flow &amp; Data</h1>
+    <p class="lede">Three pictures of the <a href="AGENTIC_PROJECT_GRAPH.html">project graph</a> in motion: how a new
+      project is stood up, how one feature travels through the methodology, and what the data model looks like.</p>
+    <div class="byline">Companion to the <a href="AGENTIC_PROJECT_GRAPH.html">design discussion</a> · the
+      <code>agentic-dev</code> solution pack</div>
+    <div class="hero-tags">
+      <span class="tag"><b>1</b> onboarding</span>
+      <span class="tag"><b>2</b> example flow</span>
+      <span class="tag"><b>3</b> the ontology</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">Diagrams</div>
+  <ol>
+    <li><a href="#onboard">Project onboarding</a></li>
+    <li><a href="#flow">Example flow</a></li>
+    <li><a href="#data">The ontology</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 · ONBOARDING -->
+<section id="onboard">
+  <div class="kicker">Diagram 1</div>
+  <h2>New-project onboarding</h2>
+  <p class="lead-p">Standing up a project is five steps — and an <b>init agent</b> runs the first four, so a team lead
+  points it at a repo and gets a governed, decision-aware workspace back.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 340" role="img" aria-label="Five-step onboarding pipeline">
+      <defs>
+        <marker id="da" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
+      </defs>
+      <!-- step template: bar + accent + badge + title + sub -->
+      <!-- 1 -->
+      <rect x="64" y="16" width="612" height="50" rx="11" fill="#1b1f2a" stroke="#2c3346"/>
+      <rect x="64" y="16" width="6" height="50" rx="3" fill="#5b8def"/>
+      <circle cx="98" cy="41" r="13" fill="#5b8def"/><text class="badge" x="98" y="45">1</text>
+      <text x="124" y="36" fill="#e7ebf3" font-weight="600" font-size="13.5">Create the workspace</text>
+      <text x="124" y="54" fill="#aab3c5" font-size="11.5">one per project — an isolated tenant (graph · vectors · policies)</text>
+      <!-- 2 -->
+      <rect x="64" y="76" width="612" height="50" rx="11" fill="#1b1f2a" stroke="#2c3346"/>
+      <rect x="64" y="76" width="6" height="50" rx="3" fill="#a974f0"/>
+      <circle cx="98" cy="101" r="13" fill="#a974f0"/><text class="badge" x="98" y="105">2</text>
+      <text x="124" y="96" fill="#e7ebf3" font-weight="600" font-size="13.5">Install the agentic-dev preset</text>
+      <text x="124" y="114" fill="#aab3c5" font-size="11.5">POST ontology · rules · actions  (· rbac · lifecycle) — data, not core code</text>
+      <!-- 3 -->
+      <rect x="64" y="136" width="612" height="50" rx="11" fill="#1b1f2a" stroke="#2c3346"/>
+      <rect x="64" y="136" width="6" height="50" rx="3" fill="#f0a73c"/>
+      <circle cx="98" cy="161" r="13" fill="#f0a73c"/><text class="badge" x="98" y="165">3</text>
+      <text x="124" y="156" fill="#e7ebf3" font-weight="600" font-size="13.5">Seed the Role nodes</text>
+      <text x="124" y="174" fill="#aab3c5" font-size="11.5">manager · architect · developer · integrator · devop · production-engineer</text>
+      <!-- 4 -->
+      <rect x="64" y="196" width="612" height="50" rx="11" fill="#1b1f2a" stroke="#2c3346"/>
+      <rect x="64" y="196" width="6" height="50" rx="3" fill="#19b89a"/>
+      <circle cx="98" cy="221" r="13" fill="#19b89a"/><text class="badge" x="98" y="225">4</text>
+      <text x="124" y="216" fill="#e7ebf3" font-weight="600" font-size="13.5">Backfill (optional)</text>
+      <text x="124" y="234" fill="#aab3c5" font-size="11.5">ingest discussions/PRDs · feed Module/API from a structural index (tree-sitter)</text>
+      <!-- 5 -->
+      <rect x="64" y="256" width="612" height="50" rx="11" fill="rgba(62,207,142,.10)" stroke="rgba(62,207,142,.5)"/>
+      <rect x="64" y="256" width="6" height="50" rx="3" fill="#3ecf8e"/>
+      <circle cx="98" cy="281" r="13" fill="#3ecf8e"/><text class="badge" x="98" y="285">5</text>
+      <text x="124" y="276" fill="#e7ebf3" font-weight="600" font-size="13.5">Agents connect over MCP — ready</text>
+      <text x="124" y="294" fill="#aab3c5" font-size="11.5">each role gets exactly its query · emit · governed-action tools</text>
+      <!-- connectors -->
+      <path d="M370 66 L370 76" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#da)"/>
+      <path d="M370 126 L370 136" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#da)"/>
+      <path d="M370 186 L370 196" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#da)"/>
+      <path d="M370 246 L370 256" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#da)"/>
+      <!-- init-agent bracket over 1-4 -->
+      <rect x="24" y="16" width="26" height="230" rx="9" fill="rgba(169,116,240,.10)" stroke="rgba(169,116,240,.45)"/>
+      <text x="37" y="131" fill="#cdb1f7" font-size="10.5" font-weight="700" transform="rotate(-90 37 131)" text-anchor="middle" letter-spacing="1">INIT AGENT</text>
+    </svg>
+    <figcaption><b>The init agent owns steps 1–4</b> (purple rail); step 5 is the handoff to the working agents. Every
+      step after install runs <i>through</i> the graph, so onboarding is itself recorded.</figcaption>
+  </div></figure>
+
+  <div class="callout key">
+    <div class="clabel">◆ Single-agent shortcut</div>
+    A solo project skips steps 3–5 entirely: create a workspace, install the ontology, done. No roles, no RBAC — the
+    layers are opt-in, so simple stays simple.
+  </div>
+</section>
+
+<!-- 2 · EXAMPLE FLOW -->
+<section id="flow">
+  <div class="kicker">Diagram 2</div>
+  <h2>One feature, end to end</h2>
+  <p class="lead-p">Follow a single feature across the six roles. The governed steps pass through a gate <i>before</i>
+  anything happens, and every step leaves an audit edge — so the flow is also its own record.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 920 270" role="img" aria-label="A feature flowing through the roles and gates">
+      <defs>
+        <marker id="fa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
+      </defs>
+      <!-- stage boxes: x = 14,166,318,470,622,774 ; w=132 ; y=64 h=64 -->
+      <!-- role pills at y=40 -->
+      <g>
+        <rect x="20" y="30" width="120" height="20" rx="10" fill="rgba(169,116,240,.16)" stroke="rgba(169,116,240,.45)"/><text class="rolelbl" x="80" y="44" fill="#cdb1f7">Architect</text>
+        <rect x="172" y="30" width="120" height="20" rx="10" fill="rgba(91,141,239,.16)" stroke="rgba(91,141,239,.45)"/><text class="rolelbl" x="232" y="44" fill="#9cc0ff">Manager</text>
+        <rect x="324" y="30" width="120" height="20" rx="10" fill="rgba(240,167,60,.16)" stroke="rgba(240,167,60,.45)"/><text class="rolelbl" x="384" y="44" fill="#ffce86">Developer</text>
+        <rect x="476" y="30" width="120" height="20" rx="10" fill="rgba(240,167,60,.16)" stroke="rgba(240,167,60,.45)"/><text class="rolelbl" x="536" y="44" fill="#ffce86">Developer</text>
+        <rect x="628" y="30" width="120" height="20" rx="10" fill="rgba(25,184,154,.16)" stroke="rgba(25,184,154,.45)"/><text class="rolelbl" x="688" y="44" fill="#7fe3cf">Integrator</text>
+        <rect x="780" y="30" width="130" height="20" rx="10" fill="rgba(62,207,142,.16)" stroke="rgba(62,207,142,.45)"/><text class="rolelbl" x="845" y="44" fill="#7ee3b4">Prod-Eng</text>
+      </g>
+      <!-- stages -->
+      <g>
+        <rect x="14" y="64" width="132" height="64" rx="10" fill="#171b26" stroke="#39425a"/>
+        <text class="nt" x="80" y="92">Discussion →</text><text class="nt" x="80" y="108">Decision</text><text class="ns" x="80" y="122">accepted</text>
+        <rect x="166" y="64" width="132" height="64" rx="10" fill="#171b26" stroke="#39425a"/>
+        <text class="nt" x="232" y="92">Create CR</text><text class="ns" x="232" y="108">→ spawns Tasks</text>
+        <rect x="318" y="64" width="132" height="64" rx="10" fill="#171b26" stroke="#39425a"/>
+        <text class="nt" x="384" y="92">ProposeAPI</text><text class="ns" x="384" y="108">reuse-checked</text>
+        <rect x="470" y="64" width="132" height="64" rx="10" fill="#171b26" stroke="#39425a"/>
+        <text class="nt" x="536" y="92">Implement</text><text class="ns" x="536" y="108">→ Commit closes Task</text>
+        <rect x="622" y="64" width="132" height="64" rx="10" fill="#171b26" stroke="#39425a"/>
+        <text class="nt" x="688" y="92">AdvanceTask</text><text class="nt" x="688" y="108">(done)</text>
+        <rect x="774" y="64" width="132" height="64" rx="10" fill="rgba(62,207,142,.10)" stroke="rgba(62,207,142,.5)"/>
+        <text class="nt" x="840" y="92">Ship Feature</text><text class="ns" x="840" y="108">merge to main</text>
+      </g>
+      <!-- arrows between stages -->
+      <path d="M146 96 L166 96" stroke="#8a93a8" stroke-width="1.7" marker-end="url(#fa)"/>
+      <path d="M298 96 L318 96" stroke="#8a93a8" stroke-width="1.7" marker-end="url(#fa)"/>
+      <path d="M450 96 L470 96" stroke="#8a93a8" stroke-width="1.7" marker-end="url(#fa)"/>
+      <path d="M602 96 L622 96" stroke="#8a93a8" stroke-width="1.7" marker-end="url(#fa)"/>
+      <path d="M754 96 L774 96" stroke="#8a93a8" stroke-width="1.7" marker-end="url(#fa)"/>
+      <!-- gate chips under governed stages 3 & 5 -->
+      <path d="M384 128 L384 146" stroke="#f0a73c" stroke-width="1.4"/>
+      <rect x="300" y="146" width="168" height="34" rx="8" fill="rgba(240,167,60,.10)" stroke="rgba(240,167,60,.5)"/>
+      <text class="ns" x="384" y="160" fill="#ffce86">⛨ gate — sim() vs existing APIs</text><text class="ns" x="384" y="173" fill="#ffce86">no duplicate → PASS</text>
+      <path d="M688 128 L688 146" stroke="#19b89a" stroke-width="1.4"/>
+      <rect x="604" y="146" width="168" height="34" rx="8" fill="rgba(25,184,154,.10)" stroke="rgba(25,184,154,.5)"/>
+      <text class="ns" x="688" y="160" fill="#7fe3cf">⛨ gate — RBAC + lifecycle</text><text class="ns" x="688" y="173" fill="#7fe3cf">integrator? active→done legal?</text>
+      <!-- audit ribbon -->
+      <rect x="14" y="212" width="892" height="40" rx="10" fill="rgba(91,141,239,.08)" stroke="rgba(91,141,239,.4)"/>
+      <text x="34" y="237" fill="#9cc0ff" font-size="12.5" font-weight="700">AUDIT TRAIL</text>
+      <text x="132" y="237" fill="#aab3c5" font-size="12.5">every step writes an edge — <tspan fill="#e7ebf3">who · why · evidence · outcome</tspan> — so the next agent inherits the reasoning for free</text>
+    </svg>
+    <figcaption><b>Two of the six steps are governed</b> (amber &amp; teal gates). A duplicate API would <i>FLAG</i> at
+      step 3; a non-integrator, or an illegal state jump, would be blocked at step 5 — before any side effect.</figcaption>
+  </div></figure>
+
+  <div class="callout info">
+    <div class="clabel">◆ Where the layers show up</div>
+    Step 3 is the <a href="RULES_ENGINE.html">rules gate</a> + precedent search (reuse). Step 5 is <b>RBAC</b> +
+    the <b>lifecycle</b> guard. Every box is an <a href="ACTIONS.html">action</a> writing a
+    <a href="AGENTIC_PROJECT_GRAPH.html">decision edge</a>. Nothing here is bespoke — it's the generic layers, configured.
+  </div>
+</section>
+
+<!-- 3 · DATA / ONTOLOGY -->
+<section id="data">
+  <div class="kicker">Diagram 3</div>
+  <h2>The ontology — the data model</h2>
+  <p class="lead-p">Ten object types in four families, wired by fourteen link types. Colour marks the family; every edge
+  carries a RelationContext (the who/why). This is the validated <code>agentic-dev</code> ontology, drawn.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 920 500" role="img" aria-label="The agentic-dev ontology: object types and link types">
+      <defs>
+        <marker id="oa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
+      </defs>
+      <!-- EDGES first (under nodes) -->
+      <g fill="none" stroke="#7b8499" stroke-width="1.3">
+        <path d="M144 66 L232 66" marker-end="url(#oa)"/>
+        <path d="M352 66 L430 66" marker-end="url(#oa)"/>
+        <path d="M300 88 L455 190" marker-end="url(#oa)"/>
+        <path d="M112 150 L258 88" marker-end="url(#oa)"/>
+        <path d="M144 172 L430 205" marker-end="url(#oa)"/>
+        <path d="M490 88 L490 190" marker-end="url(#oa)"/>
+        <path d="M490 234 L490 320" marker-end="url(#oa)"/>
+        <path d="M550 202 L680 150" marker-end="url(#oa)"/>
+        <path d="M550 224 L680 288" marker-end="url(#oa)"/>
+        <path d="M740 164 L740 270" marker-end="url(#oa)"/>
+        <path d="M800 130 C842 116 842 168 802 154" marker-end="url(#oa)"/>
+        <path d="M214 420 L694 164" marker-end="url(#oa)"/>
+        <path d="M270 442 L430 442" marker-end="url(#oa)"/>
+        <path d="M550 434 L716 164" marker-end="url(#oa)"/>
+        <path d="M452 234 L262 418" marker-end="url(#oa)"/>
+      </g>
+      <!-- edge labels -->
+      <g class="el">
+        <text x="188" y="60">produces</text>
+        <text x="391" y="60">motivates</text>
+        <text x="356" y="150">motivates</text>
+        <text x="150" y="108">supersedes</text>
+        <text x="286" y="182">spawns</text>
+        <text x="518" y="142">requires</text>
+        <text x="522" y="282">closed_by</text>
+        <text x="600" y="168">touches</text>
+        <text x="602" y="262">reuses</text>
+        <text x="766" y="220">exposes</text>
+        <text x="852" y="140">depends_on</text>
+        <text x="452" y="300">owns</text>
+        <text x="350" y="434">has_skill</text>
+        <text x="648" y="322">applies_to</text>
+        <text x="318" y="330">assigned_to</text>
+      </g>
+      <!-- NODES -->
+      <!-- Intent family: blue / purple -->
+      <g><rect x="24" y="44" width="120" height="44" rx="9" fill="rgba(91,141,239,.15)" stroke="#5b8def" stroke-width="1.5"/><text class="nt" x="84" y="71">Discussion</text></g>
+      <g><rect x="232" y="44" width="120" height="44" rx="9" fill="rgba(169,116,240,.16)" stroke="#a974f0" stroke-width="1.5"/><text class="nt" x="292" y="71">Decision</text></g>
+      <g><rect x="24" y="150" width="120" height="44" rx="9" fill="rgba(91,141,239,.15)" stroke="#5b8def" stroke-width="1.5"/><text class="nt" x="84" y="177">ChangeRequest</text></g>
+      <g><rect x="430" y="44" width="120" height="44" rx="9" fill="rgba(91,141,239,.15)" stroke="#5b8def" stroke-width="1.5"/><text class="nt" x="490" y="71">Feature</text></g>
+      <!-- Work family: amber -->
+      <g><rect x="430" y="190" width="120" height="44" rx="9" fill="rgba(240,167,60,.15)" stroke="#f0a73c" stroke-width="1.5"/><text class="nt" x="490" y="217">Task</text></g>
+      <g><rect x="430" y="320" width="120" height="44" rx="9" fill="rgba(240,167,60,.15)" stroke="#f0a73c" stroke-width="1.5"/><text class="nt" x="490" y="347">Commit</text></g>
+      <!-- Structure family: teal -->
+      <g><rect x="680" y="120" width="120" height="44" rx="9" fill="rgba(25,184,154,.15)" stroke="#19b89a" stroke-width="1.5"/><text class="nt" x="740" y="147">Module</text></g>
+      <g><rect x="680" y="270" width="120" height="44" rx="9" fill="rgba(25,184,154,.15)" stroke="#19b89a" stroke-width="1.5"/><text class="nt" x="740" y="297">API</text></g>
+      <!-- Actors family: green -->
+      <g><rect x="150" y="420" width="120" height="44" rx="9" fill="rgba(62,207,142,.15)" stroke="#3ecf8e" stroke-width="1.5"/><text class="nt" x="210" y="447">Role</text></g>
+      <g><rect x="430" y="420" width="120" height="44" rx="9" fill="rgba(62,207,142,.15)" stroke="#3ecf8e" stroke-width="1.5"/><text class="nt" x="490" y="447">Skill</text></g>
+    </svg>
+    <div class="legend">
+      <span><i class="sw" style="background:#5b8def"></i> Intent — Discussion · Feature · ChangeRequest</span>
+      <span><i class="sw" style="background:#a974f0"></i> Decision (the crown jewel)</span>
+      <span><i class="sw" style="background:#f0a73c"></i> Work — Task · Commit</span>
+      <span><i class="sw" style="background:#19b89a"></i> Structure — Module · API</span>
+      <span><i class="sw" style="background:#3ecf8e"></i> Actors — Role · Skill</span>
+    </div>
+    <figcaption><b>Read it left-to-right as delivery</b> (Discussion → Decision → Feature → Task → Commit), with the
+      <i>structure</i> the work touches on the right and the <i>actors</i> along the bottom. The bold edges —
+      <b>reuses</b>, <b>exposes</b>, <b>owns</b> — power the reuse check and ownership-based access.</figcaption>
+  </div></figure>
+
+  <div class="callout key">
+    <div class="clabel">◆ Three deliberate choices</div>
+    <b>States are properties</b> (<code>Task.state</code>, <code>Decision.status</code>) — the seams the lifecycle layer
+    drives. <b>Relationships over strings</b> — <code>Task —assigned_to→ Role</code> and <code>Role —owns→ Module</code>
+    are edges, so "who owns this?" and access checks are graph queries. <b>Module/API are declared, not parsed</b> —
+    the slot a structural code index feeds. Full source: <a href="AGENTIC_PROJECT_GRAPH.html#ontology">the ontology
+    section</a> · <code>presets/agentic-dev/ontology.json</code>.
+  </div>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  Visual walkthrough of the <code>agentic-dev</code> preset — onboarding, an example flow, and the ontology. Companion
+  to <a href="AGENTIC_PROJECT_GRAPH.html">The Project Graph</a>. Part of the
+  <a href="index.html">Context Graph documentation</a>.
+</footer>
+
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('nav.toc a')), map={};
+  links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id); if(el)map[id]=a;});
+  var obs=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}
+  });},{rootMargin:'-25% 0px -65% 0px',threshold:0});
+  Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});
+  var btt=document.getElementById('btt');
+  window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});
+})();
+</script>
+</body>
+</html>

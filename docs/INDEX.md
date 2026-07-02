@@ -22,6 +22,13 @@ reasoning, runtime decision capture, precedent search, a REST API, and an MCP se
 | [RULES_ENGINE.html](RULES_ENGINE.html) | **Business Rules Engine** — the DSL, semantic `sim()` matching, the pre-emit gate, the NL author agent, `/rules` |
 | [ACTIONS.html](ACTIONS.html) | **Action Layer** — executable operations bound to object types, the invoke → rules gate → audit pipeline, SSRF-guarded handlers, `/actions` |
 
+## Use cases & design discussions
+
+| Doc | Covers |
+|-----|--------|
+| [AGENTIC_PROJECT_GRAPH.html](AGENTIC_PROJECT_GRAPH.html) | **The Project Graph** — CG as the methodology *actor* for a multi-agent dev team: thesis, ontology, granularity, roles-as-config, RBAC & lifecycle gaps, positioning vs structural code graphs (working doc) |
+| [AGENTIC_DEV_WALKTHROUGH.html](AGENTIC_DEV_WALKTHROUGH.html) | **Onboarding, Flow & Data** — the visual companion: project onboarding, an example feature flow, and the `agentic-dev` ontology diagram |
+
 ## Reference (this set)
 
 | Doc | Covers |

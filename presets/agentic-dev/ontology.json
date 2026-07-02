@@ -1,0 +1,115 @@
+{
+  "name": "agentic_dev",
+  "version": 1,
+  "_comment": "Agentic development-team preset — ontology (piece 1 of the solution pack). POST to /ontology with LIGHTRAG-WORKSPACE set. Object/link vocabulary is user data; core stays generic. Grounded in dsivov/ai_development_team.",
+
+  "object_types": [
+    {
+      "name": "Role",
+      "description": "An agent role / principal in the team (manager, architect, developer, integrator, devop, production-engineer). The set is preset data, not core.",
+      "properties": [
+        { "name": "description", "kind": "text" },
+        { "name": "active", "kind": "boolean" }
+      ]
+    },
+    {
+      "name": "Discussion",
+      "description": "A design/analysis discussion thread — the origin of decisions.",
+      "properties": [
+        { "name": "topic", "kind": "string", "required": true },
+        { "name": "status", "kind": "enum", "enum_values": ["open", "resolved", "parked"] },
+        { "name": "summary", "kind": "text" }
+      ]
+    },
+    {
+      "name": "Decision",
+      "description": "An architectural/technical decision (ADR) — the irrecoverable 'why'. The crown jewel.",
+      "properties": [
+        { "name": "title", "kind": "string", "required": true },
+        { "name": "status", "kind": "enum", "required": true, "enum_values": ["proposed", "accepted", "superseded", "rejected"] },
+        { "name": "rationale", "kind": "text" },
+        { "name": "decided_on", "kind": "date" }
+      ]
+    },
+    {
+      "name": "Feature",
+      "description": "A feature / PRD — a unit of product intent.",
+      "properties": [
+        { "name": "title", "kind": "string", "required": true },
+        { "name": "status", "kind": "enum", "required": true, "enum_values": ["proposed", "accepted", "in_progress", "shipped", "superseded"] },
+        { "name": "priority", "kind": "enum", "enum_values": ["low", "medium", "high"] }
+      ]
+    },
+    {
+      "name": "ChangeRequest",
+      "description": "A change request — created by the manager, analyzed by the architect.",
+      "properties": [
+        { "name": "title", "kind": "string", "required": true },
+        { "name": "status", "kind": "enum", "required": true, "enum_values": ["open", "analyzing", "approved", "rejected", "done"] },
+        { "name": "summary", "kind": "text" }
+      ]
+    },
+    {
+      "name": "Task",
+      "description": "A unit of work with a lifecycle state (see the lifecycle preset piece).",
+      "properties": [
+        { "name": "title", "kind": "string", "required": true },
+        { "name": "state", "kind": "enum", "required": true, "enum_values": ["proposed", "active", "blocked", "done"] },
+        { "name": "estimate_hours", "kind": "float", "minimum": 0 }
+      ]
+    },
+    {
+      "name": "Module",
+      "description": "A code module / component. Fed from a structural index (tree-sitter), not parsed by CG.",
+      "properties": [
+        { "name": "name", "kind": "string", "required": true },
+        { "name": "path", "kind": "string" },
+        { "name": "maturity", "kind": "enum", "enum_values": ["experimental", "active", "deprecated"] }
+      ]
+    },
+    {
+      "name": "API",
+      "description": "A public interface exposed by a module — the anchor of the 'don't rebuild it' check.",
+      "properties": [
+        { "name": "name", "kind": "string", "required": true },
+        { "name": "signature", "kind": "string" },
+        { "name": "stability", "kind": "enum", "enum_values": ["experimental", "stable", "deprecated"] },
+        { "name": "description", "kind": "text" }
+      ]
+    },
+    {
+      "name": "Commit",
+      "description": "A git commit — evidence that closes a task. Thin rc; the 'why' lives on the decision it implements.",
+      "properties": [
+        { "name": "sha", "kind": "string", "required": true },
+        { "name": "branch", "kind": "string" },
+        { "name": "message", "kind": "text" }
+      ]
+    },
+    {
+      "name": "Skill",
+      "description": "A capability a role carries and applies to a module.",
+      "properties": [
+        { "name": "name", "kind": "string", "required": true },
+        { "name": "description", "kind": "text" }
+      ]
+    }
+  ],
+
+  "link_types": [
+    { "name": "produces",    "source_types": ["Discussion"],     "target_types": ["Decision"],          "cardinality": "1:N", "description": "A discussion produces decisions." },
+    { "name": "motivates",   "source_types": ["Decision"],       "target_types": ["Feature", "Task"],    "cardinality": "N:M", "description": "A decision motivates features and tasks." },
+    { "name": "supersedes",  "source_types": ["ChangeRequest"],  "target_types": ["Decision"],          "cardinality": "1:N", "description": "A change request supersedes prior decisions." },
+    { "name": "spawns",      "source_types": ["ChangeRequest"],  "target_types": ["Task"],               "cardinality": "1:N", "description": "A change request spawns tasks." },
+    { "name": "requires",    "source_types": ["Feature"],        "target_types": ["Task"],               "cardinality": "1:N", "description": "A feature requires tasks." },
+    { "name": "closed_by",   "source_types": ["Task"],           "target_types": ["Commit"],             "cardinality": "1:N", "description": "A task is closed by commits." },
+    { "name": "assigned_to", "source_types": ["Task"],           "target_types": ["Role"],               "cardinality": "N:1", "description": "A task is assigned to a role." },
+    { "name": "reuses",      "source_types": ["Task"],           "target_types": ["API"],                "cardinality": "N:M", "description": "A task reuses an existing API instead of rebuilding it." },
+    { "name": "touches",     "source_types": ["Task"],           "target_types": ["Module"],             "cardinality": "N:M", "description": "A task touches modules." },
+    { "name": "exposes",     "source_types": ["Module"],         "target_types": ["API"],                "cardinality": "1:N", "description": "A module exposes APIs." },
+    { "name": "depends_on",  "source_types": ["Module"],         "target_types": ["Module"],             "cardinality": "N:M", "description": "A module depends on other modules." },
+    { "name": "owns",        "source_types": ["Role"],           "target_types": ["Module"],             "cardinality": "1:N", "description": "A role owns modules (basis for ReBAC ownership grants)." },
+    { "name": "has_skill",   "source_types": ["Role"],           "target_types": ["Skill"],              "cardinality": "N:M", "description": "A role carries skills." },
+    { "name": "applies_to",  "source_types": ["Skill"],          "target_types": ["Module"],             "cardinality": "N:M", "description": "A skill applies to modules." }
+  ]
+}
