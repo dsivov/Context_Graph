@@ -1272,6 +1272,18 @@ def create_app(args):
             rag, action_service, rbac_service=rbac_service,
             lifecycle_service=lifecycle_service, api_key=api_key))
 
+    # Workspace manifest API (role-scoped operating context for agents).
+    if getattr(args, "use_context_graph", False):
+        try:
+            from lightrag.api.routers.workspace_routes import create_workspace_routes
+
+            app.include_router(create_workspace_routes(
+                rag, ontology_service=ontology_service, action_service=action_service,
+                rules_service=rules_service, lifecycle_service=lifecycle_service,
+                rbac_service=rbac_service, api_key=api_key))
+        except Exception as e:  # pragma: no cover - never block server start
+            logger.warning(f"Workspace manifest API unavailable: {e}")
+
     # Web-ingest API (crawl a website into the Context Graph).
     try:
         from context_graph.webingest.service import WebIngestService
