@@ -44,6 +44,9 @@
           ]
         }
       ],
+      "transition": {
+        "to_param": "to"
+      },
       "handler": {
         "kind": "none"
       }

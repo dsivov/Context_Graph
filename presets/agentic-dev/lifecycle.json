@@ -1,0 +1,35 @@
+{
+  "_comment": "Agentic-dev preset - lifecycle (piece 6). POST wrapped as {lifecycle:...} to /lifecycle. Declarative state machines over object types; a transition action (e.g. AdvanceTask) is checked against these before it writes and applies the new state to the object's node. No machine for a type = permissive. Cross-object 'requires' guards are parsed but not yet enforced. See docs/LIFECYCLE_SPEC.md.",
+  "name": "lifecycle",
+  "machines": {
+    "Task": {
+      "states": ["proposed", "active", "blocked", "done"],
+      "initial": "proposed",
+      "transitions": [
+        {"from": "proposed", "to": "active"},
+        {"from": "active", "to": "blocked"},
+        {"from": "blocked", "to": "active"},
+        {"from": "active", "to": "done", "roles": ["integrator", "manager"]}
+      ]
+    },
+    "Feature": {
+      "states": ["proposed", "accepted", "in_progress", "shipped", "superseded"],
+      "initial": "proposed",
+      "transitions": [
+        {"from": "proposed", "to": "accepted", "roles": ["manager", "architect"]},
+        {"from": "accepted", "to": "in_progress", "requires": ["accepted Decision"]},
+        {"from": "in_progress", "to": "shipped", "roles": ["production-engineer"]},
+        {"from": "accepted", "to": "superseded"}
+      ]
+    },
+    "Decision": {
+      "states": ["proposed", "accepted", "superseded", "rejected"],
+      "initial": "proposed",
+      "transitions": [
+        {"from": "proposed", "to": "accepted", "roles": ["architect", "manager"]},
+        {"from": "proposed", "to": "rejected", "roles": ["architect", "manager"]},
+        {"from": "accepted", "to": "superseded"}
+      ]
+    }
+  }
+}

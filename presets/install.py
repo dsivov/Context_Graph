@@ -119,7 +119,15 @@ def main() -> int:
             print(f"  ✓ rbac      v{r.get('version','?')}  "
                   f"({len(r.get('roles', {}))} roles)" if not args.dry_run else "  · rbac (dry-run)")
 
-    # 5) seed — entities first, then relations (relations need both endpoints to exist)
+    # 5) lifecycle — state machines over object types (absent = permissive)
+    lifecycle = load(preset_dir, "lifecycle.json")
+    if lifecycle is not None:
+        r = c.post("/lifecycle", {"lifecycle": strip_comment(lifecycle)})
+        if not fail("lifecycle", r):
+            print(f"  ✓ lifecycle v{r.get('version','?')}  "
+                  f"({len(r.get('machines', {}))} machines)" if not args.dry_run else "  · lifecycle (dry-run)")
+
+    # 6) seed — entities first, then relations (relations need both endpoints to exist)
     seed = load(preset_dir, "seed.json")
     if seed is not None:
         ents = seed.get("entities", [])

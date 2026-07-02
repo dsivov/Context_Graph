@@ -86,13 +86,13 @@ def _require_cg(rag) -> None:
         )
 
 
-def create_actions_routes(rag, service, *, rbac_service=None, api_key: Optional[str] = None,
-                          workspace_resolver=None):
+def create_actions_routes(rag, service, *, rbac_service=None, lifecycle_service=None,
+                          api_key: Optional[str] = None, workspace_resolver=None):
     """Build the /actions router bound to *rag* and an ActionService.
 
-    If *rbac_service* is provided, invoking an action is gated by a pre-check
-    (``resolve principal → RBAC → rules gate → side effect``); a workspace with
-    no RBAC policy stays permissive.
+    Invoking an action runs ``resolve principal → RBAC → lifecycle → rules gate →
+    side effect``. *rbac_service* / *lifecycle_service* are optional; a workspace
+    with no policy / no state machine stays permissive.
     """
     if workspace_resolver is None:
         from lightrag.api.workspace_pool import _current_workspace
@@ -145,18 +145,22 @@ def create_actions_routes(rag, service, *, rbac_service=None, api_key: Optional[
                  summary="Invoke an action (RBAC → validate → rules gate → side effect)")
     async def invoke_action(request: InvokeActionRequest, http_request: Request):
         _require_cg(rag)
-        # RBAC pre-check — may this authenticated principal invoke this action?
-        # The role comes from the token, never from request.actor. No policy → permissive.
+        # Resolve the authenticated principal once (role from the token, never
+        # from request.actor). Used by both RBAC and the lifecycle role check.
+        principal = get_principal(http_request)
+        role = principal.get("role") if principal else None
+
+        # RBAC pre-check — may this principal invoke this action? No policy → permissive.
         if rbac_service is not None:
-            principal = get_principal(http_request)
-            role = principal.get("role") if principal else None
             decision = rbac_service.check(_ws(), role, "invoke", request.action,
                                           object_ref=request.object_ref, rag=rag)
             if not decision.allowed:
                 raise HTTPException(status_code=403, detail=decision.reason)
+
         result = await service.invoke(
             rag, _ws(), request.action,
-            actor=request.actor, object_ref=request.object_ref, args=request.args)
+            actor=request.actor, object_ref=request.object_ref, args=request.args,
+            principal_role=role, lifecycle=lifecycle_service)
         if not result.get("ok"):
             err = result.get("error")
             if err == "unknown_action":
@@ -165,6 +169,8 @@ def create_actions_routes(rag, service, *, rbac_service=None, api_key: Optional[
             if err == "invalid_arguments":
                 raise HTTPException(status_code=400,
                                     detail="; ".join(result.get("errors", [])))
+            if err == "illegal_transition":
+                raise HTTPException(status_code=409, detail=result)
             if err == "rejected":
                 raise HTTPException(status_code=422, detail=result)
         return result

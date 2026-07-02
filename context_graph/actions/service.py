@@ -83,7 +83,9 @@ class ActionService:
 
     async def invoke(self, rag, workspace: str, action_name: str, *,
                      actor: str = "system", object_ref: str,
-                     args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                     args: Optional[Dict[str, Any]] = None,
+                     principal_role: Optional[str] = None,
+                     lifecycle=None) -> Dict[str, Any]:
         """Run an action end to end.
 
         Order matters: arguments are validated, then the rules gate authorizes
@@ -111,7 +113,21 @@ class ActionService:
         rc = self._build_rc(action, coerced, actor=src)
         edge = {"src": src, "tgt": tgt, "relation_type": relation_type}
 
-        # 1) Authorize + record via the pre-emit rules gate (writes the audit edge).
+        # 1) Lifecycle guard (for transition actions): is from → to a legal move
+        #    for this role? Runs before the write; illegal transitions never persist.
+        machine = None
+        current = target = None
+        if action.transition is not None and lifecycle is not None:
+            machine = lifecycle.machine_for(workspace, action.object_type)
+            if machine is not None:
+                target = coerced.get(action.transition.to_param)
+                current = await lifecycle.current_state(rag, tgt, machine)
+                d = machine.can(current, target, principal_role)
+                if not d.allowed:
+                    return {"ok": False, "error": "illegal_transition", "reason": d.reason,
+                            "action": action.name, "from": current, "to": target, "edge": edge}
+
+        # 2) Authorize + record via the pre-emit rules gate (writes the audit edge).
         from context_graph.rules.gate import RuleViolation
         try:
             gate_decision = await rag.emit_decision_trace(src, tgt, relation_type, rc)
@@ -122,7 +138,11 @@ class ActionService:
         outcome = gate_decision.outcome if gate_decision is not None else "RECORDED"
         audit = gate_decision.audit if gate_decision is not None else None
 
-        # 2) Side effect only after authorization.
+        # 3) Apply the state transition on the object's node (after a PASS/FLAG emit).
+        if machine is not None and target is not None:
+            await lifecycle.apply(rag, tgt, machine, target)
+
+        # 4) Side effect only after authorization.
         from context_graph.actions.handler import run_handler, HandlerError
         payload = {"action": action.name, "actor": src, "object": tgt,
                    "relation_type": relation_type, "args": coerced,
@@ -132,9 +152,12 @@ class ActionService:
         except HandlerError as e:
             handler_result = {"kind": action.handler.kind, "executed": False, "error": str(e)}
 
-        return {"ok": True, "action": action.name, "outcome": outcome,
-                "flagged": outcome == "FLAG", "edge": edge, "coerced": coerced,
-                "audit": audit, "handler": handler_result}
+        result = {"ok": True, "action": action.name, "outcome": outcome,
+                  "flagged": outcome == "FLAG", "edge": edge, "coerced": coerced,
+                  "audit": audit, "handler": handler_result}
+        if machine is not None and target is not None:
+            result["from"], result["to"] = current, target
+        return result
 
     @staticmethod
     def _build_rc(action: ActionDefinition, coerced: Dict[str, Any], *, actor: str) -> RelationContext:

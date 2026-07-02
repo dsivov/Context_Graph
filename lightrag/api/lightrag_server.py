@@ -402,6 +402,18 @@ def create_app(args):
         except Exception as e:  # pragma: no cover - never block server start
             logger.warning(f"RBAC service unavailable: {e}")
 
+    # Lifecycle service (per-workspace state machines). Only in CG mode.
+    lifecycle_service = None
+    if getattr(args, "use_context_graph", False):
+        try:
+            from context_graph.lifecycle import LifecycleService, JsonLifecycleStore
+
+            lifecycle_service = LifecycleService(
+                JsonLifecycleStore(os.path.join(str(args.working_dir), "lifecycle"))
+            )
+        except Exception as e:  # pragma: no cover - never block server start
+            logger.warning(f"Lifecycle service unavailable: {e}")
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Lifespan context manager for startup and shutdown events"""
@@ -1246,12 +1258,19 @@ def create_app(args):
 
         app.include_router(create_rbac_routes(rag, rbac_service, api_key=api_key))
 
-    # Actions API (manage + invoke the per-workspace action catalog; RBAC-gated).
+    # Lifecycle API (manage the per-workspace state machines).
+    if lifecycle_service is not None:
+        from lightrag.api.routers.lifecycle_routes import create_lifecycle_routes
+
+        app.include_router(create_lifecycle_routes(rag, lifecycle_service, api_key=api_key))
+
+    # Actions API (manage + invoke the catalog; RBAC- and lifecycle-gated).
     if action_service is not None:
         from lightrag.api.routers.actions_routes import create_actions_routes
 
         app.include_router(create_actions_routes(
-            rag, action_service, rbac_service=rbac_service, api_key=api_key))
+            rag, action_service, rbac_service=rbac_service,
+            lifecycle_service=lifecycle_service, api_key=api_key))
 
     # Web-ingest API (crawl a website into the Context Graph).
     try:

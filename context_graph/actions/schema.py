@@ -118,6 +118,27 @@ class ActionHandler:
 
 
 @dataclass
+class ActionTransition:
+    """Marks an action as a lifecycle transition of its ``object_type``.
+
+    ``to_param`` names the argument holding the target state. When set, invoking
+    the action is checked against the workspace lifecycle (is ``from → to`` legal
+    for this role?) and, on success, the object's state is advanced.
+    """
+
+    to_param: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"to_param": self.to_param}
+
+    @classmethod
+    def from_dict(cls, d: Optional[Dict[str, Any]]) -> Optional["ActionTransition"]:
+        if not d:
+            return None
+        return cls(to_param=d["to_param"])
+
+
+@dataclass
 class ActionDefinition:
     """A named, typed operation bound to an object type."""
 
@@ -129,6 +150,7 @@ class ActionDefinition:
     policy_ref: Optional[str] = None
     params: Dict[str, ActionParam] = field(default_factory=dict)  # insertion-ordered
     handler: ActionHandler = field(default_factory=ActionHandler)
+    transition: Optional[ActionTransition] = None   # lifecycle transition, if any
 
     def add(self, param: ActionParam) -> "ActionDefinition":
         self.params[param.name] = param
@@ -174,6 +196,8 @@ class ActionDefinition:
             d["policy_ref"] = self.policy_ref
         d["params"] = [p.to_dict() for p in self.params.values()]
         d["handler"] = self.handler.to_dict()
+        if self.transition is not None:
+            d["transition"] = self.transition.to_dict()
         return d
 
     @classmethod
@@ -191,6 +215,7 @@ class ActionDefinition:
             policy_ref=d.get("policy_ref"),
             params=params,
             handler=ActionHandler.from_dict(d.get("handler")),
+            transition=ActionTransition.from_dict(d.get("transition")),
         )
 
 

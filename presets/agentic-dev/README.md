@@ -17,7 +17,7 @@ See the design discussion in [`../../docs/AGENTIC_PROJECT_GRAPH.html`](../../doc
 | `actions.json` | `POST /actions` | ✅ 6 governed operations (ProposeAPI, AdvanceTask, CreateChangeRequest, ApproveArchitecture, DeprecateAPI, MergeToMain). Relation types chosen so the gate fires; validated live end-to-end |
 | `seed.json` | `POST /graph/entity/create` + `/graph/relation/create` | ✅ 22 entities (6 Roles, 6 Skills, 4 sample Modules, 6 sample APIs) + 21 relations (owns · exposes · depends_on · has_skill · applies_to). Validates 43/43 against the ontology |
 | `rbac.json` | `POST /rbac` | ✅ role → grants for the six roles (manager `*`, production-engineer `invoke:MergeToMain`, …). Opt-in + deny-by-default within the policy; absent = permissive. Gates `/actions/invoke`; validated live |
-| `lifecycle.json` | (P3 lifecycle) | ⏳ pending the lifecycle layer |
+| `lifecycle.json` | `POST /lifecycle` | ✅ state machines for Task / Feature / Decision. A transition action (AdvanceTask) is checked against these (legal move? role allowed?) and applies the new state; illegal jumps → 409. Absent = permissive. Validated live |
 
 ## Install
 
