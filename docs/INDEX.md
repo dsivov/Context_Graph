@@ -20,6 +20,7 @@ reasoning, runtime decision capture, precedent search, a REST API, and an MCP se
 | [SCRAPER.html](SCRAPER.html) | **Web Ingester** — the polite crawler, pluggable site connectors, LLM-guided acquisition, `POST /scrape` |
 | [ONTOLOGY.html](ONTOLOGY.html) | **Ontology** — typed object/link schema, coercing extraction validation, the NL author agent, `/ontology` |
 | [RULES_ENGINE.html](RULES_ENGINE.html) | **Business Rules Engine** — the DSL, semantic `sim()` matching, the pre-emit gate, the NL author agent, `/rules` |
+| [ACTIONS.html](ACTIONS.html) | **Action Layer** — executable operations bound to object types, the invoke → rules gate → audit pipeline, SSRF-guarded handlers, `/actions` |
 
 ## Reference (this set)
 

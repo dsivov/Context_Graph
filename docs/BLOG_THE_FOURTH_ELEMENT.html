@@ -730,10 +730,12 @@ end</code></pre>
       <a href="ONTOLOGY.html">ontology guide</a>.</p>
     </div>
     <div class="card">
-      <div class="kicker" style="color:var(--ctrl)">Beyond</div>
-      <h3 style="margin-top:2px">Actions &amp; access</h3>
-      <p class="small">Executable operations bound to objects, deterministic inference, object-level access control, and
-      agents that discover the actions they're permitted to take and plan over them.</p>
+      <div class="kicker" style="color:var(--b)">Now shipping</div>
+      <h3 style="margin-top:2px"><a href="ACTIONS.html">Action layer</a></h3>
+      <p class="small">Executable operations bound to object types (<code>ApproveOrder</code>), invoked over REST,
+      authorized by the rules gate and written back as an audit edge — turning a graph you reason <i>from</i> into one
+      you operate <i>from</i>. Live now; next come object-level access control and agent action-discovery — see the
+      <a href="ACTIONS.html">action layer guide</a>.</p>
     </div>
   </div>
 
@@ -783,8 +785,9 @@ answer = <span class="kw">await</span> cg.<span class="fn">cgr3_query</span>(<sp
     <b><a href="CONTEXT_GRAPH_OVERVIEW.html">Context Graph — Technical Field Guide</a></b> is the full reference:
     architecture, the quadruple, ingestion, CGR3, the REST API, MCP, storage, and multi-tenancy, with diagrams.
     Per-feature walkthroughs: <a href="RULES_ENGINE.html">Business Rules Engine</a> ·
-    <a href="ONTOLOGY.html">Ontology</a> · <a href="SCRAPER.html">Web Ingester</a>. The full gap analysis and build
-    log live in <a href="CLOSING_THE_GAPS.html">Closing the Gaps</a>.
+    <a href="ONTOLOGY.html">Ontology</a> · <a href="ACTIONS.html">Action Layer</a> ·
+    <a href="SCRAPER.html">Web Ingester</a>. The full gap analysis and build log live in
+    <a href="CLOSING_THE_GAPS.html">Closing the Gaps</a>.
   </div>
 </section>
 

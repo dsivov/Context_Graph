@@ -87,7 +87,8 @@ h2{font-size:clamp(21px,3vw,27px);margin:0 0 4px;line-height:1.15}
     <h1>Context Graph</h1>
     <p class="lede">A decision-aware knowledge-graph system built on LightRAG. It extends triples <code>(h, r, t)</code>
       into contextual quadruples <code>(h, r, t, rc)</code> — attaching the decision record (who, why, when, under which
-      policy) to every edge — and adds CGR3 reasoning, a business rules engine, a typed ontology, and web ingestion.</p>
+      policy) to every edge — and adds CGR3 reasoning, a business rules engine, a typed ontology, web ingestion, and a
+      governed action layer.</p>
     <div class="byline">Built on <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a>
       (HKUDS) · source on <a href="https://github.com/dsivov/Context_Graph" target="_blank" rel="noopener">GitHub</a> ·
       supported by <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a></div>
@@ -129,8 +130,8 @@ h2{font-size:clamp(21px,3vw,27px);margin:0 0 4px;line-height:1.15}
   <section>
     <div class="kicker">Feature guides</div>
     <h2>The productisation layer</h2>
-    <p class="sec-sub">Governance and ingestion — each with its own illustrated walkthrough.</p>
-    <div class="grid g3">
+    <p class="sec-sub">Governance, ingestion, and execution — each with its own illustrated walkthrough.</p>
+    <div class="grid g2">
       <a class="doc c" href="RULES_ENGINE.html">
         <div class="eyebrow-sm">Governance</div>
         <h3>Business Rules Engine <span class="arrow">→</span></h3>
@@ -148,6 +149,12 @@ h2{font-size:clamp(21px,3vw,27px);margin:0 0 4px;line-height:1.15}
         <h3>Web Ingester <span class="arrow">→</span></h3>
         <p>Point it at any site. A polite crawler, pluggable platform connectors, and LLM-guided acquisition — with the
           source URL carried through as provenance.</p>
+      </a>
+      <a class="doc b" href="ACTIONS.html">
+        <div class="eyebrow-sm">Execution</div>
+        <h3>Action Layer <span class="arrow">→</span></h3>
+        <p>Executable operations bound to object types. Invoke → rules gate → audit edge, with SSRF-guarded handlers —
+          turning a graph you reason from into one you operate from.</p>
       </a>
     </div>
   </section>
@@ -202,8 +209,9 @@ h2{font-size:clamp(21px,3vw,27px);margin:0 0 4px;line-height:1.15}
   <div class="callout">
     <div class="clabel">Getting started</div>
     Set <code>USE_CONTEXT_GRAPH=true</code>, start <code>lightrag-server</code> (port 9621), and open the WebUI — the
-    <b>Rules</b> and <b>Ontology</b> tabs manage governance, and <code>POST /scrape</code> pulls a website into the
-    graph. Full setup lives in the <a href="https://github.com/dsivov/Context_Graph#readme" target="_blank" rel="noopener">README</a>.
+    <b>Rules</b> and <b>Ontology</b> tabs manage governance, <code>POST /scrape</code> pulls a website into the graph,
+    and <code>POST /actions/invoke</code> runs governed operations. Full setup lives in the
+    <a href="https://github.com/dsivov/Context_Graph#readme" target="_blank" rel="noopener">README</a>.
   </div>
 
 </div>

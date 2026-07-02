@@ -18,7 +18,7 @@ The result is a *system of decision*, not just a system of record: a living, que
 - [Document Ingestion](#document-ingestion)
 - [Web Ingestion](#web-ingestion)
 - [Real-Time Decision Capture](#real-time-decision-capture)
-- [Governance: Rules & Ontology](#governance-rules--ontology)
+- [Governance & Actions](#governance--actions)
 - [Querying](#querying)
 - [REST API](#rest-api)
 - [Integration Patterns](#integration-patterns)
@@ -388,9 +388,9 @@ The `decision_trace` text is immediately indexed in the `decisions` vector store
 
 ---
 
-## Governance: Rules & Ontology
+## Governance & Actions
 
-Two workspace-scoped layers turn a graph that *remembers* decisions into one that *governs* them. Both are managed from the WebUI (the **Rules** and **Ontology** tabs) or over REST.
+Workspace-scoped layers turn a graph that *remembers* decisions into one that *governs* them — and, with the action layer, one you *operate from*. Rules and Ontology are managed from the WebUI (the **Rules** and **Ontology** tabs) or over REST; actions are managed and invoked over REST.
 
 ### Business Rules Engine
 
@@ -413,7 +413,30 @@ Describe a policy in plain English and `POST /rules/generate` writes the DSL, de
 
 A **typed schema** for the workspace — object types and directed link types, each with typed properties — that every extraction is validated against. Validation is *coercing*: the same pass that checks a record normalizes it (`"$25,000"` → `25000.0`, `"20%"` → `0.2`), which is what gives the rules engine real numbers to reason over instead of free text. Open-world by default (unknown types warn); closed-world rejects them. `POST /ontology/generate` drafts a schema from a domain description. See [`docs/ONTOLOGY.html`](docs/ONTOLOGY.html).
 
-> Both features require `USE_CONTEXT_GRAPH=true` and return **HTTP 503** otherwise.
+### Action Layer
+
+**Executable operations bound to object types** — `ApproveOrder`, `CancelShipment`. Invoking one turns a graph you reason *from* into one you operate *from*: it validates the typed arguments (reusing the ontology's coercing kinds), **authorizes and records the execution through the rules gate** (`emit_decision_trace`), and — only on `PASS`/`FLAG` — runs an optional side effect. The audit edge written to the graph *is* the record of the executed action, so actions are governed exactly like any other decision.
+
+```bash
+# Register a catalog, then invoke — the rules gate authorizes before the side effect
+curl -X POST http://localhost:9621/actions -H "LIGHTRAG-WORKSPACE: sales" \
+  -H "Content-Type: application/json" -d '{"catalog":{"name":"sales","actions":[
+    {"name":"ApproveOrder","object_type":"Order","relation_type":"APPROVED",
+     "params":[{"name":"discount","kind":"percent","required":true}]}]}}'
+
+curl -X POST http://localhost:9621/actions/invoke -H "LIGHTRAG-WORKSPACE: sales" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"ApproveOrder","actor":"Sarah","object_ref":"Order#123","args":{"discount":"20%"}}'
+# -> outcome FLAG · audit rule "large discount review" · edge Sarah -APPROVED-> Order#123
+```
+
+- **Governed by construction** — the gate runs *first*, so a `REJECT` (mapped to HTTP 422) never fires the side effect.
+- **Typed arguments** — money/percent args are coerced and rendered into `quantitative_data`, so rules reason over them.
+- **SSRF-guarded handlers** — `none` (record-only) or `webhook`; webhooks refuse loopback/private hosts unless `allow_internal`.
+
+> 📖 Full guide: [`docs/ACTIONS.html`](docs/ACTIONS.html)
+
+> These features require `USE_CONTEXT_GRAPH=true` and return **HTTP 503** otherwise.
 
 ---
 
@@ -535,6 +558,8 @@ Start the server with `USE_CONTEXT_GRAPH=true`. All endpoints below return **HTT
 | `POST` | `/rules/evaluate` · `/rules/toggle` · `/rules/generate` | Dry-run, enable/disable, or author rules from plain English |
 | `GET`/`POST`/`DELETE` | `/ontology` | Get, save, or delete the workspace ontology |
 | `POST` | `/ontology/generate` · `/ontology/validate` | Author a schema from a description; validate extractions |
+| `GET`/`POST`/`DELETE` | `/actions` | Get, save, or delete the workspace action catalog |
+| `GET`/`POST` | `/actions/{name}` · `/actions/invoke` | Fetch one action; invoke an action (validate → gate → side effect) |
 
 ---
 
@@ -1148,6 +1173,7 @@ Context Graph implements the **CGR3 (Context Graphs with Retrieve-Rank-Reason)**
 | **Business Rules Engine** | Pre-emit governance gate — DSL + semantic `sim()`, PASS/FLAG/REJECT, NL policy author |
 | **Ontology** | Per-workspace typed schema, coercing extraction validation, NL schema author |
 | **Web ingestion** | Polite crawler + pluggable connectors that pull any site into the graph with URL provenance |
+| **Action layer** | Executable operations bound to object types; invoke → rules gate → audit edge, with SSRF-guarded handlers |
 
 ---
 
@@ -1173,7 +1199,8 @@ lightrag/
 │       ├── context_graph_routes.py  — CG API endpoints (CGR3, decisions)
 │       ├── rules_routes.py     — Business Rules Engine API (/rules)
 │       ├── ontology_routes.py  — Ontology API (/ontology)
-│       └── webingest_routes.py — Web ingestion API (/scrape)
+│       ├── webingest_routes.py — Web ingestion API (/scrape)
+│       └── actions_routes.py   — Action layer API (/actions)
 ├── kg/                         — Storage backend implementations
 │   ├── neo4j_impl.py           — Neo4j graph storage (workspace-aware)
 │   ├── networkx_impl.py        — In-memory NetworkX graph
@@ -1187,10 +1214,11 @@ lightrag/
     ├── anthropic.py            — Anthropic Claude
     └── ...                     — Azure, Gemini, Bedrock, HF, NVIDIA
 
-context_graph/                  — Governance & ingestion packages
+context_graph/                  — Governance, ingestion & action packages
 ├── rules/                      — Business Rules Engine (DSL, gate, sim(), NL author)
 ├── ontology/                   — Typed schema, validation, NL author
-└── webingest/                  — Polite crawler + pluggable site connectors
+├── webingest/                  — Polite crawler + pluggable site connectors
+└── actions/                    — Executable operations bound to object types, governed by the gate
 
 tests/
 ├── test_context_graph.py       — Core CG unit tests (44 tests)
@@ -1201,6 +1229,7 @@ docs/
 ├── SCRAPER.html                — Web Ingester field guide
 ├── ONTOLOGY.html               — Ontology field guide
 ├── RULES_ENGINE.html           — Business Rules Engine field guide
+├── ACTIONS.html                — Action layer field guide
 ├── BLOG_THE_FOURTH_ELEMENT.html — Narrative intro to Context Graph
 ├── CONTEXT_GRAPH_OVERVIEW.html — Illustrated technical field guide
 ├── INDEX.md                    — Documentation index
@@ -1215,4 +1244,4 @@ docs/
 
 ## Based On
 
-Context Graph implements the [CGR3 paradigm](https://arxiv.org/abs/2406.11160) (Liang et al., 2024) — extending knowledge graph triples into contextual quadruples `(h, r, t, rc)` with Retrieve→Rank→Reason iterative query processing. Built on [LightRAG](https://github.com/HKUDS/LightRAG) by HKUDS, with production extensions for multi-tenancy, real-time decision capture, a Business Rules Engine, a typed ontology layer, and web ingestion.
+Context Graph implements the [CGR3 paradigm](https://arxiv.org/abs/2406.11160) (Liang et al., 2024) — extending knowledge graph triples into contextual quadruples `(h, r, t, rc)` with Retrieve→Rank→Reason iterative query processing. Built on [LightRAG](https://github.com/HKUDS/LightRAG) by HKUDS, with production extensions for multi-tenancy, real-time decision capture, a Business Rules Engine, a typed ontology layer, web ingestion, and a governed action layer.

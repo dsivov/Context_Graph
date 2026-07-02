@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Action Layer — From Reasoning to Doing</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(25,184,154,.11), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(62,207,142,.07), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(25,184,154,.08),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(32px,5.5vw,54px);line-height:1.04;margin:.3em 0 .25em;
+  background:linear-gradient(92deg,#8fd9c9,#7ee3b4 50%,#cfe0ff);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}
+.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:230px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(25,184,154,.18),transparent);color:#fff;border-left:2px solid var(--b)}
+
+main{min-width:0;max-width:760px}
+article section{margin:0 0 52px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--b);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}
+p{margin:.7em 0}
+.lead-p{font-size:19px;color:var(--ink)}
+.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--b);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)} .callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)} .callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(25,184,154,.55);background:rgba(25,184,154,.10)} .callout.key .clabel{color:#7fe3cf}
+
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--b)}
+.stat.a::after{background:var(--a)} .stat.c::after{background:var(--c)} .stat.danger::after{background:var(--danger)}
+.stat .v{font-size:30px;font-weight:800;letter-spacing:-.02em} .stat .l{color:var(--ink-faint);font-size:13px;margin-top:3px}
+
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:540px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+
+figure{margin:22px 0}
+figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px} figcaption b{color:var(--ink-soft)}
+
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}
+.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);
+  border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Context Graph · Feature Guide</div>
+    <h1>The Action Layer</h1>
+    <p class="lede">A graph that only records decisions is a filing cabinet. Bind executable operations to your object
+      types and it becomes a control plane — an agent can <i>do</i> things (approve, cancel, escalate), each one
+      validated, authorized by your rules, and written back as its own audit record.</p>
+    <div class="byline">A developer's guide to <code>/actions</code> · the invoke pipeline, handlers, and governed
+      execution · part of <a href="BLOG_THE_FOURTH_ELEMENT.html">Context Graph</a></div>
+    <div class="hero-tags">
+      <span class="tag"><b>typed</b> operations</span>
+      <span class="tag">bound to <b>object types</b></span>
+      <span class="tag">validate &rarr; gate &rarr; do</span>
+      <span class="tag">PASS · FLAG · REJECT</span>
+      <span class="tag"><b>audited</b> by design</span>
+      <span class="tag">SSRF-guarded handlers</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this guide</div>
+  <ol>
+    <li><a href="#what">What it does</a></li>
+    <li><a href="#anatomy">Anatomy of an action</a></li>
+    <li><a href="#args">Typed arguments</a></li>
+    <li><a href="#invoke">The invoke pipeline</a></li>
+    <li><a href="#handlers">Handlers &amp; side effects</a></li>
+    <li><a href="#api">The /actions API</a></li>
+    <li><a href="#arc">Where it sits</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="what">
+  <div class="kicker">The purpose</div>
+  <h2>What it does</h2>
+  <p class="lead-p">The first three layers made the graph <i>remember</i> decisions, reason over them, and govern them.
+  The action layer lets it <b>act on them</b> — turning a system you reason <i>from</i> into one you operate <i>from</i>.</p>
+
+  <p>An <b>action</b> is a named, typed operation bound to an ontology object type — <code>ApproveOrder</code>,
+  <code>CancelShipment</code>, <code>EscalateTicket</code>. Invoking one runs a short, strict pipeline: validate the
+  typed arguments, <b>authorize and record the execution through the business-rules gate</b>, and — only if the gate
+  didn't reject it — run an optional side effect. The audit edge written to the graph <i>is</i> the record of the
+  executed action.</p>
+
+  <div class="callout key">
+    <div class="clabel">◆ The one idea</div>
+    Execution reuses the decision machinery you already have. An action is emitted through the same
+    <code>emit_decision_trace</code> path as any decision, so it flows through the same
+    <a href="RULES_ENGINE.html">rules gate</a> and leaves the same kind of auditable edge. You don't bolt governance
+    onto actions — actions <i>are</i> governed decisions that happen to also do something.
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="anatomy">
+  <div class="kicker">The definition</div>
+  <h2>Anatomy of an action</h2>
+  <p>Actions live in a per-workspace <b>catalog</b>. Each definition names the operation, the object type it acts on,
+  the relationship it writes, its typed parameters, and how its side effect executes:</p>
+
+  <pre><code>{
+  <span class="str">"name"</span>: <span class="str">"sales"</span>,
+  <span class="str">"actions"</span>: [
+    {
+      <span class="str">"name"</span>: <span class="str">"ApproveOrder"</span>,
+      <span class="str">"object_type"</span>: <span class="str">"Order"</span>,       <span class="cm">// the ontology type it acts on</span>
+      <span class="str">"relation_type"</span>: <span class="str">"APPROVED"</span>,   <span class="cm">// edge keyword written on invoke</span>
+      <span class="str">"effect"</span>: <span class="str">"approval"</span>,          <span class="cm">// human label of the side effect</span>
+      <span class="str">"policy_ref"</span>: <span class="str">"DiscountPolicy"</span>,
+      <span class="str">"params"</span>: [
+        { <span class="str">"name"</span>: <span class="str">"discount"</span>, <span class="str">"kind"</span>: <span class="str">"percent"</span>, <span class="str">"required"</span>: <span class="kw">true</span> }
+      ],
+      <span class="str">"handler"</span>: { <span class="str">"kind"</span>: <span class="str">"none"</span> }   <span class="cm">// none | webhook</span>
+    }
+  ]
+}</code></pre>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>name</code></td><td>The operation's name. Also the default relationship keyword (upper-cased) if <code>relation_type</code> is omitted.</td></tr>
+      <tr><td><code>object_type</code></td><td>The <a href="ONTOLOGY.html">ontology</a> object type the action operates on. Empty means "any".</td></tr>
+      <tr><td><code>relation_type</code></td><td>The keyword written to the graph edge on invoke — the same field a rule matches with <code>sim()</code>.</td></tr>
+      <tr><td><code>params</code></td><td>Typed arguments, using the same property <code>kind</code>s as the ontology. Validated + coerced on invoke.</td></tr>
+      <tr><td><code>handler</code></td><td>How the side effect runs: <code>none</code> (record-only) or <code>webhook</code>.</td></tr>
+      <tr><td><code>policy_ref</code></td><td>Recorded onto the audit edge's RelationContext.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="small">The catalog is persisted per workspace, one atomic JSON file, versioned on every save — exactly like the
+  rules policy and the ontology.</p>
+</section>
+
+<!-- 3 -->
+<section id="args">
+  <div class="kicker">Type safety</div>
+  <h2>Typed arguments</h2>
+  <p class="lead-p">An action's parameters reuse the ontology's property kinds, so they validate and <b>coerce</b>
+  identically — the same pass that checks an argument normalises it.</p>
+
+  <p>Invoke <code>ApproveOrder</code> with a human-shaped discount and it becomes a real number:</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Argument in</th><th>Kind</th><th>Coerced value</th></tr></thead>
+    <tbody>
+      <tr><td><code>"20%"</code></td><td><span class="pill b">percent</span></td><td><code>0.20</code></td></tr>
+      <tr><td><code>"$25,000"</code></td><td><span class="pill b">money</span></td><td><code>25000.0</code></td></tr>
+      <tr><td><code>"slack"</code></td><td><span class="pill ctrl">enum</span> <span class="small">[slack, email]</span></td><td><code>"slack"</code> (or an error if not a member)</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Missing a required argument, or a value that won't coerce or falls outside an enum/range, comes back as a precise
+  error before anything is written:</p>
+  <pre><code>validate_args({ <span class="str">"amount"</span>: <span class="str">"not money"</span> })
+   &rarr; errors: [ <span class="str">"missing required argument 'discount'"</span>,
+                <span class="str">"amount: could not parse money from 'not money'"</span> ]</code></pre>
+
+  <div class="callout ok">
+    <div class="clabel">Why coercion matters here</div>
+    Because money/percent arguments are coerced, they're also rendered into the decision's
+    <code>quantitative_data</code> in a form the rules gate can read — so a rule like <code>percent &gt; 0.15</code>
+    fires on an <i>action's arguments</i>, not just on text extracted from documents.
+  </div>
+</section>
+
+<!-- 4 -->
+<section id="invoke">
+  <div class="kicker">Execution</div>
+  <h2>The invoke pipeline</h2>
+  <p>One call, four steps, in this order — the ordering is the whole point:</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 210" role="img" aria-label="The invoke pipeline">
+      <defs><marker id="arh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .bx{rx:10;stroke:#39425a;stroke-width:1}
+        .t{fill:#e7ebf3;font:13px "Segoe UI",sans-serif} .ts{fill:#aab3c5;font:11px "Segoe UI",sans-serif}
+        .ln{stroke:#8a93a8;stroke-width:1.8;fill:none;marker-end:url(#arh)}
+      </style>
+      <rect class="bx" x="10" y="12" width="150" height="42" fill="#173a34"/>
+      <text class="t" x="85" y="30" text-anchor="middle">1 · validate args</text>
+      <text class="ts" x="85" y="46" text-anchor="middle">coerce · required · enum</text>
+      <line class="ln" x1="85" y1="54" x2="85" y2="72"/>
+      <rect class="bx" x="10" y="74" width="150" height="42" fill="#3a2f17"/>
+      <text class="t" x="85" y="92" text-anchor="middle">2 · rules gate</text>
+      <text class="ts" x="85" y="108" text-anchor="middle">emit_decision_trace</text>
+      <line class="ln" x1="160" y1="95" x2="205" y2="95"/>
+      <rect class="bx" x="207" y="10" width="150" height="34" fill="#3a1a20"/><text class="t" x="282" y="32" text-anchor="middle">REJECT → stop</text>
+      <line class="ln" x1="282" y1="74" x2="282" y2="46"/>
+      <line class="ln" x1="85" y1="116" x2="85" y2="134"/>
+      <rect class="bx" x="10" y="136" width="150" height="42" fill="#13251f"/>
+      <text class="t" x="85" y="154" text-anchor="middle">3 · side effect</text>
+      <text class="ts" x="85" y="170" text-anchor="middle">handler (PASS/FLAG only)</text>
+      <line class="ln" x1="160" y1="157" x2="470" y2="157"/>
+      <rect class="bx" x="472" y="80" width="238" height="52" fill="#1a2236"/>
+      <text class="t" x="591" y="102" text-anchor="middle">4 · audit edge on the graph</text>
+      <text class="ts" x="591" y="120" text-anchor="middle">provenance = action:ApproveOrder</text>
+      <line class="ln" x1="282" y1="116" x2="480" y2="116"/>
+    </svg>
+    <figcaption><b>The gate runs before the side effect.</b> A REJECTed action writes nothing and never fires its
+      handler; a PASS/FLAG persists the audit edge, then runs the effect.</figcaption>
+  </div></figure>
+
+  <p>The response tells you exactly what happened — the outcome, the audit, the edge that was written, and the handler
+  result:</p>
+  <pre><code>POST /actions/invoke  →  <span class="num">200</span> {
+  <span class="str">"ok"</span>: <span class="kw">true</span>,
+  <span class="str">"outcome"</span>: <span class="str">"FLAG"</span>,
+  <span class="str">"edge"</span>: { <span class="str">"src"</span>: <span class="str">"Sarah"</span>, <span class="str">"tgt"</span>: <span class="str">"Order#123"</span>, <span class="str">"relation_type"</span>: <span class="str">"APPROVED"</span> },
+  <span class="str">"coerced"</span>: { <span class="str">"discount"</span>: <span class="num">0.2</span> },
+  <span class="str">"audit"</span>: { <span class="str">"rule"</span>: <span class="str">"large discount review"</span>, <span class="str">"matched_concept"</span>: <span class="str">"APPROVAL"</span>,
+             <span class="str">"score"</span>: <span class="num">1.0</span>, <span class="str">"threshold"</span>: <span class="num">0.4</span> },
+  <span class="str">"handler"</span>: { <span class="str">"kind"</span>: <span class="str">"none"</span>, <span class="str">"executed"</span>: <span class="kw">false</span> }
+}</code></pre>
+
+  <div class="callout caveat">
+    <div class="clabel">◆ Authorize before you act</div>
+    Running the gate <i>first</i> is what makes actions safe: a decision your rules would reject — a discount over
+    policy, an out-of-hours cancellation — never reaches the side effect. REJECT surfaces as HTTP&nbsp;422 and nothing
+    is written or done.
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="handlers">
+  <div class="kicker">Side effects</div>
+  <h2>Handlers &amp; side effects</h2>
+  <p>A handler is how an authorized action reaches the outside world. Two kinds ship today:</p>
+  <div class="grid g2">
+    <div class="card"><b><span class="pill b">none</span> — record-only.</b><br>
+      The audited decision trace <i>is</i> the effect. Perfect for capturing that an approval happened, integrating with
+      systems that watch the graph, or a first, safe rollout.</div>
+    <div class="card"><b><span class="pill b">webhook</span> — call out.</b><br>
+      POSTs the invocation payload (action, actor, object, coerced args, outcome) to a URL. This is where an action
+      actually fires a downstream system.</div>
+  </div>
+
+  <div class="callout caveat">
+    <div class="clabel">SSRF-guarded by default</div>
+    A server that POSTs to operator-supplied URLs is an SSRF risk, so the webhook handler resolves the target host and
+    <b>refuses</b> loopback, private, link-local, reserved, and multicast addresses — and non-<code>http(s)</code>
+    schemes — unless the action's handler explicitly sets <code>allow_internal: true</code> for trusted internal
+    automation. A blocked or failing webhook is <i>reported</i> in the response, never crashes the invoke, and never
+    un-writes the audit edge.
+  </div>
+</section>
+
+<!-- 6 -->
+<section id="api">
+  <div class="kicker">The interface</div>
+  <h2>The /actions API</h2>
+  <p>Workspace-scoped via <code>LIGHTRAG-WORKSPACE</code>; returns <code>503</code> unless the server runs in Context
+  Graph mode (<code>USE_CONTEXT_GRAPH=true</code>).</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Method · Path</th><th>Purpose</th><th>Returns</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill b">GET</span> <code>/actions</code></td><td>Catalog summary</td><td>Actions + params + versions</td></tr>
+      <tr><td><span class="pill b">POST</span> <code>/actions</code></td><td>Save the catalog (validated)</td><td>Summary (<code>400</code> if malformed)</td></tr>
+      <tr><td><span class="pill b">DELETE</span> <code>/actions</code></td><td>Delete the catalog</td><td><code>{deleted, workspace}</code></td></tr>
+      <tr><td><span class="pill b">GET</span> <code>/actions/{name}</code></td><td>One action's definition</td><td>Definition (<code>404</code> if unknown)</td></tr>
+      <tr><td><span class="pill b">POST</span> <code>/actions/invoke</code></td><td>Run an action</td><td>Result — unknown&nbsp;<code>404</code>, bad args&nbsp;<code>400</code>, REJECT&nbsp;<code>422</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <pre><code><span class="cm"># Register a catalog, then invoke an action</span>
+curl -X POST http://localhost:9621/actions \
+  -H <span class="str">"LIGHTRAG-WORKSPACE: sales"</span> -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"catalog":{"name":"sales","actions":[
+       {"name":"ApproveOrder","object_type":"Order","relation_type":"APPROVED",
+        "params":[{"name":"discount","kind":"percent","required":true}]}]}}'</span>
+
+curl -X POST http://localhost:9621/actions/invoke \
+  -H <span class="str">"LIGHTRAG-WORKSPACE: sales"</span> -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"action":"ApproveOrder","actor":"Sarah","object_ref":"Order#123","args":{"discount":"20%"}}'</span>
+<span class="cm"># -> outcome FLAG · audit rule "large discount review" · edge Sarah -APPROVED-> Order#123</span></code></pre>
+</section>
+
+<!-- 7 -->
+<section id="arc">
+  <div class="kicker">The stack</div>
+  <h2>Where it sits</h2>
+  <p class="lead-p">The action layer is the top of a deliberate arc — each layer standing on the one below.</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Layer</th><th>What it added</th></tr></thead>
+    <tbody>
+      <tr><td>Facts</td><td>The triple <code>(h, r, t)</code> — what is true.</td></tr>
+      <tr><td>Decisions</td><td>The <code>rc</code> — why, who, when, under which policy.</td></tr>
+      <tr><td><a href="RULES_ENGINE.html">Policy</a></td><td>The gate — whether a decision is allowed.</td></tr>
+      <tr><td><a href="ONTOLOGY.html">Ontology</a></td><td>Typed vocabulary — the object types actions bind to.</td></tr>
+      <tr><td><b>Actions</b></td><td>Executable, governed operations — turning memory into <i>doing</i>.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">◆ What's next</div>
+    This is the first slice of the P3 "action / kinetic layer." The sequenced follow-ons: a plain-English action
+    author (like the <a href="RULES_ENGINE.html">rules</a> and <a href="ONTOLOGY.html">ontology</a> guides describe),
+    object-level access control over who may invoke what, exposing the catalogue over MCP for agent
+    action-discovery, and a planner that assembles multi-step workflows over the typed graph. Fill the graph with the
+    <a href="SCRAPER.html">Web Ingester</a>; start with <a href="BLOG_THE_FOURTH_ELEMENT.html">The Fourth Element</a>.
+  </div>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  A feature guide for Context Graph's action layer — executable operations bound to object types, governed by the rules
+  gate, audited on the graph. Built on <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a>
+  (HKUDS). Supported by <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>. Code examples are
+  illustrative; identifiers and endpoints are from the project source.
+</footer>
+
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('nav.toc a')), map={};
+  links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id); if(el)map[id]=a;});
+  var obs=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}
+  });},{rootMargin:'-20% 0px -70% 0px',threshold:0});
+  Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});
+  var btt=document.getElementById('btt');
+  window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});
+})();
+</script>
+</body>
+</html>

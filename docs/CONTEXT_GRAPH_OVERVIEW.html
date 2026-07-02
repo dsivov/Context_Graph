@@ -180,7 +180,7 @@ pre code{color:#d6deec}
 <!-- 2 -->
 <section id="components">
   <h2><span class="sec-num">02</span> Components at a glance</h2>
-  <p class="sec-sub">Eight moving parts, eight jobs.</p>
+  <p class="sec-sub">Nine moving parts, nine jobs.</p>
   <div class="tablewrap"><table>
     <thead><tr><th>Component</th><th>Job</th><th>Where</th></tr></thead>
     <tbody>
@@ -191,16 +191,17 @@ pre code{color:#d6deec}
       <tr><td><span class="pill cg">Business Rules Engine</span></td><td>Pre-emit governance gate — DSL + semantic <code>sim()</code>, PASS/FLAG/REJECT, NL author. <a href="RULES_ENGINE.html">Guide →</a></td><td class="mono">context_graph/rules/</td></tr>
       <tr><td><span class="pill cg">Ontology</span></td><td>Per-workspace typed schema; coercing extraction validation; NL author. <a href="ONTOLOGY.html">Guide →</a></td><td class="mono">context_graph/ontology/</td></tr>
       <tr><td><span class="pill cg">Web ingester</span></td><td>Polite crawler + pluggable site connectors; pulls any site in with URL provenance. <a href="SCRAPER.html">Guide →</a></td><td class="mono">context_graph/webingest/</td></tr>
+      <tr><td><span class="pill cg">Action layer</span></td><td>Executable operations bound to object types; invoke → rules gate → audit edge. <a href="ACTIONS.html">Guide →</a></td><td class="mono">context_graph/actions/</td></tr>
       <tr><td><span class="pill std">LightRAG core</span></td><td>Chunking, extraction, embeddings, storage, query modes (inherited).</td><td class="mono">lightrag/lightrag.py · operate.py · kg/</td></tr>
     </tbody>
   </table></div>
 
   <div class="callout key">
     <div class="clabel">◆ Feature field guides</div>
-    Three subsystems have their own illustrated walkthroughs, in this same set:
+    Four subsystems have their own illustrated walkthroughs, in this same set:
     <a href="SCRAPER.html">Web Ingester</a> · <a href="ONTOLOGY.html">Ontology</a> ·
-    <a href="RULES_ENGINE.html">Business Rules Engine</a>. The narrative intro is
-    <a href="BLOG_THE_FOURTH_ELEMENT.html">The Fourth Element</a>.
+    <a href="RULES_ENGINE.html">Business Rules Engine</a> · <a href="ACTIONS.html">Action Layer</a>. The narrative
+    intro is <a href="BLOG_THE_FOURTH_ELEMENT.html">The Fourth Element</a>.
   </div>
 </section>
 
@@ -436,6 +437,8 @@ answer = <span class="kw">await</span> cg.<span class="fn">cgr3_query</span>(<sp
       <tr><td><span class="pill m-post">POST</span></td><td class="mono">/rules/evaluate · /rules/toggle · /rules/generate</td><td>Dry-run · enable/disable · author from plain English. <a href="RULES_ENGINE.html">Guide →</a></td></tr>
       <tr><td><span class="pill m-get">GET</span> · <span class="pill m-post">POST</span> · <span class="pill m-post">DELETE</span></td><td class="mono">/ontology</td><td>Get, save, or delete the workspace ontology</td></tr>
       <tr><td><span class="pill m-post">POST</span></td><td class="mono">/ontology/generate · /ontology/validate</td><td>Author a schema from a description · validate extractions. <a href="ONTOLOGY.html">Guide →</a></td></tr>
+      <tr><td><span class="pill m-get">GET</span> · <span class="pill m-post">POST</span> · <span class="pill m-post">DELETE</span></td><td class="mono">/actions</td><td>Get, save, or delete the workspace action catalog</td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td class="mono">/actions/invoke</td><td>Invoke an action: validate → rules gate → side effect → audit. <a href="ACTIONS.html">Guide →</a></td></tr>
     </tbody>
   </table></div>
 
@@ -552,11 +555,12 @@ lightrag/<br>
 &nbsp;└─ <span class="d">api/</span><br>
 &nbsp;&nbsp;&nbsp;├─ <span class="d">lightrag_server.py</span> <span class="note"># FastAPI app, routes, workspace middleware</span><br>
 &nbsp;&nbsp;&nbsp;├─ <span class="d">mcp_server.py</span> <span class="note"># MCP server (8 tools, X-API-Key)</span><br>
-&nbsp;&nbsp;&nbsp;└─ <span class="d">routers/</span> <span class="note"># context_graph_routes · rules_routes · ontology_routes · webingest_routes</span><br>
+&nbsp;&nbsp;&nbsp;└─ <span class="d">routers/</span> <span class="note"># context_graph · rules · ontology · webingest · actions routes</span><br>
 context_graph/ <span class="note"># governance &amp; ingestion packages</span><br>
 &nbsp;├─ <span class="d">rules/</span> <span class="note"># Business Rules Engine — DSL, gate, sim(), NL author</span><br>
 &nbsp;├─ <span class="d">ontology/</span> <span class="note"># typed schema, coercing validation, NL author</span><br>
-&nbsp;└─ <span class="d">webingest/</span> <span class="note"># polite crawler + pluggable site connectors</span><br>
+&nbsp;├─ <span class="d">webingest/</span> <span class="note"># polite crawler + pluggable site connectors</span><br>
+&nbsp;└─ <span class="d">actions/</span> <span class="note"># executable operations bound to object types, governed by the gate</span><br>
 docs/ <span class="note"># this guide, the blog, per-feature guides, the paper, deployment</span><br>
 tests/ <span class="note"># test_context_graph · test_context_graph_api · test_mcp_server</span>
   </div>
