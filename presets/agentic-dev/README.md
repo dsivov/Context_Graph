@@ -16,7 +16,7 @@ See the design discussion in [`../../docs/AGENTIC_PROJECT_GRAPH.html`](../../doc
 | `rules.json` | `POST /rules` | ✅ 4-rule methodology gate (reuse nudge, deprecation, arch rationale, low-confidence); validated live. Advisory by default (FLAG/NOTIFY) — hard invariants go to the lifecycle layer, access control to RBAC |
 | `actions.json` | `POST /actions` | ✅ 6 governed operations (ProposeAPI, AdvanceTask, CreateChangeRequest, ApproveArchitecture, DeprecateAPI, MergeToMain). Relation types chosen so the gate fires; validated live end-to-end |
 | `seed.json` | `POST /graph/entity/create` + `/graph/relation/create` | ✅ 22 entities (6 Roles, 6 Skills, 4 sample Modules, 6 sample APIs) + 21 relations (owns · exposes · depends_on · has_skill · applies_to). Validates 43/43 against the ontology |
-| `rbac.json` | (P3 RBAC) | ⏳ pending the RBAC layer |
+| `rbac.json` | `POST /rbac` | ✅ role → grants for the six roles (manager `*`, production-engineer `invoke:MergeToMain`, …). Opt-in + deny-by-default within the policy; absent = permissive. Gates `/actions/invoke`; validated live |
 | `lifecycle.json` | (P3 lifecycle) | ⏳ pending the lifecycle layer |
 
 ## Install

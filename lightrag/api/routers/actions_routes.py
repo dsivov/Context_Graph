@@ -20,10 +20,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from lightrag.api.utils_api import get_combined_auth_dependency
+from lightrag.api.utils_api import get_combined_auth_dependency, get_principal
 from lightrag.utils import logger
 
 
@@ -86,9 +86,14 @@ def _require_cg(rag) -> None:
         )
 
 
-def create_actions_routes(rag, service, *, api_key: Optional[str] = None,
+def create_actions_routes(rag, service, *, rbac_service=None, api_key: Optional[str] = None,
                           workspace_resolver=None):
-    """Build the /actions router bound to *rag* and an ActionService."""
+    """Build the /actions router bound to *rag* and an ActionService.
+
+    If *rbac_service* is provided, invoking an action is gated by a pre-check
+    (``resolve principal → RBAC → rules gate → side effect``); a workspace with
+    no RBAC policy stays permissive.
+    """
     if workspace_resolver is None:
         from lightrag.api.workspace_pool import _current_workspace
 
@@ -137,9 +142,18 @@ def create_actions_routes(rag, service, *, api_key: Optional[str] = None,
         return action
 
     @router.post("/actions/invoke", dependencies=[Depends(combined_auth)],
-                 summary="Invoke an action (validate → rules gate → side effect)")
-    async def invoke_action(request: InvokeActionRequest):
+                 summary="Invoke an action (RBAC → validate → rules gate → side effect)")
+    async def invoke_action(request: InvokeActionRequest, http_request: Request):
         _require_cg(rag)
+        # RBAC pre-check — may this authenticated principal invoke this action?
+        # The role comes from the token, never from request.actor. No policy → permissive.
+        if rbac_service is not None:
+            principal = get_principal(http_request)
+            role = principal.get("role") if principal else None
+            decision = rbac_service.check(_ws(), role, "invoke", request.action,
+                                          object_ref=request.object_ref, rag=rag)
+            if not decision.allowed:
+                raise HTTPException(status_code=403, detail=decision.reason)
         result = await service.invoke(
             rag, _ws(), request.action,
             actor=request.actor, object_ref=request.object_ref, args=request.args)

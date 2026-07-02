@@ -262,6 +262,28 @@ def get_combined_auth_dependency(api_key: Optional[str] = None):
     return combined_dependency
 
 
+def get_principal(request: Request) -> Optional[dict]:
+    """Resolve the authenticated principal ``{username, role}`` from the request's
+    bearer token, or ``None``.
+
+    The role is read **only** from the validated JWT — never from a client header
+    or a request body field — so RBAC cannot be spoofed. Non-fatal: callers treat
+    ``None`` as "no authenticated role" (RBAC denies on an RBAC-enabled workspace,
+    while a workspace with no policy stays permissive regardless).
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    token = auth_header[7:].strip()
+    if not token:
+        return None
+    try:
+        info = auth_handler.validate_token(token)
+    except Exception:
+        return None
+    return {"username": info.get("username"), "role": info.get("role")}
+
+
 def display_splash_screen(args: argparse.Namespace) -> None:
     """
     Display a colorful splash screen showing LightRAG server configuration

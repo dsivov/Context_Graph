@@ -111,7 +111,15 @@ def main() -> int:
             print(f"  ✓ actions   v{r.get('version','?')}  "
                   f"({len(r.get('actions', []))} actions)" if not args.dry_run else "  · actions (dry-run)")
 
-    # 4) seed — entities first, then relations (relations need both endpoints to exist)
+    # 4) rbac — opt-in access policy (absent = permissive)
+    rbac = load(preset_dir, "rbac.json")
+    if rbac is not None:
+        r = c.post("/rbac", {"policy": strip_comment(rbac)})
+        if not fail("rbac", r):
+            print(f"  ✓ rbac      v{r.get('version','?')}  "
+                  f"({len(r.get('roles', {}))} roles)" if not args.dry_run else "  · rbac (dry-run)")
+
+    # 5) seed — entities first, then relations (relations need both endpoints to exist)
     seed = load(preset_dir, "seed.json")
     if seed is not None:
         ents = seed.get("entities", [])

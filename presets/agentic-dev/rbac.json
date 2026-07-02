@@ -1,0 +1,12 @@
+{
+  "_comment": "Agentic-dev preset - RBAC policy (piece 5). POST wrapped as {policy:...} to /rbac. Opt-in and deny-by-default WITHIN this policy; a workspace with no rbac.json stays fully permissive (single-agent = zero config). Grants gate the /actions/invoke path. The principal's role comes from the authenticated JWT, never from a request field. See docs/RBAC_SPEC.md.",
+  "name": "rbac",
+  "roles": {
+    "manager": ["*"],
+    "architect": ["invoke:ApproveArchitecture", "invoke:ProposeAPI", "invoke:DeprecateAPI", "invoke:CreateChangeRequest"],
+    "developer": ["invoke:ProposeAPI", "invoke:AdvanceTask", "invoke:CreateChangeRequest"],
+    "integrator": ["invoke:AdvanceTask"],
+    "devop": ["invoke:AdvanceTask"],
+    "production-engineer": ["invoke:MergeToMain", "invoke:AdvanceTask"]
+  }
+}
