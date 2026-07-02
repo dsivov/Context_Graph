@@ -1,0 +1,29 @@
+{
+  "_comment": "Agentic-dev preset - methodology gate (piece 2). POST to /rules. Advisory by default (FLAG/NOTIFY): hard structural invariants belong to the lifecycle layer; access control belongs to RBAC, not to spoofable approved_by rules. Concepts are verb-focused so 'create API' and 'deprecate API' don't collide under static embeddings.",
+  "enabled": true,
+  "concepts": {
+    "API_CREATION": [
+      "create a new capability",
+      "propose a new api",
+      "add a new endpoint",
+      "build a new service",
+      "expose a new interface"
+    ],
+    "DEPRECATION": [
+      "deprecate",
+      "mark as deprecated",
+      "sunset",
+      "retire",
+      "phase out",
+      "end of life"
+    ],
+    "ARCHITECTURE": [
+      "architecture decision",
+      "design decision",
+      "system design",
+      "technology choice",
+      "adopt a framework"
+    ]
+  },
+  "dsl": "rule \"new API - confirm reuse\" priority 20\nwhen\n    sim(relation_type, \"API_CREATION\") > 0.4\nthen\n    flag(\"New API proposed - confirm no existing capability already covers it (the action layer cites precedents; a role confirms).\")\nend\n\nrule \"deprecation needs a linked decision\" priority 30\nwhen\n    sim(relation_type, \"DEPRECATION\") > 0.45\nthen\n    flag(\"Interface deprecation - link the Decision (ADR) that authorizes it before it ships.\")\nend\n\nrule \"architecture decision needs rationale\" priority 15\nwhen\n    sim(relation_type, \"ARCHITECTURE\") > 0.4\n    and evidence_count < 1\nthen\n    notify(\"Architecture decision recorded without supporting evidence - add rationale or links.\")\nend\n\nrule \"low-confidence capture needs confirmation\" priority 10\nwhen\n    confidence < 0.5\nthen\n    flag(\"Low-confidence auto-captured decision - a role should confirm it.\")\nend"
+}

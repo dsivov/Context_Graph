@@ -125,7 +125,8 @@ b.hl{color:#8fd9c9}
       tracking every decision and its reasoning, holding the current state, keeping specialised agents in sync, and
       refusing the moves that break the process?</p>
     <div class="byline">Context Graph as the methodology <b>actor</b> for multi-agent software development ·
-      a working analysis, not a spec</div>
+      a working analysis, not a spec · see the visual
+      <a href="AGENTIC_DEV_WALKTHROUGH.html">Onboarding, Flow &amp; Data</a> walkthrough</div>
     <div class="status">● Open discussion — leanings recorded, questions unresolved</div>
     <div class="hero-tags">
       <span class="tag">decisions worth remembering</span>
@@ -150,6 +151,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#methodology">Methodology as data</a></li>
     <li><a href="#example">Worked example: reuse</a></li>
     <li><a href="#sync">The sync bus</a></li>
+    <li><a href="#playbook">Onboarding &amp; playbook</a></li>
     <li><a href="#readiness">Ready vs missing</a></li>
     <li><a href="#gaps">Closing the gaps</a></li>
     <li><a href="#questions">Open questions &amp; log</a></li>
@@ -490,6 +492,92 @@ end</code></pre>
     The roles already have a channel: the <b>MCP server</b> exposes CG as tools. Manager, architect, developer, and
     integrator each get the query + emit + (governed) action tools their skills need — a shared, decision-aware working
     memory instead of a shared folder.
+  </div>
+</section>
+
+<!-- 8b -->
+<section id="playbook">
+  <div class="kicker">The entry point</div>
+  <h2>Onboarding &amp; the playbook</h2>
+  <p class="lead-p">How does an agent know how to <i>use</i> CG — the config, the flow, its own permissions? A setup
+  wizard tailors and initialises the project; each agent then gets an operating manual. But "manual" splits into two
+  things that must be handled differently.</p>
+
+  <h3>Two kinds of "knowing CG"</h3>
+  <div class="grid g2">
+    <div class="card"><b>Generic CG usage</b> — how to call CG at all: the MCP tools, what <i>emit</i>/<i>query</i>/an
+      <i>action</i> mean. <b>Identical for every project.</b> Lives in the agent's system prompt / a "working-with-CG"
+      skill / the self-describing MCP schemas. Never regenerated per project.</div>
+    <div class="card"><b>Project-specific config</b> — this project's ontology, roles, actions, lifecycle, and what the
+      gate flags. <b>This</b> is the playbook — a <i>projection of the installed config</i>, scoped to a role. Generated
+      at onboarding and kept current.</div>
+  </div>
+
+  <div class="callout caveat">
+    <div class="clabel">◆ The trap — a generated playbook file drifts</div>
+    A static <code>playbook.md</code> the agent reads forever is just <code>queue/*.md</code> again: tweak a rule and it's
+    stale. So the project half is delivered <b>both</b> ways — a <b>bootstrap snapshot</b> to seed the session, plus a
+    <b>live, role-scoped manifest the agent re-fetches</b> so it never acts on yesterday's config.
+  </div>
+
+  <h3>The tailored wizard flow</h3>
+  <figure><div class="fig">
+    <svg viewBox="0 0 900 210" role="img" aria-label="Tailored onboarding wizard and playbook delivery">
+      <defs><marker id="pb" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <g>
+        <rect x="14" y="40" width="176" height="60" rx="10" fill="rgba(91,141,239,.14)" stroke="#5b8def"/>
+        <text class="nt" x="102" y="66">① Describe project</text><text class="ns" x="102" y="84">name · repo · roles · workspace</text>
+        <rect x="212" y="40" width="196" height="60" rx="10" fill="rgba(169,116,240,.16)" stroke="#a974f0"/>
+        <text class="nt" x="310" y="66">② NL authors draft</text><text class="ns" x="310" y="84">OntologyAuthor + RuleAuthor</text>
+        <rect x="430" y="40" width="176" height="60" rx="10" fill="rgba(240,167,60,.15)" stroke="#f0a73c"/>
+        <text class="nt" x="518" y="66">③ Review &amp; install</text><text class="ns" x="518" y="84">preset → CG</text>
+        <rect x="628" y="40" width="176" height="60" rx="10" fill="rgba(62,207,142,.12)" stroke="#3ecf8e"/>
+        <text class="nt" x="716" y="66">④ Workspace live</text><text class="ns" x="716" y="84">ontology·rules·actions·roles</text>
+      </g>
+      <path d="M190 70 L212 70" stroke="#8a93a8" stroke-width="1.7" marker-end="url(#pb)"/>
+      <path d="M408 70 L430 70" stroke="#8a93a8" stroke-width="1.7" marker-end="url(#pb)"/>
+      <path d="M606 70 L628 70" stroke="#8a93a8" stroke-width="1.7" marker-end="url(#pb)"/>
+      <path d="M716 100 L716 132 L470 132 L470 150" stroke="#8a93a8" stroke-width="1.6" fill="none" marker-end="url(#pb)"/>
+      <rect x="120" y="150" width="700" height="46" rx="10" fill="rgba(25,184,154,.09)" stroke="rgba(25,184,154,.5)"/>
+      <text x="470" y="169" class="nt" style="fill:#7fe3cf">Each agent gets — per role</text>
+      <text x="470" y="187" class="ns">① a CLAUDE.md snapshot (bootstrap)  +  ② a live manifest, re-fetched per session — never drifts</text>
+    </svg>
+    <figcaption><b>Tailored, not templated.</b> The wizard interviews the user, the NL authors we already ship draft a
+      <i>project-specific</i> ontology + rules for review, then install — so onboarding generates <i>your</i>
+      methodology rather than copying a fixed template.</figcaption>
+  </div></figure>
+
+  <h3>The manifest — an agent's operating context</h3>
+  <p>One generic, role-scoped call returns everything an agent needs to act; it re-fetches it when the config version
+  bumps.</p>
+  <pre><code>GET /workspace/manifest?role=developer  →
+{
+  <span class="str">"workspace"</span>: <span class="str">"acme_app"</span>, <span class="str">"role"</span>: <span class="str">"developer"</span>,
+  <span class="str">"skills"</span>: [<span class="str">"clean-code"</span>, <span class="str">"debugging"</span>, <span class="str">"impl-patterns"</span>],
+  <span class="str">"object_types"</span>: [<span class="str">"Feature"</span>, <span class="str">"Task"</span>, <span class="str">"Module"</span>, <span class="str">"API"</span>, <span class="str">"Commit"</span>],
+  <span class="str">"actions"</span>: [ {<span class="str">"name"</span>:<span class="str">"ProposeAPI"</span>, <span class="str">"params"</span>:[…], <span class="str">"effect"</span>:<span class="str">"…"</span>}, {<span class="str">"name"</span>:<span class="str">"AdvanceTask"</span>, …} ],
+  <span class="str">"guardrails"</span>: [ <span class="str">"new API — confirm reuse (FLAG)"</span>, <span class="str">"deprecation needs a linked decision"</span> ],
+  <span class="str">"lifecycle"</span>: { <span class="str">"Task"</span>: <span class="str">"proposed → active → done | blocked"</span> },
+  <span class="str">"mcp"</span>: { <span class="str">"url"</span>: <span class="str">"…"</span>, <span class="str">"tools"</span>: [<span class="str">"query"</span>, <span class="str">"emit"</span>, <span class="str">"invoke"</span>] }
+}</code></pre>
+  <p class="small">The endpoints stay generic — <code>POST /presets/{name}/install</code>,
+  <code>GET /workspace/manifest?role=</code>, and a <code>POST /onboard</code> that runs install and returns
+  <code>{workspace, per-role manifests, mcp, installed}</code>. The wizard is orchestration on top; core never learns
+  "manager" or "Task".</p>
+
+  <div class="callout info">
+    <div class="clabel">How it lands in the current setup</div>
+    <code>roles/&lt;role&gt;/CLAUDE.md</code> stays — but slimmed to <b>generic CG usage + "fetch your manifest at
+    session start."</b> The project specifics come from the live manifest, not baked into the file;
+    <code>role_enforcer.py</code> keeps gating local tools; the manifest tells the agent what CG itself will and won't
+    allow.
+  </div>
+
+  <div class="callout ok">
+    <div class="clabel">✓ Settled</div>
+    <b>Tailored</b> — the wizard uses the NL authors to generate a project-specific config for review, not a fixed
+    template. · <b>Both deliveries</b> — a bootstrap <code>CLAUDE.md</code> snapshot <i>and</i> a live role-scoped
+    manifest the agent re-fetches (the snapshot bootstraps; the manifest is the source of truth).
   </div>
 </section>
 
