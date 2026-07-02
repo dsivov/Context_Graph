@@ -13,6 +13,14 @@ reasoning, runtime decision capture, precedent search, a REST API, and an MCP se
 - **[BLOG_THE_FOURTH_ELEMENT.html](BLOG_THE_FOURTH_ELEMENT.html)** — narrative intro: why decisions,
   not just facts, belong in the graph.
 
+## Feature guides (illustrated HTML)
+
+| Guide | Covers |
+|-------|--------|
+| [SCRAPER.html](SCRAPER.html) | **Web Ingester** — the polite crawler, pluggable site connectors, LLM-guided acquisition, `POST /scrape` |
+| [ONTOLOGY.html](ONTOLOGY.html) | **Ontology** — typed object/link schema, coercing extraction validation, the NL author agent, `/ontology` |
+| [RULES_ENGINE.html](RULES_ENGINE.html) | **Business Rules Engine** — the DSL, semantic `sim()` matching, the pre-emit gate, the NL author agent, `/rules` |
+
 ## Reference (this set)
 
 | Doc | Covers |

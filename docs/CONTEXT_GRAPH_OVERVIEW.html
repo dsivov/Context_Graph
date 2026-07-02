@@ -115,13 +115,14 @@ pre code{color:#d6deec}
     <p class="lede">A decision-aware knowledge-graph system built on
       <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a>. It extends triples
       <code>(h, r, t)</code> into contextual quadruples <code>(h, r, t, rc)</code> — attaching a full decision record
-      to every edge — and adds CGR3 multi-hop reasoning, runtime decision capture, precedent search, a REST API, and an
-      MCP server.</p>
+      to every edge — and adds CGR3 multi-hop reasoning, runtime decision capture, precedent search, a business rules
+      engine, a typed ontology, web ingestion, a REST API, and an MCP server.</p>
     <div class="hero-tags">
       <span class="tag"><b>(h, r, t, rc)</b> quadruples</span>
       <span class="tag"><b>11</b>-field RelationContext</span>
       <span class="tag"><b>CGR3</b> reasoning</span>
-      <span class="tag"><b>9</b> storage backends</span>
+      <span class="tag"><b>rules</b> &amp; ontology</span>
+      <span class="tag"><b>web</b> ingester</span>
       <span class="tag"><b>MCP</b> + REST</span>
       <span class="tag">multi-tenant workspaces</span>
     </div>
@@ -179,7 +180,7 @@ pre code{color:#d6deec}
 <!-- 2 -->
 <section id="components">
   <h2><span class="sec-num">02</span> Components at a glance</h2>
-  <p class="sec-sub">Five moving parts, five jobs.</p>
+  <p class="sec-sub">Eight moving parts, eight jobs.</p>
   <div class="tablewrap"><table>
     <thead><tr><th>Component</th><th>Job</th><th>Where</th></tr></thead>
     <tbody>
@@ -187,9 +188,20 @@ pre code{color:#d6deec}
       <tr><td><span class="pill cg">RelationContext</span></td><td>The 11-field decision record carried by each edge.</td><td class="mono">lightrag/context_graph_types.py</td></tr>
       <tr><td><span class="pill cg">CGR3</span></td><td>Retrieve → Rank → Reason iterative multi-hop query loop.</td><td class="mono">context_graph.py · operate.py</td></tr>
       <tr><td><span class="pill cg">Decision capture</span></td><td>Runtime <code>emit_decision_trace</code> + semantic precedent search.</td><td class="mono">context_graph.py</td></tr>
+      <tr><td><span class="pill cg">Business Rules Engine</span></td><td>Pre-emit governance gate — DSL + semantic <code>sim()</code>, PASS/FLAG/REJECT, NL author. <a href="RULES_ENGINE.html">Guide →</a></td><td class="mono">context_graph/rules/</td></tr>
+      <tr><td><span class="pill cg">Ontology</span></td><td>Per-workspace typed schema; coercing extraction validation; NL author. <a href="ONTOLOGY.html">Guide →</a></td><td class="mono">context_graph/ontology/</td></tr>
+      <tr><td><span class="pill cg">Web ingester</span></td><td>Polite crawler + pluggable site connectors; pulls any site in with URL provenance. <a href="SCRAPER.html">Guide →</a></td><td class="mono">context_graph/webingest/</td></tr>
       <tr><td><span class="pill std">LightRAG core</span></td><td>Chunking, extraction, embeddings, storage, query modes (inherited).</td><td class="mono">lightrag/lightrag.py · operate.py · kg/</td></tr>
     </tbody>
   </table></div>
+
+  <div class="callout key">
+    <div class="clabel">◆ Feature field guides</div>
+    Three subsystems have their own illustrated walkthroughs, in this same set:
+    <a href="SCRAPER.html">Web Ingester</a> · <a href="ONTOLOGY.html">Ontology</a> ·
+    <a href="RULES_ENGINE.html">Business Rules Engine</a>. The narrative intro is
+    <a href="BLOG_THE_FOURTH_ELEMENT.html">The Fourth Element</a>.
+  </div>
 </section>
 
 <!-- 3 -->
@@ -415,6 +427,18 @@ answer = <span class="kw">await</span> cg.<span class="fn">cgr3_query</span>(<sp
     </tbody>
   </table></div>
 
+  <h3>Governance &amp; ingestion <span class="pill cg">CG</span></h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill m-post">POST</span></td><td class="mono">/scrape</td><td>Crawl a website into the graph (async job) · <code>GET /scrape/{id}</code> to poll. <a href="SCRAPER.html">Guide →</a></td></tr>
+      <tr><td><span class="pill m-get">GET</span> · <span class="pill m-post">POST</span> · <span class="pill m-post">DELETE</span></td><td class="mono">/rules</td><td>Get, save, or delete the workspace rules policy</td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td class="mono">/rules/evaluate · /rules/toggle · /rules/generate</td><td>Dry-run · enable/disable · author from plain English. <a href="RULES_ENGINE.html">Guide →</a></td></tr>
+      <tr><td><span class="pill m-get">GET</span> · <span class="pill m-post">POST</span> · <span class="pill m-post">DELETE</span></td><td class="mono">/ontology</td><td>Get, save, or delete the workspace ontology</td></tr>
+      <tr><td><span class="pill m-post">POST</span></td><td class="mono">/ontology/generate · /ontology/validate</td><td>Author a schema from a description · validate extractions. <a href="ONTOLOGY.html">Guide →</a></td></tr>
+    </tbody>
+  </table></div>
+
   <h3>Auth &amp; workspace</h3>
   <p>Authenticate with <code>X-API-Key</code>; select the tenant with the <code>LIGHTRAG-WORKSPACE</code> header.</p>
 <pre><code><span class="cm"># query a specific workspace</span>
@@ -528,8 +552,12 @@ lightrag/<br>
 &nbsp;└─ <span class="d">api/</span><br>
 &nbsp;&nbsp;&nbsp;├─ <span class="d">lightrag_server.py</span> <span class="note"># FastAPI app, routes, workspace middleware</span><br>
 &nbsp;&nbsp;&nbsp;├─ <span class="d">mcp_server.py</span> <span class="note"># MCP server (8 tools, X-API-Key)</span><br>
-&nbsp;&nbsp;&nbsp;└─ <span class="d">routers/context_graph_routes.py</span> <span class="note"># CG REST endpoints</span><br>
-docs/ <span class="note"># this guide, the blog, the paper, deployment guides</span><br>
+&nbsp;&nbsp;&nbsp;└─ <span class="d">routers/</span> <span class="note"># context_graph_routes · rules_routes · ontology_routes · webingest_routes</span><br>
+context_graph/ <span class="note"># governance &amp; ingestion packages</span><br>
+&nbsp;├─ <span class="d">rules/</span> <span class="note"># Business Rules Engine — DSL, gate, sim(), NL author</span><br>
+&nbsp;├─ <span class="d">ontology/</span> <span class="note"># typed schema, coercing validation, NL author</span><br>
+&nbsp;└─ <span class="d">webingest/</span> <span class="note"># polite crawler + pluggable site connectors</span><br>
+docs/ <span class="note"># this guide, the blog, per-feature guides, the paper, deployment</span><br>
 tests/ <span class="note"># test_context_graph · test_context_graph_api · test_mcp_server</span>
   </div>
 </section>

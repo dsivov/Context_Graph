@@ -16,7 +16,9 @@ The result is a *system of decision*, not just a system of record: a living, que
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
 - [Document Ingestion](#document-ingestion)
+- [Web Ingestion](#web-ingestion)
 - [Real-Time Decision Capture](#real-time-decision-capture)
+- [Governance: Rules & Ontology](#governance-rules--ontology)
 - [Querying](#querying)
 - [REST API](#rest-api)
 - [Integration Patterns](#integration-patterns)
@@ -329,6 +331,28 @@ The LLM fills `approved_by` / `approved_via` when an approver and channel are na
 
 ---
 
+## Web Ingestion
+
+Point Context Graph at a public website and it crawls the content straight into the graph. `POST /scrape` starts an async job that walks the same domain breadth-first — respecting `robots.txt`, rate-limited, bounded by depth and page count — strips each page to its readable main text, and inserts it **with the page URL as the file path**, so that URL becomes the `provenance` on every quadruple extracted from it. Binary/structured files (PDFs, Office docs, JSON) found while crawling are downloaded and picked up by the standard document scan.
+
+```bash
+# Start a JS-rendered, LLM-filtered crawl (workspace-scoped)
+curl -X POST http://localhost:9621/scrape \
+  -H "LIGHTRAG-WORKSPACE: district_acme" -H "Content-Type: application/json" \
+  -d '{"url":"https://acme.k12.org","render_js":true,"analyze":true,"max_depth":3}'
+# -> {"job_id":"a1b2c3d4e5f6","state":"running"}
+
+curl http://localhost:9621/scrape/a1b2c3d4e5f6 -H "LIGHTRAG-WORKSPACE: district_acme"
+```
+
+- **Polite crawler** — same-domain BFS, `robots.txt`, per-host rate limit, sitemap seeding, main-text extraction.
+- **Pluggable connectors** — platform plugins that crack sites hiding files behind a JS widget or private API. WordPress, Finalsite/Blackboard, and BoardDocs ship enabled; adding one is copy-a-template.
+- **LLM-guided acquisition** — with `analyze=true`, an LLM selects the right connector and filters which resources are worth ingesting. Fails open to deterministic behavior if no LLM is configured.
+
+> 📖 Full guide: [`docs/SCRAPER.html`](docs/SCRAPER.html)
+
+---
+
 ## Real-Time Decision Capture
 
 `emit_decision_trace()` writes a decision into the graph **at the moment it is made**, from agent code or a webhook handler — no document ingestion round-trip required.
@@ -361,6 +385,35 @@ await cg.emit_decision_trace(
 - `confidence_score`: maximum across all versions
 
 The `decision_trace` text is immediately indexed in the `decisions` vector store, making this decision discoverable via `find_precedents()` without any delay.
+
+---
+
+## Governance: Rules & Ontology
+
+Two workspace-scoped layers turn a graph that *remembers* decisions into one that *governs* them. Both are managed from the WebUI (the **Rules** and **Ontology** tabs) or over REST.
+
+### Business Rules Engine
+
+A **pre-emit governance gate**: before any decision is written, the workspace's rules evaluate it and return one of three outcomes — `PASS` (persist), `FLAG` (persist, mark `needs_review`), or `REJECT` (abort, nothing persisted). Rules are authored in a small DSL that matches structured fields with exact operators and free-text fields *by meaning* via a semantic `sim()` predicate (local `minishlab/potion-retrieval-32M` embeddings — no API cost). Evaluation is **fail-open**: a misconfigured rule is skipped with a warning, never crashing ingestion.
+
+```text
+rule "large discount needs finance review"  priority 10
+when
+    sim(relation_type, "APPROVAL") > 0.4
+    and percent > 0.15
+    and approved_via == "slack"
+then
+    flag("Discount >15% approved over Slack — route to Finance")
+end
+```
+
+Describe a policy in plain English and `POST /rules/generate` writes the DSL, defines the concepts, and **proves it** with a dry-run self-test before you save. See [`docs/RULES_ENGINE.html`](docs/RULES_ENGINE.html).
+
+### Ontology
+
+A **typed schema** for the workspace — object types and directed link types, each with typed properties — that every extraction is validated against. Validation is *coercing*: the same pass that checks a record normalizes it (`"$25,000"` → `25000.0`, `"20%"` → `0.2`), which is what gives the rules engine real numbers to reason over instead of free text. Open-world by default (unknown types warn); closed-world rejects them. `POST /ontology/generate` drafts a schema from a domain description. See [`docs/ONTOLOGY.html`](docs/ONTOLOGY.html).
+
+> Both features require `USE_CONTEXT_GRAPH=true` and return **HTTP 503** otherwise.
 
 ---
 
@@ -476,6 +529,12 @@ Start the server with `USE_CONTEXT_GRAPH=true`. All endpoints below return **HTT
 | `POST` | `/graph/decision/emit` | Write a decision directly into the graph |
 | `GET`  | `/graph/decisions/search` | Semantic precedent search |
 | `GET`  | `/graph/decisions` | List/filter all decision-bearing edges |
+| `POST` | `/scrape` | Crawl a website into the graph (async job) — see [Web Ingestion](#web-ingestion) |
+| `GET`  | `/scrape/{job_id}` · `/scrape` | Poll / list web-ingest jobs |
+| `GET`/`POST`/`DELETE` | `/rules` | Get, save, or delete the workspace rules policy |
+| `POST` | `/rules/evaluate` · `/rules/toggle` · `/rules/generate` | Dry-run, enable/disable, or author rules from plain English |
+| `GET`/`POST`/`DELETE` | `/ontology` | Get, save, or delete the workspace ontology |
+| `POST` | `/ontology/generate` · `/ontology/validate` | Author a schema from a description; validate extractions |
 
 ---
 
@@ -1086,6 +1145,9 @@ Context Graph implements the **CGR3 (Context Graphs with Retrieve-Rank-Reason)**
 | **Size-aware routing** | `catalog_bypass` for small catalogs (<100 products), `auto` router |
 | **Precedent search** | `find_precedents()` — semantic search over decision traces |
 | **Temporal filtering** | `is_active(as_of)` for date-range validity checks |
+| **Business Rules Engine** | Pre-emit governance gate — DSL + semantic `sim()`, PASS/FLAG/REJECT, NL policy author |
+| **Ontology** | Per-workspace typed schema, coercing extraction validation, NL schema author |
+| **Web ingestion** | Polite crawler + pluggable connectors that pull any site into the graph with URL provenance |
 
 ---
 
@@ -1108,7 +1170,10 @@ lightrag/
 │       ├── query_routes.py     — Standard query endpoints
 │       ├── document_routes.py  — Document upload and management
 │       ├── graph_routes.py     — Graph CRUD operations
-│       └── context_graph_routes.py  — CG API endpoints (CGR3, decisions)
+│       ├── context_graph_routes.py  — CG API endpoints (CGR3, decisions)
+│       ├── rules_routes.py     — Business Rules Engine API (/rules)
+│       ├── ontology_routes.py  — Ontology API (/ontology)
+│       └── webingest_routes.py — Web ingestion API (/scrape)
 ├── kg/                         — Storage backend implementations
 │   ├── neo4j_impl.py           — Neo4j graph storage (workspace-aware)
 │   ├── networkx_impl.py        — In-memory NetworkX graph
@@ -1122,15 +1187,25 @@ lightrag/
     ├── anthropic.py            — Anthropic Claude
     └── ...                     — Azure, Gemini, Bedrock, HF, NVIDIA
 
+context_graph/                  — Governance & ingestion packages
+├── rules/                      — Business Rules Engine (DSL, gate, sim(), NL author)
+├── ontology/                   — Typed schema, validation, NL author
+└── webingest/                  — Polite crawler + pluggable site connectors
+
 tests/
 ├── test_context_graph.py       — Core CG unit tests (44 tests)
 ├── test_context_graph_api.py   — API route tests (36 tests)
 └── conftest.py                 — Pytest configuration and fixtures
 
 docs/
+├── SCRAPER.html                — Web Ingester field guide
+├── ONTOLOGY.html               — Ontology field guide
+├── RULES_ENGINE.html           — Business Rules Engine field guide
+├── BLOG_THE_FOURTH_ELEMENT.html — Narrative intro to Context Graph
+├── CONTEXT_GRAPH_OVERVIEW.html — Illustrated technical field guide
+├── INDEX.md                    — Documentation index
 ├── Algorithm.md                — LightRAG indexing and retrieval flowcharts
 ├── PaperComparison.md          — Detailed CGR3 paper alignment analysis
-├── ConversationEnrichment.md   — Conversation enrichment and anonymization guide
 ├── DockerDeployment.md         — Docker deployment guide
 ├── FrontendBuildGuide.md       — WebUI build guide
 └── ...
@@ -1140,4 +1215,4 @@ docs/
 
 ## Based On
 
-Context Graph implements the [CGR3 paradigm](https://arxiv.org/abs/2406.11160) (Liang et al., 2024) — extending knowledge graph triples into contextual quadruples `(h, r, t, rc)` with Retrieve→Rank→Reason iterative query processing. Built on [LightRAG](https://github.com/HKUDS/LightRAG) by HKUDS, with production extensions for multi-tenancy and real-time decision capture.
+Context Graph implements the [CGR3 paradigm](https://arxiv.org/abs/2406.11160) (Liang et al., 2024) — extending knowledge graph triples into contextual quadruples `(h, r, t, rc)` with Retrieve→Rank→Reason iterative query processing. Built on [LightRAG](https://github.com/HKUDS/LightRAG) by HKUDS, with production extensions for multi-tenancy, real-time decision capture, a Business Rules Engine, a typed ontology layer, and web ingestion.

@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Business Rules Engine — A Governance Gate for the Graph</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(240,167,60,.10), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(239,91,110,.07), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(240,167,60,.07),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(32px,5.5vw,54px);line-height:1.04;margin:.3em 0 .25em;
+  background:linear-gradient(92deg,#ffd79a,#f6a2ad 55%,#cfe0ff);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}
+.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:230px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(240,167,60,.18),transparent);color:#fff;border-left:2px solid var(--c)}
+
+main{min-width:0;max-width:760px}
+article section{margin:0 0 52px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--c);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}
+p{margin:.7em 0}
+.lead-p{font-size:19px;color:var(--ink)}
+.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--c);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)} .callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)} .callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(240,167,60,.55);background:rgba(240,167,60,.10)} .callout.key .clabel{color:#ffce86}
+
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--c)}
+.stat.a::after{background:var(--a)} .stat.b::after{background:var(--b)} .stat.danger::after{background:var(--danger)}
+.stat .v{font-size:30px;font-weight:800;letter-spacing:-.02em} .stat .l{color:var(--ink-faint);font-size:13px;margin-top:3px}
+
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:540px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+
+figure{margin:22px 0}
+figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px} figcaption b{color:var(--ink-soft)}
+
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}
+.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);
+  border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#ffce86}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Context Graph · Feature Guide</div>
+    <h1>The Business Rules Engine</h1>
+    <p class="lede">A knowledge graph that only records decisions is a filing cabinet. Add a rules engine and it becomes
+      a control point: every decision passes through a governance gate <i>before</i> it's written — passed, flagged for
+      review, or rejected outright.</p>
+    <div class="byline">A developer's guide to <code>/rules</code> · the DSL, semantic matching, the pre-emit gate, and
+      the NL author agent · part of <a href="BLOG_THE_FOURTH_ELEMENT.html">Context Graph</a></div>
+    <div class="hero-tags">
+      <span class="tag"><b>DSL</b> with priorities</span>
+      <span class="tag"><b>sim()</b> semantic match</span>
+      <span class="tag">PASS · FLAG · REJECT</span>
+      <span class="tag"><b>pre-emit</b> gate</span>
+      <span class="tag"><b>NL &rarr;</b> policy author</span>
+      <span class="tag">fail-open, audited</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this guide</div>
+  <ol>
+    <li><a href="#what">What it does</a></li>
+    <li><a href="#dsl">The rule DSL</a></li>
+    <li><a href="#fields">The fields you match on</a></li>
+    <li><a href="#sim">Semantic matching</a></li>
+    <li><a href="#gate">The pre-emit gate</a></li>
+    <li><a href="#author">The NL author agent</a></li>
+    <li><a href="#api">The /rules API</a></li>
+    <li><a href="#storage">Storage &amp; lifecycle</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="what">
+  <div class="kicker">The purpose</div>
+  <h2>What it does</h2>
+  <p class="lead-p">The rules engine is a per-workspace <b>governance gate that runs before any decision is written to
+  the graph</b>. When a decision reaches <code>emit_decision_trace(...)</code>, an attached gate projects the edge into
+  a flat set of fields, evaluates the workspace's rules against it, and returns an outcome plus an audit record.</p>
+
+  <p>Rules are authored in a small DSL. They match structured fields (numbers, dates, channels) with exact operators,
+  and free-text fields (like the relationship type) by <i>meaning</i> — via a semantic <code>sim()</code> predicate
+  backed by a local embedding model. Three outcomes are possible:</p>
+
+  <div class="grid g3">
+    <div class="stat b"><div class="v">PASS</div><div class="l">Persisted unchanged</div></div>
+    <div class="stat c"><div class="v">FLAG</div><div class="l">Persisted, marked <code>needs_review</code></div></div>
+    <div class="stat danger"><div class="v">REJECT</div><div class="l">Aborted — nothing persisted</div></div>
+  </div>
+
+  <div class="callout info">
+    <div class="clabel">Built on a proven core</div>
+    The engine wraps the <code>business_rule_engine</code> library's parser and adds what a multi-tenant decision graph
+    needs: workspace isolation, semantic matching, fail-open evaluation, audit attribution, persistence, an HTTP API,
+    and a natural-language author agent.
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="dsl">
+  <div class="kicker">The language</div>
+  <h2>The rule DSL</h2>
+  <p>A rule is a named, prioritised <code>when … then</code> block. Conditions are Python boolean expressions over the
+  decision's fields; actions declare the outcome with a human-readable reason.</p>
+
+  <pre><code><span class="kw">rule</span> <span class="str">"large discount needs finance review"</span>  <span class="kw">priority</span> <span class="num">10</span>
+<span class="kw">when</span>
+    sim(relation_type, <span class="str">"APPROVAL"</span>) &gt; <span class="num">0.4</span>
+    <span class="kw">and</span> percent &gt; <span class="num">0.15</span>
+    <span class="kw">and</span> approved_via == <span class="str">"slack"</span>
+<span class="kw">then</span>
+    flag(<span class="str">"Discount &gt;15% approved over Slack — route to Finance for review"</span>)
+<span class="kw">end</span></code></pre>
+
+  <h3>Actions</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Verb</th><th>Outcome</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>reject(<span class="str">"…"</span>)</code></td><td><span class="pill danger">REJECT</span></td><td>Block the write — the emit raises and nothing is persisted (callers map to HTTP 422).</td></tr>
+      <tr><td><code>flag(<span class="str">"…"</span>)</code></td><td><span class="pill c">FLAG</span></td><td>Persist the edge but annotate it <code>needs_review</code> with the audit attached.</td></tr>
+      <tr><td><code>notify(<span class="str">"…"</span>)</code></td><td><span class="pill">note</span></td><td>Record a side note; does <i>not</i> change the gate outcome.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="small">There is no <code>block</code>/<code>deny</code> verb — the blocking action is <code>reject</code>.
+  Available operators: <code>==</code>, <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code>, and
+  boolean <code>and</code>/<code>or</code>.</p>
+
+  <div class="callout caveat">
+    <div class="clabel">Formatting is strict</div>
+    <code>when</code> and <code>then</code> must each sit alone on their own line, with conditions and actions indented
+    beneath. The loader lints for the common mistake of putting a condition on the same line as <code>when</code> (which
+    the underlying parser would silently swallow) and rejects it.
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="fields">
+  <div class="kicker">The environment</div>
+  <h2>The fields you match on</h2>
+  <p>Before evaluation, a decision <code>(src, tgt, relation_type, RelationContext)</code> is <b>projected</b> into a
+  flat dict. Some fields pass through raw; a few are <i>derived</i>.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td><code>src</code>, <code>tgt</code>, <code>relation_type</code></td><td>text</td><td>Head/tail names &amp; relationship keyword — match with <code>sim()</code>.</td></tr>
+      <tr><td><code>approved_via</code></td><td>text</td><td>Channel: <code>slack｜zoom｜email｜in_person｜jira｜system</code> — match with <code>==</code>.</td></tr>
+      <tr><td><code>approved_by</code>, <code>policy_ref</code>, <code>provenance</code></td><td>text</td><td>Raw RelationContext fields.</td></tr>
+      <tr><td><code>decision_trace</code>, <code>quantitative_data</code>, <code>temporal_info</code></td><td>text</td><td>Raw free-text (may be null).</td></tr>
+      <tr><td><code>valid_from</code>, <code>valid_until</code></td><td>date</td><td>ISO-8601 validity window.</td></tr>
+      <tr><td><code>confidence</code></td><td>float</td><td>Extraction confidence, 0–1.</td></tr>
+      <tr><td><code>amount</code></td><td>float｜null <span class="pill b">derived</span></td><td>Parsed from <code>quantitative_data</code> — <code>"$25,000"</code> &rarr; <code>25000.0</code>.</td></tr>
+      <tr><td><code>percent</code></td><td>float｜null <span class="pill b">derived</span></td><td>Parsed from <code>quantitative_data</code> — <code>"20%"</code> &rarr; <code>0.20</code>.</td></tr>
+      <tr><td><code>is_active</code></td><td>bool <span class="pill b">derived</span></td><td>Whether the decision is inside its validity window today.</td></tr>
+      <tr><td><code>evidence_count</code></td><td>int <span class="pill b">derived</span></td><td>Number of supporting sentences.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout caveat">
+    <div class="clabel">A gotcha worth internalising</div>
+    <code>amount</code> and <code>percent</code> are <b>best-effort parses of the free-text <code>quantitative_data</code>
+    field</b>, not raw numbers. A rule with <code>percent &gt; 0.15</code> only fires when <code>quantitative_data</code>
+    actually contains something like <code>"20% discount"</code>. If it can't be parsed, the value is <code>null</code>
+    and the rule is skipped fail-open (see below). This is exactly the raw-text fragility the
+    <a href="ONTOLOGY.html">Ontology</a> is designed to remove by handing the engine typed values.
+  </div>
+</section>
+
+<!-- 4 -->
+<section id="sim">
+  <div class="kicker">Meaning, not strings</div>
+  <h2>Semantic matching</h2>
+  <p class="lead-p">The relationship type is free text — an LLM might write "approved", "authorized", "gave the
+  go-ahead". Matching those with string equality is hopeless. <code>sim(field, "CONCEPT")</code> matches on meaning.</p>
+
+  <p>A <b>concept</b> maps a name to a list of example phrases. <code>sim()</code> returns the maximum cosine similarity
+  between the field's embedding and any of the concept's phrase embeddings — a float in <code>[-1, 1]</code> you compare
+  against a threshold. A companion <code>similar(field, "CONCEPT", threshold=0.4)</code> returns the boolean directly.</p>
+
+  <pre><code><span class="cm">// concept catalog — name -> phrases</span>
+{
+  <span class="str">"APPROVAL"</span>: [<span class="str">"approved"</span>, <span class="str">"authorized"</span>, <span class="str">"granted approval"</span>, <span class="str">"go ahead"</span>]
+}</code></pre>
+
+  <div class="grid g2">
+    <div class="card"><b>Local &amp; deterministic.</b> Embeddings come from
+      <code>minishlab/potion-retrieval-32M</code> — a static, ~30&nbsp;MB, MIT-licensed model. No network call, no API
+      cost, repeatable scores. It loads lazily, only when a gate actually evaluates.</div>
+    <div class="card"><b>Calibrated threshold.</b> The default match threshold is <code>0.4</code>. Empirically,
+      non-matches ceil around <code>0.24</code> and true matches floor around <code>0.53</code> on the approval
+      concept — so <code>0.4</code> is a safe starting line to tune per concept.</div>
+  </div>
+  <p class="small">Field text is normalised (snake_case/kebab-case split, whitespace collapsed) and embeddings are
+  L2-normalised so the dot product <i>is</i> the cosine. The model id is recorded in a fingerprint for audit and
+  pinning.</p>
+</section>
+
+<!-- 5 -->
+<section id="gate">
+  <div class="kicker">Where it runs</div>
+  <h2>The pre-emit gate</h2>
+  <p>The gate sits inside <code>emit_decision_trace</code>, before any write. If the edge already exists and you're
+  upserting, the new context is merged with the existing one <i>first</i>, so the gate always evaluates the
+  <b>final</b> decision.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 150" role="img" aria-label="Decision flowing through the gate">
+      <style>
+        .bx{rx:10;stroke:#39425a;stroke-width:1}
+        .t{fill:#e7ebf3;font:13px "Segoe UI",sans-serif} .ts{fill:#aab3c5;font:11px "Segoe UI",sans-serif}
+        .ln{stroke:#8a93a8;stroke-width:1.8;fill:none;marker-end:url(#arh)}
+      </style>
+      <defs><marker id="arh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <rect class="bx" x="10" y="55" width="150" height="40" fill="#22314f"/>
+      <text class="t" x="85" y="80" text-anchor="middle">decision</text>
+      <rect class="bx" x="210" y="45" width="150" height="60" fill="#3a2f17"/>
+      <text class="t" x="285" y="70" text-anchor="middle">rules gate</text>
+      <text class="ts" x="285" y="88" text-anchor="middle">project + evaluate</text>
+      <line class="ln" x1="160" y1="75" x2="208" y2="75"/>
+      <rect class="bx" x="470" y="8" width="150" height="34" fill="#13251f"/><text class="t" x="545" y="30" text-anchor="middle">PASS → write</text>
+      <rect class="bx" x="470" y="58" width="150" height="34" fill="#3a2f17"/><text class="t" x="545" y="80" text-anchor="middle">FLAG → write+mark</text>
+      <rect class="bx" x="470" y="108" width="150" height="34" fill="#3a1a20"/><text class="t" x="545" y="130" text-anchor="middle">REJECT → abort</text>
+      <line class="ln" x1="360" y1="70" x2="468" y2="25"/>
+      <line class="ln" x1="360" y1="75" x2="468" y2="75"/>
+      <line class="ln" x1="360" y1="80" x2="468" y2="125"/>
+    </svg>
+    <figcaption><b>One decision, three exits.</b> Rules run one at a time in priority order; the decisive rule is the
+      highest-severity, highest-priority match.</figcaption>
+  </div></figure>
+
+  <ul>
+    <li><b>REJECT</b> raises a <code>RuleViolation</code> — nothing is persisted.</li>
+    <li><b>FLAG</b> persists the edge with <code>needs_review=true</code> and the JSON audit stored on the edge.</li>
+    <li><b>PASS</b> persists unchanged.</li>
+  </ul>
+
+  <div class="callout key">
+    <div class="clabel">◆ Fail-open by design</div>
+    Each rule runs in isolation. A rule that raises — a missing numeric, an unknown concept — is <b>skipped</b> and its
+    message added to <code>warnings</code>, never crashing the emit. A misconfigured rule can't take down your ingestion;
+    it just doesn't fire, visibly. The audit records <code>outcome</code>, <code>model_id</code>, the decisive
+    <code>rule</code> + <code>reason</code>, the <code>matched_concept</code>/<code>score</code>/<code>threshold</code>,
+    plus any <code>notes</code> and <code>warnings</code>.
+  </div>
+</section>
+
+<!-- 6 -->
+<section id="author">
+  <div class="kicker">Plain English in</div>
+  <h2>The NL author agent</h2>
+  <p class="lead-p">You describe a policy in English; the <code>RuleAuthor</code> writes the DSL and the concepts, then
+  <b>proves it works</b> with a self-test before you ever save it.</p>
+
+  <pre><code>POST /rules/generate
+{
+  <span class="str">"policy"</span>: <span class="str">"Any purchase over $10,000 approved via email must be flagged for CFO review."</span>,
+  <span class="str">"max_repairs"</span>: <span class="num">1</span>,   <span class="cm">// 0–3 self-repair attempts</span>
+  <span class="str">"save"</span>: <span class="kw">false</span>       <span class="cm">// persist + enable only if valid</span>
+}</code></pre>
+
+  <p>The agent is given a capability manifest — the available fields and action verbs — and is instructed to use
+  <code>sim()</code> for free text and exact operators for numbers and channels. Each attempt is validated (does the DSL
+  parse with non-empty conditions? is every referenced concept defined?), and any error is fed back into the next repair
+  prompt. On success it runs a <b>dry-run</b>: it builds a real gate and evaluates each fixture, checking the outcome
+  matches the expectation.</p>
+
+  <pre><code><span class="cm">// dry_run in the response — the policy proving itself</span>
+[ {<span class="str">"name"</span>:<span class="str">"Email approval over $10k"</span>,  <span class="str">"expect"</span>:<span class="str">"FLAG"</span>, <span class="str">"outcome"</span>:<span class="str">"FLAG"</span>, <span class="str">"ok"</span>:<span class="kw">true</span>},
+  {<span class="str">"name"</span>:<span class="str">"Email approval under $10k"</span>, <span class="str">"expect"</span>:<span class="str">"PASS"</span>, <span class="str">"outcome"</span>:<span class="str">"PASS"</span>, <span class="str">"ok"</span>:<span class="kw">true</span>},
+  {<span class="str">"name"</span>:<span class="str">"In-person over $10k"</span>,       <span class="str">"expect"</span>:<span class="str">"PASS"</span>, <span class="str">"outcome"</span>:<span class="str">"PASS"</span>, <span class="str">"ok"</span>:<span class="kw">true</span>} ]</code></pre>
+</section>
+
+<!-- 7 -->
+<section id="api">
+  <div class="kicker">The interface</div>
+  <h2>The /rules API</h2>
+  <p>All endpoints are workspace-scoped via <code>LIGHTRAG-WORKSPACE</code> and return <code>503</code> unless the
+  server runs in Context Graph mode (<code>USE_CONTEXT_GRAPH=true</code>).</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Method · Path</th><th>Purpose</th><th>Returns</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill c">GET</span> <code>/rules</code></td><td>Policy summary</td><td><code>RuleSummaryResponse</code></td></tr>
+      <tr><td><span class="pill c">POST</span> <code>/rules</code></td><td>Save DSL + concepts</td><td>Summary; attaches the gate live (<code>400</code> if invalid)</td></tr>
+      <tr><td><span class="pill c">POST</span> <code>/rules/evaluate</code></td><td>Dry-run against a sample decision</td><td><code>EvaluateResponse</code></td></tr>
+      <tr><td><span class="pill c">POST</span> <code>/rules/toggle</code></td><td>Enable/disable the gate</td><td>Summary (<code>404</code> if none)</td></tr>
+      <tr><td><span class="pill c">DELETE</span> <code>/rules</code></td><td>Delete the policy</td><td><code>{deleted, workspace}</code></td></tr>
+      <tr><td><span class="pill c">POST</span> <code>/rules/generate</code></td><td>NL &rarr; policy (LLM)</td><td>Generation result + <code>saved</code> (<code>503</code> if no LLM)</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>The summary reports <code>exists</code>, <code>enabled</code>, <code>version</code>, <code>model_id</code>, the
+  concept names, and the rules with their priorities. <code>evaluate</code> returns the <code>outcome</code>, the
+  <code>audit</code>, and the <code>triggered</code> rules with their concept matches, warnings, and notes:</p>
+
+  <pre><code>curl -X POST http://localhost:9621/rules/evaluate \
+  -H <span class="str">"LIGHTRAG-WORKSPACE: sales"</span> -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{
+    "src":"Sarah Chen","tgt":"MegaCorp Order","relation_type":"approved a large discount",
+    "relation_context":{"quantitative_data":"20% discount","approved_via":"slack"}
+  }'</span>
+
+<span class="cm"># -> outcome FLAG · matched_concept APPROVAL · score 0.53 > 0.4</span></code></pre>
+</section>
+
+<!-- 8 -->
+<section id="storage">
+  <div class="kicker">Lifecycle</div>
+  <h2>Storage &amp; lifecycle</h2>
+  <p>A workspace's policy is a <b>rule bundle</b> — DSL, concepts, an <code>enabled</code> flag, the embedding
+  <code>model_id</code>, and a version — persisted as one atomic JSON file per workspace.</p>
+  <ul>
+    <li><b>Validated on save</b> without loading the model: the DSL must parse with non-empty conditions, and every
+      concept referenced by a <code>sim()</code> must be defined. Version bumps on each save.</li>
+    <li><b>Toggling</b> enabled/disabled updates the timestamp without re-validating or bumping the version.</li>
+    <li><b>Live wiring.</b> A service caches one built gate per workspace, keyed by version, invalidated on
+      save/toggle/delete. Saving a policy attaches the gate so the very next decision is governed. The embedding model
+      loads lazily — summaries and saves stay fast and offline.</li>
+  </ul>
+
+  <div class="callout key">
+    <div class="clabel">◆ The arc</div>
+    Facts &rarr; decisions &rarr; <b>policy</b> &rarr; a typed ontology. The rules engine is the policy layer: it turns a
+    graph that <i>remembers</i> decisions into one that <i>governs</i> them. Pair it with the
+    <a href="ONTOLOGY.html">Ontology</a> for typed values and the <a href="SCRAPER.html">Web Ingester</a> to feed it
+    from real sources.
+  </div>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  A feature guide for Context Graph's Business Rules Engine — a semantic, fail-open governance gate over every decision.
+  Wraps the <code>business_rule_engine</code> parser; embeddings via <code>minishlab/potion-retrieval-32M</code>. Built
+  on <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a> (HKUDS). Supported by
+  <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>. Code examples are illustrative;
+  identifiers and endpoints are from the project source.
+</footer>
+
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('nav.toc a')), map={};
+  links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id); if(el)map[id]=a;});
+  var obs=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}
+  });},{rootMargin:'-20% 0px -70% 0px',threshold:0});
+  Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});
+  var btt=document.getElementById('btt');
+  window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});
+})();
+</script>
+</body>
+</html>

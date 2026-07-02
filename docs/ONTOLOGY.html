@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Ontology — A Typed Schema for the Graph</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(169,116,240,.10), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.08), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(169,116,240,.07),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(32px,5.5vw,54px);line-height:1.04;margin:.3em 0 .25em;
+  background:linear-gradient(92deg,#d9c8ff,#8fd9c9 55%,#cfe0ff);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}
+.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:230px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(169,116,240,.18),transparent);color:#fff;border-left:2px solid var(--ctrl)}
+
+main{min-width:0;max-width:760px}
+article section{margin:0 0 52px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ctrl);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}
+p{margin:.7em 0}
+.lead-p{font-size:19px;color:var(--ink)}
+.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--ctrl);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)} .callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)} .callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(169,116,240,.55);background:rgba(169,116,240,.10)} .callout.key .clabel{color:#cdb1f7}
+
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--ctrl)}
+.stat.a::after{background:var(--a)} .stat.b::after{background:var(--b)} .stat.c::after{background:var(--c)}
+.stat .v{font-size:30px;font-weight:800;letter-spacing:-.02em} .stat .l{color:var(--ink-faint);font-size:13px;margin-top:3px}
+
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:540px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+
+figure{margin:22px 0}
+figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px} figcaption b{color:var(--ink-soft)}
+
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}
+.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);
+  border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#cdb1f7}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Context Graph · Feature Guide</div>
+    <h1>The Ontology</h1>
+    <p class="lede">An LLM extracts whatever it sees. An ontology tells it what <i>should</i> be there — the object
+      types, link types, and typed properties your domain actually has — and validates every extraction against that
+      schema, coercing raw text into real values as it goes.</p>
+    <div class="byline">A developer's guide to <code>/ontology</code> · typed schema, the NL author agent, and
+      extraction validation · part of <a href="BLOG_THE_FOURTH_ELEMENT.html">Context Graph</a></div>
+    <div class="hero-tags">
+      <span class="tag"><b>typed</b> object &amp; link types</span>
+      <span class="tag"><b>9</b> property kinds</span>
+      <span class="tag">open- / closed-world</span>
+      <span class="tag">coercing validation</span>
+      <span class="tag"><b>NL &rarr;</b> schema author</span>
+      <span class="tag">per-workspace</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this guide</div>
+  <ol>
+    <li><a href="#what">What it does</a></li>
+    <li><a href="#model">The data model</a></li>
+    <li><a href="#author">The NL author agent</a></li>
+    <li><a href="#validate">Extraction validation</a></li>
+    <li><a href="#api">The /ontology API</a></li>
+    <li><a href="#storage">Storage &amp; versioning</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="what">
+  <div class="kicker">The purpose</div>
+  <h2>What it does</h2>
+  <p class="lead-p">An ontology is a typed schema for a workspace. You declare the <b>object types</b> (entity kinds
+  like <code>Person</code>, <code>Order</code>), each with typed <b>properties</b>, and the directed <b>link types</b>
+  (relations like <code>approved: Person &rarr; Order</code>) that connect them. Then every entity and relation the
+  graph extracts is checked against it.</p>
+
+  <p>It is deliberately <i>not</i> RDF or OWL. It's a plain dataclass model, persisted as JSON, one file per workspace.
+  And validation isn't just a yes/no gate — the same pass that checks a record also <b>normalises</b> it, so
+  <code>"$25,000"</code> becomes <code>25000.0</code> and <code>"20%"</code> becomes <code>0.2</code>, using the exact
+  same parsers as the Rules Engine.</p>
+
+  <div class="callout key">
+    <div class="clabel">◆ Why it exists</div>
+    Its real job is to give downstream reasoning <b>typed values to work with</b>. The
+    <a href="RULES_ENGINE.html">Business Rules Engine</a> becomes dramatically stronger once the ontology hands it a
+    real <code>money</code> or <code>percent</code> instead of a free-text blob to regex.
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="model">
+  <div class="kicker">The shape</div>
+  <h2>The data model</h2>
+  <p>An ontology document has a name, an integer version, a list of object types, and a list of link types:</p>
+  <pre><code>{
+  <span class="str">"name"</span>: <span class="str">"sales"</span>,
+  <span class="str">"version"</span>: <span class="num">1</span>,
+  <span class="str">"object_types"</span>: [
+    { <span class="str">"name"</span>: <span class="str">"Person"</span>, <span class="str">"description"</span>: <span class="str">"a human"</span>,
+      <span class="str">"properties"</span>: [ { <span class="str">"name"</span>: <span class="str">"email"</span>, <span class="str">"kind"</span>: <span class="str">"string"</span> } ] },
+    { <span class="str">"name"</span>: <span class="str">"Order"</span>, <span class="str">"description"</span>: <span class="str">"a deal"</span>,
+      <span class="str">"properties"</span>: [
+        { <span class="str">"name"</span>: <span class="str">"value"</span>,  <span class="str">"kind"</span>: <span class="str">"money"</span>, <span class="str">"required"</span>: <span class="kw">true</span> },
+        { <span class="str">"name"</span>: <span class="str">"status"</span>, <span class="str">"kind"</span>: <span class="str">"enum"</span>,  <span class="str">"enum_values"</span>: [<span class="str">"open"</span>,<span class="str">"won"</span>,<span class="str">"lost"</span>] }
+      ] }
+  ],
+  <span class="str">"link_types"</span>: [
+    { <span class="str">"name"</span>: <span class="str">"approved"</span>, <span class="str">"source_types"</span>: [<span class="str">"Person"</span>], <span class="str">"target_types"</span>: [<span class="str">"Order"</span>],
+      <span class="str">"cardinality"</span>: <span class="str">"1:N"</span> }
+  ]
+}</code></pre>
+
+  <h3>Property kinds</h3>
+  <p>A property's <code>kind</code> is one of nine values. Numeric kinds accept optional <code>minimum</code>/<code>maximum</code>
+  bounds; <code>enum</code> requires <code>enum_values</code>.</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Kind</th><th>Coerces to</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill a">string</span> · <span class="pill a">text</span></td><td>str</td><td>Free text.</td></tr>
+      <tr><td><span class="pill c">integer</span> · <span class="pill c">float</span></td><td>number</td><td>Numeric; range-checkable.</td></tr>
+      <tr><td><span class="pill b">money</span></td><td>float</td><td>Parsed from text — <code>"$8k"</code> &rarr; <code>8000.0</code>. Numeric.</td></tr>
+      <tr><td><span class="pill b">percent</span></td><td>float</td><td><code>"20%"</code> &rarr; <code>0.20</code>. Numeric.</td></tr>
+      <tr><td><span class="pill">boolean</span></td><td>bool</td><td>From common string forms.</td></tr>
+      <tr><td><span class="pill">date</span></td><td>ISO date</td><td><code>YYYY-MM-DD</code> via <code>date.fromisoformat</code>.</td></tr>
+      <tr><td><span class="pill ctrl">enum</span></td><td>member</td><td>Value must be in <code>enum_values</code>.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Link types</h3>
+  <p>A link type constrains a relation's endpoints and can carry its own typed properties (which map onto the edge's
+  RelationContext). <code>source_types</code>/<code>target_types</code> list the allowed head/tail object types — an
+  <i>empty</i> list means "any". <code>cardinality</code> is one of <code>1:1</code>, <code>1:N</code>,
+  <code>N:1</code>, <code>N:M</code> (default <code>N:M</code>), and <code>directed</code> defaults to true.</p>
+
+  <div class="callout caveat">
+    <div class="clabel">Descriptive, not enforced</div>
+    Cardinality is stored and shown, but there is <b>no multiplicity enforcement</b> at validation time — it documents
+    intent rather than rejecting a second edge. Endpoint <i>types</i>, required properties, enums, and ranges <i>are</i>
+    enforced.
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="author">
+  <div class="kicker">Plain English in</div>
+  <h2>The NL author agent</h2>
+  <p class="lead-p">You rarely hand-write JSON. Describe the domain in a sentence and the <code>OntologyAuthor</code>
+  drafts, validates, repairs, and dry-runs a schema for you — using the workspace's own LLM.</p>
+
+  <pre><code>POST /ontology/generate
+{
+  <span class="str">"description"</span>: <span class="str">"A school district. Schools employ teachers. Teachers teach courses</span>
+                  <span class="str">to students. Students enroll in courses and receive grades."</span>,
+  <span class="str">"extend"</span>: <span class="kw">true</span>,      <span class="cm">// merge into the existing ontology, draft wins on conflicts</span>
+  <span class="str">"max_repairs"</span>: <span class="num">1</span>,   <span class="cm">// 0–3 self-repair attempts on validation failure</span>
+  <span class="str">"save"</span>: <span class="kw">false</span>       <span class="cm">// persist only if valid</span>
+}</code></pre>
+
+  <p>Each attempt runs a strict pipeline, and any failure feeds the error back into the next repair prompt:</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Step</th><th>Check</th></tr></thead>
+    <tbody>
+      <tr><td>1 · Draft</td><td>The LLM returns strict JSON: an <code>ontology</code>, sample <code>entities</code>/<code>relations</code>, and a one-sentence <code>explanation</code>. Nouns become object types, verbs become link types, and it picks the most specific property kind.</td></tr>
+      <tr><td>2 · Merge</td><td>If <code>extend</code>, union with the current ontology by type name (draft wins on conflict).</td></tr>
+      <tr><td>3 · Parse</td><td>Must deserialize into a real <code>Ontology</code> — malformed shapes are rejected.</td></tr>
+      <tr><td>4 · Lint</td><td>Must pass self-consistency: no link may reference an undefined object type.</td></tr>
+      <tr><td>5 · Dry-run</td><td>The model's own sample records are validated against the fresh schema; the report is returned so you can see it conform.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="small">The response carries <code>valid</code>, <code>ontology</code>, <code>lint</code>, <code>dry_run</code>,
+  <code>explanation</code>, <code>errors</code>, and <code>attempts</code>. Nothing is saved unless
+  <code>save=true</code> <i>and</i> the result is valid.</p>
+</section>
+
+<!-- 4 -->
+<section id="validate">
+  <div class="kicker">The gate</div>
+  <h2>Extraction validation</h2>
+  <p>The <code>ExtractionValidator</code> checks extracted entities and relations against the ontology and returns a
+  per-item report. Two policies control how strict it is:</p>
+
+  <div class="grid g2">
+    <div class="card"><b>Open-world</b> <span class="pill ctrl">default</span><br>
+      A type the ontology doesn't define is flagged <code>unknown_type</code> but stays <code>ok</code> — recorded as a
+      <i>warning</i>. New kinds are tolerated.</div>
+    <div class="card"><b>Closed-world</b><br>
+      The same unknown type becomes a <i>violation</i> (<code>ok=false</code>). Only the declared schema is allowed.</div>
+  </div>
+
+  <h3>What counts as a violation vs a warning</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Condition</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>Missing a <code>required</code> property</td><td><span class="pill danger">violation</span></td></tr>
+      <tr><td>Enum value not in <code>enum_values</code>, or numeric out of range</td><td><span class="pill danger">violation</span></td></tr>
+      <tr><td>Relation endpoint is a <i>known-but-disallowed</i> type</td><td><span class="pill danger">violation</span></td></tr>
+      <tr><td>Relation endpoint type is <i>unknown</i> (can't be verified)</td><td><span class="pill c">warning</span></td></tr>
+      <tr><td>A property not declared on the type</td><td><span class="pill c">warning</span></td></tr>
+      <tr><td>Unknown object/link type (open-world)</td><td><span class="pill c">warning</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout info">
+    <div class="clabel">Endpoint types: warn, don't block</div>
+    If a relation's endpoint type simply isn't known — the extraction didn't say what type the head or tail is — the
+    validator emits <i>"domain not verified"</i> as a warning rather than a violation. It only errors when an endpoint
+    is a known type that the link type explicitly disallows. The validator also backfills endpoint types from the other
+    entities in the same batch, so it can check domain/range even when a relation omits them.
+  </div>
+
+  <p>The report's <code>summary()</code> gives you <code>total</code>, <code>conforming</code>, <code>violations</code>,
+  <code>by_status</code>, <code>unknown_types</code>, and the active <code>policy</code>. Each item also returns its
+  <code>coerced</code> values — the normalised form the graph should store.</p>
+</section>
+
+<!-- 5 -->
+<section id="api">
+  <div class="kicker">The interface</div>
+  <h2>The /ontology API</h2>
+  <p>All endpoints are workspace-scoped via <code>LIGHTRAG-WORKSPACE</code> and return <code>503</code> unless the
+  server runs in Context Graph mode (<code>USE_CONTEXT_GRAPH=true</code>).</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Method · Path</th><th>Purpose</th><th>Returns</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill a">GET</span> <code>/ontology</code></td><td>Current schema summary</td><td><code>OntologySummaryResponse</code></td></tr>
+      <tr><td><span class="pill a">POST</span> <code>/ontology</code></td><td>Save a schema (JSON)</td><td>Summary (<code>400</code> if malformed)</td></tr>
+      <tr><td><span class="pill a">DELETE</span> <code>/ontology</code></td><td>Delete this workspace's schema</td><td><code>{deleted, workspace}</code></td></tr>
+      <tr><td><span class="pill a">POST</span> <code>/ontology/generate</code></td><td>NL &rarr; schema (LLM)</td><td>Generation result + <code>saved</code> (<code>503</code> if no LLM)</td></tr>
+      <tr><td><span class="pill a">POST</span> <code>/ontology/validate</code></td><td>Validate extracted records</td><td>Report (<code>404</code> if no schema)</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>The summary describes the schema at a glance — object types with property counts, link types with their
+  source/target types and cardinality, plus any <code>lint</code> messages and the full <code>ontology</code> for
+  round-tripping into an editor:</p>
+  <pre><code><span class="cm"># Validate a batch of extractions against the workspace schema</span>
+curl -X POST http://localhost:9621/ontology/validate \
+  -H <span class="str">"LIGHTRAG-WORKSPACE: sales"</span> -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{
+    "entities": [{"entity_name":"Acme Deal","entity_type":"Order","properties":{"status":"won"}}],
+    "relations": [],
+    "closed_world": false
+  }'</span>
+
+<span class="cm"># -> Order:Acme Deal  status=invalid  "missing required property 'value'"</span></code></pre>
+</section>
+
+<!-- 6 -->
+<section id="storage">
+  <div class="kicker">Persistence</div>
+  <h2>Storage &amp; versioning</h2>
+  <p>The default store writes one atomic JSON file per workspace — <code>ontology_&lt;workspace&gt;.json</code> — holding
+  the workspace name, an <code>updated_at</code> timestamp, and the ontology itself. An in-memory store is available for
+  tests and the API cache.</p>
+  <ul>
+    <li><b>Validated on save.</b> A schema whose links reference undefined object types is rejected at author time,
+      never persisted broken.</li>
+    <li><b>Monotonic version.</b> Each save bumps an integer <code>version</code> (previous + 1). The stored version
+      overrides whatever the incoming document carried.</li>
+    <li><b>Single current copy.</b> There is one file per workspace — the version counts changes; it is not a
+      per-version history or rollback log.</li>
+  </ul>
+
+  <div class="callout key">
+    <div class="clabel">◆ The arc</div>
+    Facts &rarr; decisions &rarr; policy &rarr; a typed ontology, each stage sharpening the next. Pair this with the
+    <a href="RULES_ENGINE.html">Rules Engine</a> for governance and the <a href="SCRAPER.html">Web Ingester</a> to fill
+    the graph from real sources.
+  </div>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  A feature guide for Context Graph's ontology — a typed, coercing schema validated against every extraction. Built on
+  <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a> (HKUDS). Supported by
+  <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>. Code examples are illustrative;
+  identifiers and endpoints are from the project source.
+</footer>
+
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('nav.toc a')), map={};
+  links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id); if(el)map[id]=a;});
+  var obs=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}
+  });},{rootMargin:'-20% 0px -70% 0px',threshold:0});
+  Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});
+  var btt=document.getElementById('btt');
+  window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});
+})();
+</script>
+</body>
+</html>

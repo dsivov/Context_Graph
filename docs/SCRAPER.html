@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Web Ingester — Any Site Into the Context Graph</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.10), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.08), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(91,141,239,.07),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(32px,5.5vw,54px);line-height:1.04;margin:.3em 0 .25em;
+  background:linear-gradient(92deg,#cfe0ff,#8fd9c9 50%,#ffd79a);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}
+.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:230px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(91,141,239,.18),transparent);color:#fff;border-left:2px solid var(--a)}
+
+main{min-width:0;max-width:760px}
+article section{margin:0 0 52px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}
+p{margin:.7em 0}
+.lead-p{font-size:19px;color:var(--ink)}
+.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--a);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)} .callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)} .callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.10)} .callout.key .clabel{color:#9cc0ff}
+
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--a)}
+.stat.b::after{background:var(--b)} .stat.c::after{background:var(--c)} .stat.ctrl::after{background:var(--ctrl)}
+.stat .v{font-size:30px;font-weight:800;letter-spacing:-.02em} .stat .l{color:var(--ink-faint);font-size:13px;margin-top:3px}
+
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:540px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+
+figure{margin:22px 0}
+figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px} figcaption b{color:var(--ink-soft)}
+
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}
+.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);
+  border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Context Graph · Feature Guide</div>
+    <h1>The Web Ingester</h1>
+    <p class="lede">A knowledge graph is only as good as what you put in it. The web ingester turns any public
+      website — a blog, a district CMS, a board-meeting portal — into decision-aware graph content, with the
+      source URL carried through as provenance on every edge.</p>
+    <div class="byline">A developer's guide to <code>POST /scrape</code> · the polite crawler, the connector
+      framework, and LLM-guided acquisition · part of <a href="BLOG_THE_FOURTH_ELEMENT.html">Context Graph</a></div>
+    <div class="hero-tags">
+      <span class="tag"><b>polite</b> crawler</span>
+      <span class="tag">robots &amp; rate-limit aware</span>
+      <span class="tag"><b>pluggable</b> connectors</span>
+      <span class="tag"><b>LLM</b>-guided selection</span>
+      <span class="tag">URL &rarr; <b>provenance</b></span>
+      <span class="tag">async job API</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this guide</div>
+  <ol>
+    <li><a href="#what">What it does</a></li>
+    <li><a href="#crawl">The polite crawler</a></li>
+    <li><a href="#connectors">The connector framework</a></li>
+    <li><a href="#select">LLM-driven selection</a></li>
+    <li><a href="#flow">Ingestion &amp; provenance</a></li>
+    <li><a href="#analyst">The site analyst</a></li>
+    <li><a href="#api">The /scrape API</a></li>
+    <li><a href="#limits">Limits &amp; config</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="what">
+  <div class="kicker">The purpose</div>
+  <h2>What it does</h2>
+  <p class="lead-p">Give it a seed URL. It crawls the same domain breadth-first — respecting <code>robots.txt</code>,
+  rate-limited, bounded by depth and page count — strips each page down to its readable main text, and hands that
+  text to the Context Graph's normal ingestion pipeline.</p>
+
+  <p>The important detail is the last one: each page's text is inserted <b>with its URL as the file path</b>. That URL
+  becomes the <code>provenance</code> field of the <code>RelationContext</code> on every <code>(h, r, t, rc)</code>
+  the graph extracts from that page. You don't just get facts — you get facts that know which page they came from.</p>
+
+  <p>Binary and structured files discovered along the way (PDFs, Office docs, JSON) are downloaded into the workspace's
+  input directory and picked up by the Context Graph's standard document scan. The whole thing runs as an async
+  background job you start and poll.</p>
+
+  <div class="callout info">
+    <div class="clabel">Scope of the module</div>
+    The ingester acquires and cleans content. It does <b>not</b> turn prose into quadruples itself — extraction,
+    chunking, dedup, and RelationContext construction all happen inside the Context Graph's <code>ainsert</code>
+    pipeline. The ingester's job is to fill the funnel, politely, with the provenance already attached.
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="crawl">
+  <div class="kicker">Acquisition</div>
+  <h2>The polite crawler</h2>
+  <p>The default path is a static breadth-first crawl (<code>SiteCrawler</code>). It stays on the seed's host,
+  optionally seeds itself from <code>/sitemap.xml</code>, and de-duplicates URLs by normalising them (dropping the
+  fragment, default port, and trailing slash while preserving the query string). Obvious static assets are filtered
+  by extension before they're ever fetched.</p>
+
+  <p>Every response is classified by content-type into three buckets:</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Bucket</th><th>What it is</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill a">html</span></td><td>A readable page</td>
+        <td>Cleaned by <code>extract_main_text</code> (lxml) — scripts, nav, header, footer and asides stripped;
+          <code>&lt;main&gt;</code>/<code>&lt;article&gt;</code> preferred — then queued for insertion.</td></tr>
+      <tr><td><span class="pill c">data</span></td><td>A PDF, Office doc, JSON, CSV…</td>
+        <td>Accumulated as a document to download (up to <code>max_documents</code>), later saved and scanned.</td></tr>
+      <tr><td><span class="pill">other</span></td><td>Assets, unknown types</td>
+        <td>Ignored.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>For JavaScript-heavy sites, set <code>render_js=true</code> and the crawler wraps its fetcher in a headless
+  Chromium (<code>PlaywrightFetcher</code>) that renders each page and also captures the data payloads the page's own
+  scripts request over the network — which is where the connector framework comes in.</p>
+
+  <div class="callout caveat">
+    <div class="clabel">Good citizenship, by default</div>
+    The bot identifies itself as <code>ContextGraphBot/1.0</code>, honours <code>robots.txt</code>
+    (<code>respect_robots</code>), waits <code>min_interval</code> seconds between hits to the same host, and caps
+    request size at 40&nbsp;MiB. All of these are on by default.
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="connectors">
+  <div class="kicker">The hard sites</div>
+  <h2>The connector framework</h2>
+  <p class="lead-p">Some platforms hide their documents behind a JavaScript widget or a private API. The files never
+  appear as <code>&lt;a href&gt;</code> links, so ordinary crawling — and even JS rendering — walks right past them.
+  A <b>connector</b> is a plugin that cracks a <i>platform</i>.</p>
+
+  <p>Each connector is generic across its platform — it keys off the platform's signature, never a specific site — and
+  implements a two-method contract:</p>
+  <pre><code><span class="kw">class</span> <span class="fn">Connector</span>(ABC):
+    name: str = <span class="str">"connector"</span>
+    description: str = <span class="str">""</span>   <span class="cm"># one line shown to the LLM selector</span>
+
+    <span class="kw">def</span> <span class="fn">detect</span>(self, *, requests, responses, page_url, html) -&gt; Optional[dict]:
+        <span class="cm"># Recognise the platform from render signals.</span>
+        <span class="cm"># Return a small template dict for resolve(), or None.</span>
+
+    <span class="kw">async def</span> <span class="fn">resolve</span>(self, request_context, template, *, max_files=None) -&gt; List[FetchResult]:
+        <span class="cm"># Replay the platform's API with the browser session,</span>
+        <span class="cm"># enumerate and download the hidden files.</span></code></pre>
+
+  <p>Connectors register in one list — <code>DEFAULT_CONNECTORS</code>. Three ship enabled today:</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Connector</th><th>Targets</th><th>How it cracks it</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill b">wordpress</span></td><td>Any WordPress site</td>
+        <td>Detects the <code>api.w.org</code> link tag or any <code>/wp-json/</code> request; pages the
+          <code>wp/v2/media</code> REST endpoint and downloads document files via their <code>source_url</code>.</td></tr>
+      <tr><td><span class="pill b">finalsite</span></td><td>Finalsite / Blackboard WCM (common on K-12 districts)</td>
+        <td>Detects <code>ContentItemSvc.asmx/GetItemList</code> calls; walks the folder-tree JSON API and downloads
+          leaf files via each item's <code>DownloadLink</code>.</td></tr>
+      <tr><td><span class="pill b">boarddocs</span></td><td>BoardDocs board-meeting portals (<code>Board.nsf</code>)</td>
+        <td>Detects <code>Board.nsf/BD-*</code> AJAX endpoints; posts <code>BD-GetMeetingsList</code> then
+          <code>BD-GetAgenda</code> and pulls Domino <code>/$file/</code> PDF attachments.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>Adding a connector is deliberately mechanical: copy <code>example.py</code> (a ready template that ships
+  <i>disabled</i>), implement <code>detect</code>/<code>resolve</code> for the platform, and append it to
+  <code>DEFAULT_CONNECTORS</code>.</p>
+
+  <div class="callout caveat">
+    <div class="clabel">Honesty note on BoardDocs</div>
+    The BoardDocs connector was written to the platform's <i>documented</i> API but could not be live-validated —
+    BoardDocs' CloudFront WAF blocks datacenter IPs. It needs a validation run from an unblocked network before you
+    rely on it in production.
+  </div>
+</section>
+
+<!-- 4 -->
+<section id="select">
+  <div class="kicker">The smarts</div>
+  <h2>LLM-driven connector selection</h2>
+  <p>When you crawl with <code>render_js=true</code> and <code>analyze=true</code>, the ingester doesn't blindly run
+  every connector against every page. After a page renders, it builds a compact <b>signals</b> summary — the
+  <code>&lt;meta generator&gt;</code> tag, platform markers, and up to 25 API-ish request URLs — and asks the
+  workspace's own LLM which connector fits:</p>
+
+  <pre><code><span class="cm"># LLMConnectorSelector.select(signals, connectors)</span>
+{
+  <span class="str">"connectors"</span>: [<span class="str">"wordpress"</span>],
+  <span class="str">"reason"</span>: <span class="str">"api.w.org link tag and /wp-json/ requests present"</span>
+}</code></pre>
+
+  <p>The model sees a manifest of each connector's one-line <code>description</code> and returns the matching names
+  (or an empty list if none clearly apply — which it is allowed to do). Two safety properties make this robust:</p>
+  <div class="grid g2">
+    <div class="card"><b>Fails open.</b> If the LLM errors or returns unparseable output, the ingester falls back to
+      trying <i>all</i> connectors — you never lose acquisition because the model hiccuped.</div>
+    <div class="card"><b>Deterministic gate.</b> Even when "all" connectors are tried, each one's <code>detect()</code>
+      self-gates on a real platform signature. A WordPress connector will never fire on a Finalsite site.</div>
+  </div>
+  <p class="small">The selector is only constructed when <code>analyze=true</code> <i>and</i> the workspace has an LLM
+  configured. Otherwise the connectors run purely on their deterministic <code>detect()</code> signatures.</p>
+</section>
+
+<!-- 5 -->
+<section id="flow">
+  <div class="kicker">End to end</div>
+  <h2>Ingestion &amp; provenance</h2>
+  <p>Here is the full path from a seed URL to graph edges, as orchestrated by <code>WebIngestor.ingest_site</code>:</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>#</th><th>Step</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Job starts</td><td><code>/scrape</code> creates a job record and launches an async task; the
+        response returns immediately in state <code>running</code>.</td></tr>
+      <tr><td>2</td><td>Workspace pinned</td><td>The background task sets the workspace context variable so the crawl
+        writes into the correct tenant even though it runs outside the request.</td></tr>
+      <tr><td>3</td><td>Crawl</td><td>Same-host BFS bounded by <code>max_pages</code>/<code>max_depth</code>, optional
+        sitemap seed, content-type classification.</td></tr>
+      <tr><td>4</td><td class="mono">HTML &rarr; graph</td><td><code>ainsert([page.text …], file_paths=[page.url …])</code>
+        — one call, <b>URL passed as the file path</b>.</td></tr>
+      <tr><td>5</td><td>Analyst filter</td><td>If enabled, the site analyst keeps only relevant data resources and
+        extracts document URLs to fetch (next section).</td></tr>
+      <tr><td>6</td><td>Save files</td><td>Kept data payloads written to the workspace input dir with safe,
+        collision-resistant filenames.</td></tr>
+      <tr><td>7</td><td>Scan &amp; done</td><td>If any files were saved, the job moves to <code>scanning</code> and
+        triggers the standard document scan; then <code>done</code>. Any failure &rarr; <code>error</code>, never a
+        server crash.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">◆ Why the file-path trick matters</div>
+    Passing the page URL as the <code>file_path</code> is what makes web-ingested knowledge <b>traceable</b>. Every
+    quadruple the graph extracts inherits that URL as its provenance, so a later query can answer not just "what does
+    the policy say" but "and here is the page it came from."
+  </div>
+</section>
+
+<!-- 6 -->
+<section id="analyst">
+  <div class="kicker">Relevance</div>
+  <h2>The site analyst</h2>
+  <p>A large site produces a lot of noise — tracking pixels, CDN junk, empty JSON. With <code>analyze=true</code>, the
+  <code>SiteAnalyst</code> filters what actually gets ingested:</p>
+  <ul>
+    <li><b>Binary documents</b> (PDF, Office) are kept automatically — no LLM call needed.</li>
+    <li><b>Obvious noise</b> (tracking/CDN URLs, sub-40-byte bodies) is dropped deterministically.</li>
+    <li><b>Ambiguous text resources</b> (JSON/CSV/XML, sampled up to ~2500 chars, capped at 40 resources) go to the
+      LLM, which returns keep/drop decisions <i>and</i> any document URLs it found <i>inside</i> those payloads —
+      e.g. a PDF link buried in an API response.</li>
+  </ul>
+  <p>The policy is default-drop for ambiguous resources: only what the LLM explicitly keeps is ingested. But if the
+  LLM errors, it fails <b>open</b> — keeping candidates rather than silently discarding them.</p>
+</section>
+
+<!-- 7 -->
+<section id="api">
+  <div class="kicker">The interface</div>
+  <h2>The /scrape API</h2>
+  <p>Three endpoints, all workspace-scoped via the <code>LIGHTRAG-WORKSPACE</code> header.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Method · Path</th><th>Purpose</th><th>Returns</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill a">POST</span> <code>/scrape</code></td><td>Start a crawl job</td>
+        <td><code>202</code> + <code>JobResponse</code> in state <code>running</code></td></tr>
+      <tr><td><span class="pill a">GET</span> <code>/scrape/{job_id}</code></td><td>Poll a job</td>
+        <td><code>JobResponse</code> with current state + summary (<code>404</code> if unknown)</td></tr>
+      <tr><td><span class="pill a">GET</span> <code>/scrape</code></td><td>List all jobs</td>
+        <td>Array of job records</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Request body — <code>ScrapeRequest</code></h3>
+  <pre><code>{
+  <span class="str">"url"</span>: <span class="str">"https://example-district.org"</span>,   <span class="cm">// required, http(s)</span>
+  <span class="str">"max_pages"</span>: <span class="num">50</span>,        <span class="cm">// 1–500   HTML pages to ingest</span>
+  <span class="str">"max_documents"</span>: <span class="num">200</span>,   <span class="cm">// 0–2000  data files to download</span>
+  <span class="str">"max_depth"</span>: <span class="num">2</span>,          <span class="cm">// 0–6     link depth from the seed</span>
+  <span class="str">"same_domain"</span>: <span class="kw">true</span>,      <span class="cm">// stay on the seed's host</span>
+  <span class="str">"respect_robots"</span>: <span class="kw">true</span>,   <span class="cm">// honour robots.txt</span>
+  <span class="str">"render_js"</span>: <span class="kw">false</span>,       <span class="cm">// headless browser for JS sites</span>
+  <span class="str">"analyze"</span>: <span class="kw">false</span>,         <span class="cm">// LLM analyst + connector selection</span>
+  <span class="str">"use_sitemap"</span>: <span class="kw">true</span>,      <span class="cm">// seed from sitemap.xml</span>
+  <span class="str">"min_interval"</span>: <span class="num">1.0</span>       <span class="cm">// 0–30s between hits to a host</span>
+}</code></pre>
+
+  <h3>Response — <code>JobResponse</code></h3>
+  <p>The <code>summary</code> is populated as the job progresses:
+  <code>ingested</code> (HTML pages inserted), <code>urls</code>, <code>documents</code> (<code>{url, file}</code>),
+  <code>skipped</code> (<code>{url, reason}</code>), <code>track_ids</code>, and a nullable <code>analyst</code> block.
+  Job state moves <code>running</code> &rarr; <code>scanning</code> &rarr; <code>done</code>, or <code>error</code>.</p>
+
+  <pre><code><span class="cm"># Start a JS-rendered, LLM-filtered crawl of a district site</span>
+curl -X POST http://localhost:9621/scrape \
+  -H <span class="str">"LIGHTRAG-WORKSPACE: district_acme"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"url":"https://acme.k12.org","render_js":true,"analyze":true,"max_depth":3}'</span>
+
+<span class="cm"># -> {"job_id":"a1b2c3d4e5f6","state":"running", ...}</span>
+curl http://localhost:9621/scrape/a1b2c3d4e5f6 -H <span class="str">"LIGHTRAG-WORKSPACE: district_acme"</span></code></pre>
+</section>
+
+<!-- 8 -->
+<section id="limits">
+  <div class="kicker">Operating it</div>
+  <h2>Limits &amp; config</h2>
+  <p>There is no dedicated environment variable to enable or tune the web ingester — everything is set per request via
+  <code>ScrapeRequest</code>. A few operational facts worth knowing:</p>
+  <ul>
+    <li>The feature is wired at server startup inside a guarded block: if its dependencies are missing, the server logs
+      <i>"Web-ingest API unavailable"</i> and starts anyway.</li>
+    <li>Auth reuses the server's existing API key, exactly like every other router.</li>
+    <li><code>render_js=true</code> needs Playwright + Chromium installed
+      (<code>pip install playwright &amp;&amp; playwright install chromium</code>). It's imported lazily, so static
+      crawls have no such dependency.</li>
+    <li><code>analyze=true</code> uses the workspace's own LLM function — provider-agnostic, no separate config. Without
+      an LLM the analyst and connector selector are silently skipped.</li>
+  </ul>
+
+  <div class="callout info">
+    <div class="clabel">Where it fits</div>
+    The web ingester is the front door for the rest of the stack: pull a district's public documents in, let the graph
+    extract the decisions, then govern them with the <a href="RULES_ENGINE.html">Business Rules Engine</a> and validate
+    them against your <a href="ONTOLOGY.html">Ontology</a>. Facts in, defensible answers out.
+  </div>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  A feature guide for Context Graph's web ingester — <code>POST /scrape</code>, the polite crawler, and the pluggable
+  connector framework. Built on <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a>
+  (HKUDS). Supported by <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>. Code examples
+  are illustrative; identifiers and endpoints are from the project source.
+</footer>
+
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('nav.toc a')), map={};
+  links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id); if(el)map[id]=a;});
+  var obs=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}
+  });},{rootMargin:'-20% 0px -70% 0px',threshold:0});
+  Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});
+  var btt=document.getElementById('btt');
+  window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});
+})();
+</script>
+</body>
+</html>

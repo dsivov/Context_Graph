@@ -141,8 +141,8 @@ b.hl{color:#8fd9c9}
     <li><a href="#precedents">Precedents &amp; validity</a></li>
     <li><a href="#benchmark">Does surfacing rc help?</a></li>
     <li><a href="#lightrag">Standing on LightRAG</a></li>
-    <li><a href="#rules">From memory to policy</a></li>
-    <li><a href="#ingest">Filling the graph</a></li>
+    <li><a href="#rules">Business Rules: the decision gate</a></li>
+    <li><a href="#ingest">Web ingestion: any site</a></li>
     <li><a href="#roadmap">What's next</a></li>
     <li><a href="#fit">Where it fits · try it</a></li>
   </ol>
@@ -529,8 +529,8 @@ rc = RelationContext(
 
 <!-- 8 -->
 <section id="rules">
-  <div class="kicker">New · governance</div>
-  <h2>From memory to policy: the decision gate</h2>
+  <div class="kicker">New · Business Rules Engine</div>
+  <h2>Business Rules: from memory to policy</h2>
   <p class="lead-p">Once every edge carries <i>why</i> a decision was made, the next question writes itself: should this
   decision have been allowed at all? Context Graph now ships a <b>business rules engine</b> that evaluates every decision
   the moment it's recorded.</p>
@@ -576,6 +576,8 @@ end</code></pre>
   <p>Policies are managed through a small <code>/rules</code> API and validated before they're stored — the DSL must
   parse and every concept a rule references must be defined. Each tenant (workspace) carries its own rule set and concept
   catalog, with a pinned embedding model so a rule that passed yesterday behaves identically today.</p>
+  <p class="small">→ Full walkthrough: <a href="RULES_ENGINE.html">the Business Rules Engine guide</a> — the DSL, the
+  fields you can match on, semantic <code>sim()</code>, the pre-emit gate, and the plain-English rule author.</p>
 
   <div class="callout key">
     <div class="clabel">◆ Why it matters</div>
@@ -691,6 +693,8 @@ end</code></pre>
   the <b>page URL as provenance</b>, so the mentor can cite the exact page it learned something from.</p>
 <pre><code>POST /scrape { <span class="str">"url"</span>: <span class="str">"https://a-district.org/policies"</span>, <span class="str">"render_js"</span>: true }
    →  crawl + render + capture  →  documents ingested  →  graph, with citations</code></pre>
+  <p class="small">→ Full walkthrough: <a href="SCRAPER.html">the Web Ingester guide</a> — the polite crawler, the
+  connector framework, LLM-driven connector selection, the site analyst, and the <code>/scrape</code> job API.</p>
 
   <div class="callout caveat">
     <div class="clabel">◆ The honest edge</div>
@@ -704,24 +708,26 @@ end</code></pre>
 <section id="roadmap">
   <div class="kicker">What's next</div>
   <h2>The road from memory to operational ontology</h2>
-  <p class="lead-p">The decision gate and the web ingester are in; the plan turns Context Graph into a system you don't
-  just reason from, but operate from. <span class="small">(The AI rule author — plain-English policy → validated DSL,
+  <p class="lead-p">The decision gate, the web ingester, and the typed ontology are all in; the plan turns Context Graph
+  into a system you don't just reason from, but operate from. <span class="small">(The AI rule author — plain-English policy → validated DSL,
   dry-run before it goes live — already ships with the rules engine.)</span></p>
 
   <div class="grid g3" style="margin:18px 0">
     <div class="card">
-      <div class="kicker" style="color:var(--c)">Near term</div>
+      <div class="kicker" style="color:var(--b)">Now shipping</div>
       <h3 style="margin-top:2px">LLM site analyst</h3>
       <p class="small">The brain on top of the web ingester: given a page, its links, and its captured API responses, an
       LLM judges <i>relevance</i> (policy catalog vs. tracking beacon) and extracts the document URLs to fetch — so the
-      graph fills with what matters, on any site.</p>
+      graph fills with what matters, on any site. Live behind <code>analyze=true</code> — see the
+      <a href="SCRAPER.html">web ingester guide</a>.</p>
     </div>
     <div class="card">
-      <div class="kicker" style="color:var(--a)">In progress</div>
-      <h3 style="margin-top:2px">Ontology layer</h3>
+      <div class="kicker" style="color:var(--b)">Now shipping</div>
+      <h3 style="margin-top:2px"><a href="ONTOLOGY.html">Ontology layer</a></h3>
       <p class="small">A typed schema — object types, typed properties, link types, cardinality — authored top-down and
       AI-assisted. It gives rules a real vocabulary (<code>Order.value</code>, <code>Employee.role</code>) and validates
-      what extraction writes. The schema model and store are built.</p>
+      <i>and coerces</i> what extraction writes. Now live, with a plain-English schema author — see the
+      <a href="ONTOLOGY.html">ontology guide</a>.</p>
     </div>
     <div class="card">
       <div class="kicker" style="color:var(--ctrl)">Beyond</div>
@@ -770,6 +776,15 @@ answer = <span class="kw">await</span> cg.<span class="fn">cgr3_query</span>(<sp
     Facts tell you what is true. Decisions tell you why, who, and for how long. By making the decision the fourth
     element of every edge, Context Graph turns a knowledge graph from a system of record into a system you can reason —
     and act — from.
+  </div>
+
+  <div class="callout info">
+    <div class="clabel">Dig deeper</div>
+    <b><a href="CONTEXT_GRAPH_OVERVIEW.html">Context Graph — Technical Field Guide</a></b> is the full reference:
+    architecture, the quadruple, ingestion, CGR3, the REST API, MCP, storage, and multi-tenancy, with diagrams.
+    Per-feature walkthroughs: <a href="RULES_ENGINE.html">Business Rules Engine</a> ·
+    <a href="ONTOLOGY.html">Ontology</a> · <a href="SCRAPER.html">Web Ingester</a>. The full gap analysis and build
+    log live in <a href="CLOSING_THE_GAPS.html">Closing the Gaps</a>.
   </div>
 </section>
 
