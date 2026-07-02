@@ -45,6 +45,30 @@ def gather_docs(repo, limit):
     return dict(list(out.items())[:limit])
 
 
+_CODE_EXTS = (".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".rb", ".kt", ".swift")
+_CODE_SKIP = {"__pycache__", "node_modules", ".venv", "venv", "migrations", "dist", "build", ".git"}
+
+
+def gather_code(repo, modules, limit, include_tests=False):
+    """Source files to ingest for the code semantic layer (shallow paths first)."""
+    out = {}
+    for m in modules:
+        if not include_tests and m in ("tests", "test"):
+            continue
+        base = os.path.join(repo, m)
+        if not os.path.isdir(base):
+            continue
+        for root, dirs, files in os.walk(base):
+            dirs[:] = [d for d in dirs if d not in _CODE_SKIP and not d.startswith(".")
+                       and (include_tests or d not in ("tests", "test"))]
+            for f in files:
+                if f.endswith(_CODE_EXTS):
+                    p = os.path.join(root, f)
+                    out[os.path.relpath(p, repo)] = p
+    items = sorted(out.items(), key=lambda kv: (kv[0].count(os.sep), kv[0]))  # shallow first
+    return dict(items[:limit])
+
+
 def detect_modules(repo):
     """Top-level directories that contain source files."""
     exts = (".py", ".js", ".ts", ".tsx", ".go", ".rs", ".java", ".rb")
@@ -71,6 +95,11 @@ def main() -> int:
     ap.add_argument("--no-docs", action="store_true",
                     help="Skip ingesting README/docs (skip the semantic layer).")
     ap.add_argument("--max-docs", type=int, default=25)
+    ap.add_argument("--code", action="store_true",
+                    help="Also ingest source files so code-level facts are query-able.")
+    ap.add_argument("--max-code-files", type=int, default=60)
+    ap.add_argument("--include-tests", action="store_true",
+                    help="Include tests/ when ingesting code (default: skip).")
     args = ap.parse_args()
 
     repo = os.path.abspath(args.repo)
@@ -144,6 +173,29 @@ def main() -> int:
         if texts and post("/documents/texts", {"texts": texts, "file_sources": sources}):
             print(f"queued {len(texts)} docs for extraction (async — poll "
                   f"/documents/pipeline_status): {sources}", flush=True)
+
+    # --- code layer: ingest source files (full content) so code-level facts —
+    #     symbol locations, paths, logic — become query-able with provenance.
+    if args.code:
+        code = gather_code(repo, modules, args.max_code_files, include_tests=args.include_tests)
+        texts, sources = [], []
+        for rel, path in code.items():
+            try:
+                txt = open(path, encoding="utf-8", errors="ignore").read()
+            except OSError:
+                continue
+            if txt.strip() and len(txt) <= 200_000:
+                texts.append(txt)
+                sources.append(rel)
+        # ingest in batches so a large repo doesn't overflow one request
+        BATCH = 25
+        total = 0
+        for i in range(0, len(texts), BATCH):
+            if post("/documents/texts", {"texts": texts[i:i + BATCH], "file_sources": sources[i:i + BATCH]}):
+                total += len(texts[i:i + BATCH])
+        if total:
+            print(f"queued {total} source files for extraction (async — poll "
+                  f"/documents/pipeline_status)", flush=True)
     return 0
 
 
