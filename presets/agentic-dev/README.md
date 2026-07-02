@@ -19,12 +19,21 @@ See the design discussion in [`../../docs/AGENTIC_PROJECT_GRAPH.html`](../../doc
 | `rbac.json` | (P3 RBAC) | ⏳ pending the RBAC layer |
 | `lifecycle.json` | (P3 lifecycle) | ⏳ pending the lifecycle layer |
 
-## Install (ontology)
+## Install
+
+One command applies every piece present, in dependency order
+(ontology → rules → actions → seed) via the generic installer:
 
 ```bash
-curl -X POST http://localhost:9621/ontology \
-  -H "LIGHTRAG-WORKSPACE: my_project" -H "Content-Type: application/json" \
-  -d "{\"ontology\": $(cat ontology.json)}"
+# from the repo root, with lightrag-server running
+python presets/install.py --workspace my_project
+python presets/install.py --workspace my_project --dry-run    # preview, no calls
 ```
+
+Options: `--preset <dir>` (default `agentic-dev`), `--url` (default
+`http://localhost:9621`), `--api-key` (or `LIGHTRAG_API_KEY`). The installer is
+generic — it knows nothing about roles or tasks, only which JSON files a preset
+provides. Ontology/rules/actions replace-and-version on re-run; seed
+entity/relation creation tolerates "already exists".
 
 Everything here is opt-in and per-workspace; single-agent projects can ignore it.
