@@ -1,0 +1,123 @@
+{
+  "_comment": "Agentic-dev preset - actions (piece 3). POST wrapped as {catalog:...} to /actions. Each action is bound to an ontology object type; relation_type is chosen so the methodology-gate rules fire (ProposeAPI->reuse, DeprecateAPI->deprecation, ApproveArchitecture->rationale notify). Handlers are record-only; a webhook handler can trigger CI/downstream systems (SSRF-guarded).",
+  "name": "agentic_dev",
+  "actions": [
+    {
+      "name": "ProposeAPI",
+      "object_type": "API",
+      "relation_type": "proposes a new API",
+      "effect": "api-proposal",
+      "params": [
+        {
+          "name": "name",
+          "kind": "string",
+          "required": true
+        },
+        {
+          "name": "signature",
+          "kind": "string"
+        },
+        {
+          "name": "module",
+          "kind": "string"
+        }
+      ],
+      "handler": {
+        "kind": "none"
+      }
+    },
+    {
+      "name": "AdvanceTask",
+      "object_type": "Task",
+      "relation_type": "advances task state",
+      "effect": "task-transition",
+      "params": [
+        {
+          "name": "to",
+          "kind": "enum",
+          "required": true,
+          "enum_values": [
+            "proposed",
+            "active",
+            "blocked",
+            "done"
+          ]
+        }
+      ],
+      "handler": {
+        "kind": "none"
+      }
+    },
+    {
+      "name": "CreateChangeRequest",
+      "object_type": "ChangeRequest",
+      "relation_type": "creates a change request",
+      "effect": "cr-created",
+      "params": [
+        {
+          "name": "title",
+          "kind": "string",
+          "required": true
+        },
+        {
+          "name": "summary",
+          "kind": "text"
+        }
+      ],
+      "handler": {
+        "kind": "none"
+      }
+    },
+    {
+      "name": "ApproveArchitecture",
+      "object_type": "Decision",
+      "relation_type": "architecture decision approved",
+      "effect": "architecture-approval",
+      "params": [
+        {
+          "name": "title",
+          "kind": "string",
+          "required": true
+        },
+        {
+          "name": "rationale",
+          "kind": "text"
+        }
+      ],
+      "handler": {
+        "kind": "none"
+      }
+    },
+    {
+      "name": "DeprecateAPI",
+      "object_type": "API",
+      "relation_type": "deprecate the API",
+      "effect": "deprecation",
+      "policy_ref": "ApiLifecyclePolicy",
+      "params": [
+        {
+          "name": "reason",
+          "kind": "text"
+        }
+      ],
+      "handler": {
+        "kind": "none"
+      }
+    },
+    {
+      "name": "MergeToMain",
+      "object_type": "Feature",
+      "relation_type": "ships to main branch",
+      "effect": "release",
+      "params": [
+        {
+          "name": "version",
+          "kind": "string"
+        }
+      ],
+      "handler": {
+        "kind": "none"
+      }
+    }
+  ]
+}

@@ -14,7 +14,7 @@ See the design discussion in [`../../docs/AGENTIC_PROJECT_GRAPH.html`](../../doc
 |------|--------------|--------|
 | `ontology.json` | `POST /ontology` | ✅ drafted — 10 object types, 14 link types, lints clean |
 | `rules.json` | `POST /rules` | ✅ drafted — 4-rule methodology gate (reuse nudge, deprecation, arch rationale, low-confidence); validated live. Advisory by default (FLAG/NOTIFY) — hard invariants go to the lifecycle layer, access control to RBAC |
-| `actions.json` | `POST /actions` | ⏳ next — governed operations (ProposeAPI, AdvanceTask, …) |
+| `actions.json` | `POST /actions` | ✅ drafted — 6 governed operations (ProposeAPI, AdvanceTask, CreateChangeRequest, ApproveArchitecture, DeprecateAPI, MergeToMain). Relation types chosen so the gate fires; validated live end-to-end |
 | `rbac.json` | (P3 RBAC) | ⏳ pending the RBAC layer |
 | `lifecycle.json` | (P3 lifecycle) | ⏳ pending the lifecycle layer |
 
