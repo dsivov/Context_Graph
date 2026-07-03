@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import Button from '@/components/ui/Button'
 import Textarea from '@/components/ui/Textarea'
@@ -40,6 +40,7 @@ export default function RulesManager() {
   const [policy, setPolicy] = useState('')
   const [busy, setBusy] = useState(false)
   const [genResult, setGenResult] = useState<any>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -79,6 +80,15 @@ export default function RulesManager() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const onEdit = () => {
+    if (!summary?.exists) return
+    setDsl(summary.dsl || '')
+    setConceptsText(JSON.stringify(summary.concepts_map || {}, null, 2))
+    setGenResult(null)
+    editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    toast.info('Loaded the current policy into the editor below — edit, then Save.')
   }
 
   const onToggle = async () => {
@@ -173,6 +183,9 @@ export default function RulesManager() {
               ))}
             </div>
             <div className="flex gap-2">
+              <Button size="sm" onClick={onEdit} disabled={busy}>
+                Edit
+              </Button>
               <Button size="sm" variant="outline" onClick={onToggle} disabled={busy}>
                 {summary.enabled ? 'Disable gate' : 'Enable gate'}
               </Button>
@@ -228,9 +241,11 @@ export default function RulesManager() {
       <Separator />
 
       {/* Editor */}
-      <Card>
+      <Card ref={editorRef}>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Policy editor</CardTitle>
+          <CardTitle className="text-base">
+            {summary?.exists ? 'Policy editor · editing current' : 'Policy editor'}
+          </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <label className="text-sm font-medium">Rule DSL</label>

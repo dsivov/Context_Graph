@@ -48,7 +48,7 @@ class RulesService:
         bundle = self._store.load(workspace)
         if bundle is None:
             return {"workspace": workspace, "exists": False, "enabled": False,
-                    "rules": [], "concepts": []}
+                    "rules": [], "concepts": [], "dsl": "", "concepts_map": {}}
         return {
             "workspace": workspace,
             "exists": True,
@@ -58,6 +58,9 @@ class RulesService:
             "updated_at": bundle.updated_at,
             "concepts": sorted(bundle.concepts),
             "rules": self._list_rules(bundle.dsl),
+            # Raw source so the UI can load an existing policy back into the editor.
+            "dsl": bundle.dsl,
+            "concepts_map": {k: list(v) for k, v in bundle.concepts.items()},
         }
 
     @staticmethod

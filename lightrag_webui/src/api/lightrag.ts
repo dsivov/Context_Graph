@@ -1072,6 +1072,8 @@ export type RulesSummary = {
   updated_at?: number | null
   concepts: string[]
   rules: RuleInfo[]
+  dsl?: string
+  concepts_map?: Record<string, string[]>
 }
 
 export const getRules = async (): Promise<RulesSummary> =>

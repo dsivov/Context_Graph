@@ -59,6 +59,8 @@ class RuleSummaryResponse(BaseModel):
     updated_at: Optional[float] = None
     concepts: List[str] = Field(default_factory=list)
     rules: List[RuleInfo] = Field(default_factory=list)
+    dsl: str = ""
+    concepts_map: Dict[str, List[str]] = Field(default_factory=dict)
 
 
 class EvaluateRequest(BaseModel):
