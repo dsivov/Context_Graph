@@ -53,6 +53,9 @@ function TabsNavigation() {
         <NavigationTab value="ontology" currentTab={currentTab}>
           {t('header.ontology', 'Ontology')}
         </NavigationTab>
+        <NavigationTab value="get-started" currentTab={currentTab}>
+          {t('header.getStarted', 'Get Started')}
+        </NavigationTab>
         <NavigationTab value="api" currentTab={currentTab}>
           {t('header.api')}
         </NavigationTab>

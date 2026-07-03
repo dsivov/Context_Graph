@@ -1223,3 +1223,48 @@ export const validateExtraction = async (
   closedWorld = false
 ): Promise<OntologyValidateResponse> =>
   (await axiosInstance.post('/ontology/validate', { entities, relations, closed_world: closedWorld })).data
+
+/* ---- Conversational onboarding (Get Started tab) ---------------------------- */
+
+export type OnboardChatMessage = { role: string; content: string }
+export type OnboardFirstCR = { id: string; title: string; description: string }
+export type OnboardProposal = {
+  workspace?: string
+  brief: string
+  description: string
+  policy?: string | null
+  roles: string[]
+  object_types_preview: string[]
+  rules_preview: string[]
+  first_cr?: OnboardFirstCR | null
+  backfill?: Record<string, any>
+}
+export type OnboardChatResponse = {
+  assistant: string
+  ready: boolean
+  proposal: OnboardProposal | null
+}
+export type OnboardApplyResponse = {
+  workspace: string
+  ontology: { valid: boolean; saved: boolean; object_types: string[] }
+  rules?: { valid: boolean; saved: boolean; errors: string[] } | null
+  roles_seeded: string[]
+  first_cr?: { id: string; title: string } | null
+  brief_id?: string | null
+  bootstrap: {
+    mcp_config: Record<string, any>
+    playbook_url: string
+    manifest_url: string
+    backfill: { script_url: string; cmd: string; when: string }
+    next_steps: string[]
+  }
+}
+
+export const onboardChat = async (
+  messages: OnboardChatMessage[],
+  repoPresent = false
+): Promise<OnboardChatResponse> =>
+  (await axiosInstance.post('/onboard/chat', { messages, repo_present: repoPresent })).data
+
+export const onboardApply = async (proposal: OnboardProposal): Promise<OnboardApplyResponse> =>
+  (await axiosInstance.post('/onboard/apply', { proposal })).data
