@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Context Graph">
+  <defs>
+    <linearGradient id="cg-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c2436"/>
+      <stop offset="1" stop-color="#10131b"/>
+    </linearGradient>
+    <radialGradient id="cg-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#a974f0" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#a974f0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" rx="14" fill="url(#cg-bg)"/>
+  <circle cx="44" cy="44" r="18" fill="url(#cg-glow)"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M21 21 L43 20" stroke="#46516b" stroke-width="3"/>
+    <path d="M21 21 L20 43" stroke="#46516b" stroke-width="3"/>
+    <path d="M43 20 L44 44" stroke="#8a63c0" stroke-width="3"/>
+    <path d="M20 43 L44 44" stroke="#8a63c0" stroke-width="3"/>
+    <path d="M21 21 L44 44" stroke="#a974f0" stroke-width="3"/>
+  </g>
+  <circle cx="21" cy="21" r="6" fill="#19b89a"/>
+  <circle cx="43" cy="20" r="6" fill="#5b8def"/>
+  <circle cx="20" cy="43" r="6" fill="#f0a73c"/>
+  <circle cx="44" cy="44" r="7.5" fill="#a974f0" stroke="#e0cef9" stroke-width="1.8"/>
+</svg>

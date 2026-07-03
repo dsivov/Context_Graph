@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import Button from '@/components/ui/Button'
 import Textarea from '@/components/ui/Textarea'
@@ -43,6 +43,7 @@ export default function OntologyManager() {
   const [extend, setExtend] = useState(true)
   const [busy, setBusy] = useState(false)
   const [genResult, setGenResult] = useState<any>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -77,6 +78,15 @@ export default function OntologyManager() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const onEdit = () => {
+    if (summary?.exists && summary.ontology) {
+      setDocText(JSON.stringify(summary.ontology, null, 2))
+    }
+    setGenResult(null)
+    editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    toast.info('Loaded the current schema into the editor below — edit, then Save.')
   }
 
   const onDelete = async () => {
@@ -169,7 +179,10 @@ export default function OntologyManager() {
                 <b>Lint:</b> {summary.lint.join('; ')}
               </div>
             )}
-            <div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={onEdit} disabled={busy}>
+                Edit
+              </Button>
               <Button size="sm" variant="destructive" onClick={onDelete} disabled={busy}>
                 Delete ontology
               </Button>
@@ -223,9 +236,11 @@ export default function OntologyManager() {
       <Separator />
 
       {/* Editor */}
-      <Card>
+      <Card ref={editorRef}>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Ontology editor (JSON)</CardTitle>
+          <CardTitle className="text-base">
+            {summary?.exists ? 'Ontology editor (JSON) · editing current' : 'Ontology editor (JSON)'}
+          </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <Textarea
