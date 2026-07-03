@@ -777,6 +777,13 @@ end</code></pre>
   requests, ADRs, commits. The methodology itself is <b>data</b> — an <code>agentic-dev</code> preset of ontology,
   rules, actions, RBAC, and lifecycle — so the core stays generic while the agent gets a project that governs itself.</p>
 
+  <p><b>How this differs from the "code graph" crowd.</b> Almost every tool that pairs <i>graph</i> or <i>context</i>
+  with coding agents is a <b>code parser</b>: it indexes your symbols, imports, and call sites and hangs that index off
+  the IDE for better autocomplete and retrieval. Useful — but it's still an index of <i>what the code is</i>, rebuilt
+  from the source each time. Context Graph sits a level up: it's a <b>management system on a generic decision-aware
+  platform</b> that remembers the <i>decisions</i> made across the project, enforces <i>how</i> the next one gets made
+  (rules, RBAC, lifecycle), and keeps the audit trail. A code index is just one input we can ingest — not the product.</p>
+
   <div class="callout key">
     <div class="clabel">◆ Read the full use case</div>
     <b><a href="AGENTIC_DEVELOPMENT.html">AI Agent Development on Context Graph</a></b> — the development loop, the

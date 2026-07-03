@@ -428,6 +428,27 @@ invoke_action(action=<span class="str">"AdvanceTask"</span>, object_ref=<span cl
     </div>
   </div>
 
+  <h3>The agent pulls its own playbook</h3>
+  <p>No files to hand-copy into a repo. The server serves everything an agent needs to bootstrap itself, generated
+  <i>live</i> from the workspace's installed config — so the guide lists the real object types, the real actions with
+  their params, and the real guardrails, never a stale template. The whole greenfield flow is <b>read one URL</b>:</p>
+
+  <ol class="steps">
+    <li><b>Read the bootstrap bundle</b> — <code>GET /workspace/bootstrap</code> returns the <code>.mcp.json</code> to
+      write, the backfill command, links to the playbook and manifest, and the ordered next steps (JSON, for machine init).</li>
+    <li><b>Wire MCP</b> — write the returned <code>mcp_config</code> to <code>.mcp.json</code> and connect. One surface, done.</li>
+    <li><b>Backfill if the repo isn't empty</b> —
+      <code>curl $SERVER/workspace/backfill-script | python - --repo . --workspace &lt;ws&gt; --code</code>. The server
+      serves the script; the agent runs it against its own checkout (the server can't reach your filesystem).</li>
+    <li><b>Read the playbook</b> — <code>GET /workspace/playbook</code> returns a Markdown operating guide (the three
+      habits, your actions, the signals) rendered from this workspace's live manifest.</li>
+    <li><b>Start the loop.</b></li>
+  </ol>
+
+  <p class="small">Onboarding a <i>new</i> workspace first? <code>POST /onboard</code> tailors the config <b>and returns
+  the same bootstrap bundle</b> — the wizard hands the agent its entry points in one call.</p>
+
+  <h3>What backfill imports</h3>
   <ol class="steps">
     <li><b>Structural facts</b> (no LLM): source directories → <code>Module</code> nodes, git author →
       <code>Developer</code>, recent commits → <code>Commit</code> nodes linked to the modules they changed.</li>

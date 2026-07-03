@@ -19,6 +19,7 @@ The result is a *system of decision*, not just a system of record: a living, que
 - [Web Ingestion](#web-ingestion)
 - [Real-Time Decision Capture](#real-time-decision-capture)
 - [Governance & Actions](#governance--actions)
+- [AI Agent Development](#ai-agent-development)
 - [Querying](#querying)
 - [REST API](#rest-api)
 - [Integration Patterns](#integration-patterns)
@@ -437,6 +438,32 @@ curl -X POST http://localhost:9621/actions/invoke -H "LIGHTRAG-WORKSPACE: sales"
 > 📖 Full guide: [`docs/ACTIONS.html`](docs/ACTIONS.html)
 
 > These features require `USE_CONTEXT_GRAPH=true` and return **HTTP 503** otherwise.
+
+---
+
+## AI Agent Development
+
+Point a coding agent — or a whole dev team of agents — at Context Graph and it stops rebuilding what already exists, stops losing the *why* behind past choices, and follows a methodology the graph **enforces** (rules, RBAC, lifecycle). The methodology itself is **data** — an `agentic-dev` preset of ontology/rules/actions/RBAC/lifecycle — so the core stays generic. This is a management system on a decision-aware platform, not a code index bolted onto the IDE.
+
+**Greenfield onboarding is one URL.** The server serves the agent's playbook and bootstrap bundle, generated *live* from the workspace's installed config (real object types, actions, guardrails) — no guide files to hand-copy into the repo:
+
+```bash
+# 1) Everything the agent needs to init itself — mcp config, backfill cmd, playbook/manifest links
+curl -s http://localhost:9621/workspace/bootstrap -H "LIGHTRAG-WORKSPACE: myproj"
+
+# 2) Backfill an existing repo/fork — the server serves the script; the agent runs it locally
+#    (imports modules, author, commits, docs, and with --code the source itself)
+curl -s http://localhost:9621/workspace/backfill-script | python - --repo . --workspace myproj --code
+
+# 3) The live operating guide (Markdown) — the three habits, your actions, the signals
+curl -s http://localhost:9621/workspace/playbook -H "LIGHTRAG-WORKSPACE: myproj"
+```
+
+Onboarding a *brand-new* workspace? `POST /onboard` with a plain-English description tailors the ontology + rules and returns the same bootstrap bundle, handing the agent its entry points in one call.
+
+> 📖 Full use case: [`docs/AGENTIC_DEVELOPMENT.html`](docs/AGENTIC_DEVELOPMENT.html) · design discussion: [`docs/AGENTIC_PROJECT_GRAPH.html`](docs/AGENTIC_PROJECT_GRAPH.html)
+
+> Requires `USE_CONTEXT_GRAPH=true`.
 
 ---
 
