@@ -18,9 +18,12 @@ Context Graph mode. See ``AGENTIC_PROJECT_GRAPH.html`` § Onboarding & the playb
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from lightrag.api.utils_api import get_combined_auth_dependency
@@ -97,6 +100,194 @@ async def build_manifest(rag, ws: str, role: Optional[str], *, ontology_service=
     return out
 
 
+# --------------------------------------------------------------------------- #
+# Greenfield onboarding: the server serves its own playbook + bootstrap bundle #
+# so a brand-new team's agent can pull everything it needs from one URL,       #
+# instead of us hand-copying guide files into every repo.                      #
+# --------------------------------------------------------------------------- #
+
+def _server_url(request: Request) -> str:
+    """Public base URL to embed in the mcp config / script commands.
+
+    Honors ``LIGHTRAG_PUBLIC_URL`` (set it when the server sits behind a proxy),
+    else derives from the incoming request.
+    """
+    override = os.environ.get("LIGHTRAG_PUBLIC_URL")
+    return (override or str(request.base_url)).rstrip("/")
+
+
+def build_bootstrap(ws: str, role: Optional[str], server_url: str) -> Dict[str, Any]:
+    """Machine-readable bootstrap bundle — what an agent needs to init itself."""
+    q = f"?role={role}" if role else ""
+    return {
+        "workspace": ws,
+        "role": role,
+        "server_url": server_url,
+        "mcp_config": {
+            "mcpServers": {
+                "context-graph": {
+                    "type": "http",
+                    "url": f"{server_url}/mcp",
+                    "headers": {"LIGHTRAG-WORKSPACE": ws},
+                }
+            }
+        },
+        "playbook_url": f"{server_url}/workspace/playbook{q}",
+        "manifest_url": f"{server_url}/workspace/manifest{q}",
+        "backfill": {
+            "script_url": f"{server_url}/workspace/backfill-script",
+            "cmd": (f"curl -s {server_url}/workspace/backfill-script | "
+                    f"python - --repo . --workspace {ws} --code"),
+            "when": ("Run only if this repo already has source/docs (a fork, or an "
+                     "in-progress codebase). It imports modules, the git author, recent "
+                     "commits, docs, and — with --code — the source itself. Skip for an "
+                     "empty repo."),
+        },
+        "next_steps": [
+            "Write mcp_config to .mcp.json at your repo root, then (re)connect the MCP client.",
+            "If this repo already has code/docs, run backfill.cmd so the graph knows your project from day one.",
+            "Read playbook_url — it lists the object types, actions, and guardrails installed for THIS workspace.",
+            "Start the loop: query before you build, record the why, use governed actions.",
+        ],
+    }
+
+
+def _playbook_md(ws: str, role: Optional[str], m: Dict[str, Any], server_url: str) -> str:
+    """Render a live, workspace-accurate operating playbook as Markdown."""
+    q = f"?role={role}" if role else ""
+    mcp_block = (
+        "{\n"
+        '  "mcpServers": {\n'
+        '    "context-graph": {\n'
+        '      "type": "http",\n'
+        f'      "url": "{server_url}/mcp",\n'
+        '      "headers": { "LIGHTRAG-WORKSPACE": "' + ws + '" }\n'
+        "    }\n"
+        "  }\n"
+        "}"
+    )
+
+    object_types = m.get("object_types") or []
+    actions = m.get("actions") or []
+    guardrails = m.get("guardrails") or []
+    lifecycle = m.get("lifecycle") or {}
+
+    def _bullets(items: List[str], empty: str) -> str:
+        return "\n".join(f"- `{i}`" for i in items) if items else f"_{empty}_"
+
+    # actions rendered with their params so the agent knows the call shape
+    if actions:
+        arows = []
+        for a in actions:
+            params = ", ".join(
+                f"{p['name']}{'*' if p.get('required') else ''}:{p.get('kind', 'text')}"
+                for p in a.get("params", [])
+            ) or "—"
+            arows.append(f"| `{a['name']}` | `{a.get('object_type', '') or '—'}` | {params} | {a.get('effect', '') or ''} |")
+        actions_tbl = ("| Action | Object type | Params (`*`=required) | Effect |\n"
+                       "|---|---|---|---|\n" + "\n".join(arows))
+    else:
+        actions_tbl = "_No actions installed yet. Run `POST /onboard` or install a preset._"
+
+    if lifecycle:
+        lc_lines = []
+        for obj, machine in lifecycle.items():
+            states = machine.get("states") if isinstance(machine, dict) else None
+            state_str = ", ".join(f"`{s}`" for s in states) if states else "state machine installed"
+            lc_lines.append(f"- **{obj}**: {state_str}")
+        lifecycle_md = "\n".join(lc_lines)
+    else:
+        lifecycle_md = "_No lifecycle state machines installed._"
+
+    role_line = f" · role **{role}**" if role else " · single-agent (no role)"
+
+    return f"""# Context Graph — Start here
+
+**Workspace:** `{ws}`{role_line}
+
+Context Graph (CG) is this project's **shared, decision-aware memory**. It already
+knows (or can be told) your modules, commits, and architecture, and it records *why*
+things were decided so a later session inherits the reasoning instead of rebuilding
+or second-guessing it. This playbook is generated live from **your** workspace's
+installed config — the object types, actions, and guardrails below are the real ones.
+
+---
+
+## 1 · Wire up MCP (one time)
+
+Everything — querying, recording decisions, discovering what you can do, invoking
+governed actions — is a single **MCP** tool surface. Write this to `.mcp.json` at your
+repo root, then (re)connect your MCP client:
+
+```json
+{mcp_block}
+```
+
+(The same operations also exist as REST endpoints under `{server_url}` if you ever want to `curl` them.)
+
+## 2 · Backfill existing work — *if this isn't an empty repo*
+
+Starting from a fork, or a codebase already in progress? Import its reality so the graph
+knows it from day one (modules, the git author, recent commits and the modules they
+touched, README/docs, and with `--code` the source itself):
+
+```bash
+curl -s {server_url}/workspace/backfill-script | python - --repo . --workspace {ws} --code
+```
+
+Skip this step for a brand-new empty project. Re-running is safe (idempotent upserts).
+
+## 3 · Your operating manifest
+
+Machine-readable view: `GET {server_url}/workspace/manifest{q}`
+
+**Object types you work with:**
+{_bullets(object_types, "None installed yet — run POST /onboard to tailor an ontology.")}
+
+**Actions you may invoke** (via the `invoke_action` MCP tool; discover live with `get_manifest`):
+
+{actions_tbl}
+
+**Guardrails — the methodology gate** (advisory unless a rule rejects):
+{_bullets(guardrails, "No rules installed — decisions are recorded without gating.")}
+
+**Lifecycle state machines** (illegal transitions are refused with `409`):
+{lifecycle_md}
+
+## 4 · The three habits (in order of importance)
+
+1. **Query before you build.** Never assume something doesn't exist — ask CG first.
+   `query_auto("Is there already a module that does X? Why is it like this?")`.
+   A recorded decision is query-able immediately: `query_auto("explain <adr-slug>")`
+   returns it with full rationale (CG blends the decision store into every answer).
+2. **Record the why, not the keystroke.** When you make a choice worth remembering —
+   a design decision, a tech pick, an API contract, a **rejected** option — capture the
+   *why* via `record_decision(...)` or a typed action. Filter: *if you can't say who
+   decided it and why, it's telemetry, not memory.*
+3. **Use governed actions for standard moves.** Discover them with `get_manifest`, then
+   `invoke_action(...)` — each call is validated, may be flagged by the gate, and is
+   written to the graph as an audit record.
+
+## 5 · Read the signals
+
+- **`PASS`** — recorded, nothing to review.
+- **`FLAG`** — *advice*, not a block (e.g. a reuse check saying "confirm nothing already
+  covers this"). Run a `query_auto` to check, then proceed.
+- **`409` illegal transition** — the lifecycle state machine refused an illegal jump.
+- **`403`** — RBAC: your role may not invoke that action.
+
+## 6 · Help us validate the methodology 🙏
+
+This may be an early run for your team. Use CG naturally, and **tell us when it gets in
+your way** — a tool that errors or confuses, a query that *should* have found something
+but didn't, a `FLAG`/`409` that felt wrong, a missing or awkwardly-named action, or this
+playbook being unclear. Keep a short running `cg/FEEDBACK.md` — ten small annoyances beat
+none. Friction is exactly the data we need.
+
+Build well — and grumble freely.
+"""
+
+
 def create_workspace_routes(rag, *, ontology_service=None, action_service=None,
                             rules_service=None, lifecycle_service=None, rbac_service=None,
                             api_key: Optional[str] = None, workspace_resolver=None):
@@ -124,9 +315,38 @@ def create_workspace_routes(rag, *, ontology_service=None, action_service=None,
         _require_cg(rag)
         return await build_manifest(rag, _ws(), role, **_services())
 
+    @router.get("/workspace/bootstrap", dependencies=[Depends(combined_auth)],
+                summary="Everything a new agent needs to init itself (mcp config, backfill, links)")
+    async def bootstrap(request: Request, role: Optional[str] = None):
+        _require_cg(rag)
+        return build_bootstrap(_ws(), role, _server_url(request))
+
+    @router.get("/workspace/playbook", dependencies=[Depends(combined_auth)],
+                summary="Live, workspace-accurate operating playbook (Markdown)")
+    async def playbook(request: Request, role: Optional[str] = None, format: str = "md"):
+        _require_cg(rag)
+        ws = _ws()
+        m = await build_manifest(rag, ws, role, **_services())
+        md = _playbook_md(ws, role, m, _server_url(request))
+        if format == "json":
+            return {"workspace": ws, "role": role, "playbook_md": md}
+        return PlainTextResponse(md, media_type="text/markdown; charset=utf-8")
+
+    @router.get("/workspace/backfill-script",
+                summary="The backfill script an agent runs against its own repo")
+    async def backfill_script():
+        path = Path(__file__).resolve().parents[3] / "presets" / "backfill_git.py"
+        if not path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail="backfill script not found on the server; fetch presets/backfill_git.py "
+                       "from the Context Graph repository instead.")
+        return PlainTextResponse(path.read_text(encoding="utf-8"),
+                                 media_type="text/x-python; charset=utf-8")
+
     @router.post("/onboard", dependencies=[Depends(combined_auth)],
                  summary="Onboard a workspace: tailor + install config, return manifests")
-    async def onboard(request: OnboardRequest):
+    async def onboard(request: OnboardRequest, http_request: Request):
         _require_cg(rag)
         ws = _ws()
         llm = getattr(rag, "llm_model_func", None)
@@ -173,6 +393,8 @@ def create_workspace_routes(rag, *, ontology_service=None, action_service=None,
         manifests["_default"] = await build_manifest(rag, ws, None, **_services())
 
         onto_types = [o["name"] for o in (onto.ontology or {}).get("object_types", [])]
+        server_url = _server_url(http_request)
+        primary_role = request.roles[0] if request.roles else None
         return {
             "workspace": ws,
             "ontology": {"valid": onto.valid, "saved": onto_saved, "attempts": onto.attempts,
@@ -180,6 +402,8 @@ def create_workspace_routes(rag, *, ontology_service=None, action_service=None,
             "rules": rules_out,
             "roles_seeded": seeded,
             "manifests": manifests,
+            # Hand the agent its entry points: read the playbook, init from bootstrap.
+            "bootstrap": build_bootstrap(ws, primary_role, server_url),
         }
 
     logger.info("Workspace manifest + onboard API routes registered")
