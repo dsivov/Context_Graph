@@ -856,6 +856,123 @@ class ContextGraph(LightRAG):
                 break
         return results
 
+    def _format_decisions_context(self, precedents: list[dict]) -> str:
+        """Render recorded decisions as a format-safe LLM context block."""
+        lines = [
+            "## Recorded decisions (the project's own decision log — ADRs, change "
+            "requests, approvals; captured at the moment they were made)"
+        ]
+        for p in precedents:
+            rc = p.get("relation_context")
+            trace = (getattr(rc, "decision_trace", "") or "").strip()
+            if not trace:
+                continue
+            who = f" — recorded by {rc.approved_by}" if getattr(rc, "approved_by", None) else ""
+            lines.append(f"- [{p.get('src_id')} → {p.get('tgt_id')}]{who}: {trace}")
+        block = "\n".join(lines)
+        # escape braces so the block survives str.format() in kg_query
+        return block.replace("{", "{{").replace("}", "}}")
+
+    async def aquery_llm(self, query, param=None, system_prompt=None):
+        """Blend recorded decisions into the normal retrieval context.
+
+        Decisions recorded via :meth:`emit_decision_trace` live in
+        ``decisions_vdb`` and are otherwise reachable only through precedent
+        search — invisible to ``/query`` and the WebUI Retrieval tab. This
+        override fetches the decisions most relevant to *query* and injects them
+        into the LLM context, so a single query returns code, docs, **and** the
+        project's own decisions together. Skipped for ``bypass`` mode,
+        ``only_need_context``, or when a custom ``system_prompt`` is supplied.
+
+        Overrides ``aquery_llm`` (not ``aquery``) because the REST query routes
+        call ``aquery_llm`` directly; ``aquery`` wraps it, so this covers both.
+        """
+        from lightrag.base import QueryParam
+
+        if param is None:
+            param = QueryParam()
+
+        precedents: list[dict] = []
+        should_blend = (
+            getattr(self, "decisions_vdb", None) is not None
+            and getattr(param, "mode", "mix") != "bypass"
+            and not getattr(param, "only_need_context", False)
+        )
+        if should_blend:
+            try:
+                precedents = await self.find_precedents(query, top_k=5)
+            except Exception as e:  # pragma: no cover - never break a query
+                logger.warning(f"aquery decision-blend skipped: {e}")
+                precedents = []
+            # Structural fallback: pull decisions attached to any node the query
+            # names by id (e.g. "explain adr-m2-concurrency") — an opaque slug is
+            # not semantically close to its decision text, so vector search misses it.
+            try:
+                import re
+
+                seen = {(p.get("src_id"), p.get("tgt_id")) for p in precedents}
+                graph = self.chunk_entity_relation_graph
+                for cand in dict.fromkeys(re.findall(r"[A-Za-z][A-Za-z0-9_.-]{3,}", query)):
+                    if len(precedents) >= 8 or not await graph.has_node(cand):
+                        continue
+                    for s, t in (await graph.get_node_edges(cand) or []):
+                        if (s, t) in seen:
+                            continue
+                        edge = await graph.get_edge(s, t)
+                        if edge and edge.get("relation_context"):
+                            rc = RelationContext.from_json(edge["relation_context"])
+                            if rc.decision_trace:
+                                precedents.append({"src_id": s, "tgt_id": t, "relation_context": rc})
+                                seen.add((s, t))
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"aquery decision by-name include skipped: {e}")
+            if precedents:
+                from lightrag.prompt import PROMPTS
+
+                tmpl_key = (
+                    "rag_response_annotated"
+                    if getattr(param, "context_format", "annotated") == "annotated"
+                    else "rag_response"
+                )
+                base = PROMPTS.get(tmpl_key, PROMPTS["rag_response"])
+                if "{context_data}" in base:
+                    block = self._format_decisions_context(precedents)
+                    system_prompt = base.replace(
+                        "{context_data}", "{context_data}\n\n" + block, 1
+                    )
+
+        result = await super().aquery_llm(query, param, system_prompt=system_prompt)
+
+        # Fallback: the base retrieval short-circuits and returns no answer when it
+        # finds no entities/chunks (a pure decision lookup like "explain
+        # adr-m2-concurrency" hits nothing in the code/doc index). In that case the
+        # blended system_prompt above never rendered — so answer from the decisions
+        # we found directly, closing the read-your-writes gap for recorded ADRs/CRs.
+        if precedents:
+            lr = result.get("llm_response") or {}
+            content = lr.get("content") or ""
+            if lr.get("response_iterator") is None and (
+                not content.strip() or "enough information" in content.lower()
+            ):
+                block = (
+                    self._format_decisions_context(precedents)
+                    .replace("{{", "{")
+                    .replace("}}", "}")
+                )
+                try:
+                    ans = await self.llm_model_func(
+                        "Answer the question using ONLY these recorded project "
+                        "decisions (quote the relevant one and its rationale). If "
+                        "none apply, say so briefly.\n\n"
+                        f"{block}\n\n---\nQuestion: {query}"
+                    )
+                    if isinstance(ans, str) and ans.strip():
+                        result.setdefault("llm_response", {})["content"] = ans
+                        result["status"] = "success"
+                except Exception as e:  # pragma: no cover - never break a query
+                    logger.warning(f"aquery decision fallback failed: {e}")
+        return result
+
     async def get_all_decisions(
         self,
         approved_by: Optional[str] = None,
