@@ -38,6 +38,79 @@ class OnboardRequest(BaseModel):
     max_repairs: int = Field(default=1, ge=0, le=3)
 
 
+# --- Conversational onboarding (the "Get Started" tab) ---------------------- #
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class OnboardChatRequest(BaseModel):
+    messages: List[ChatMessage] = Field(default_factory=list, description="Transcript so far (client-held).")
+    repo_present: bool = Field(default=False, description="Hint the interviewer to offer backfill.")
+
+
+class FirstCR(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+
+
+class OnboardProposal(BaseModel):
+    workspace: Optional[str] = None
+    brief: str = ""
+    description: str = ""
+    policy: Optional[str] = None
+    roles: List[str] = Field(default_factory=list)
+    object_types_preview: List[str] = Field(default_factory=list)
+    rules_preview: List[str] = Field(default_factory=list)
+    first_cr: Optional[FirstCR] = None
+    backfill: Dict[str, Any] = Field(default_factory=dict)
+
+
+class OnboardApplyRequest(BaseModel):
+    proposal: OnboardProposal
+
+
+_INTERVIEW_PROMPT = """You are the onboarding interviewer for Context Graph — a \
+decision-aware knowledge graph that gives a project shared memory and a methodology it \
+enforces. You are talking to the human lead setting up the workspace `{ws}`.
+
+Through a SHORT conversation (aim for 4–6 exchanges), gather just enough to set the \
+project up:
+- what the project is and its purpose;
+- who works on it — a single agent, or a team (and the role names);
+- the main object types and their lifecycle (e.g. Task: pending→completed; \
+ChangeRequest: open→in progress→closed);
+- what decisions matter / what should be flagged for review;
+- ONE concrete first piece of work to seed as the first change request.
+
+Guidance:
+- Ask ONE focused question at a time. Be concise and friendly.
+- Prefer a standard preset vocabulary (for software teams: Module, Task, ChangeRequest, \
+ArchitectureDecisionRecord, Commit, Developer). Only introduce a bespoke type with a \
+clear reason — genericity matters.
+- {repo_hint}
+
+When — and only when — you have enough, STOP asking questions. Write a one-sentence \
+summary, then output a single fenced json block EXACTLY in this shape and nothing after it:
+
+```json
+{{
+  "brief": "2-4 sentence project summary (the onboarding document)",
+  "description": "a plain-English paragraph describing the project's object types and \
+relationships, to author the ontology from",
+  "policy": "a plain-English paragraph of the methodology rules to enforce, or null",
+  "roles": ["developer"],
+  "object_types_preview": ["Module", "Task", "ChangeRequest"],
+  "rules_preview": ["new module - confirm reuse"],
+  "first_cr": {{"id": "cr-initial-<slug>", "title": "...", "description": "..."}},
+  "backfill": {{"recommended": false, "reason": ""}}
+}}
+```
+Never emit the json block while still asking questions."""
+
+
 def _require_cg(rag) -> None:
     if not hasattr(rag, "rules_gate"):
         raise HTTPException(
@@ -114,6 +187,27 @@ def _server_url(request: Request) -> str:
     """
     override = os.environ.get("LIGHTRAG_PUBLIC_URL")
     return (override or str(request.base_url)).rstrip("/")
+
+
+def _split_proposal(text: str) -> tuple[str, Optional[Dict[str, Any]]]:
+    """Split an interview reply into (prose, proposal-or-None).
+
+    The interviewer emits a fenced ```json block once it has gathered enough. Return
+    the text before the block plus the parsed proposal; if there's no valid block the
+    turn is still a question, so proposal is None.
+    """
+    import json
+    import re
+
+    m = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if not m:
+        return text.strip(), None
+    try:
+        proposal = json.loads(m.group(1))
+    except (ValueError, TypeError):
+        return text.strip(), None
+    prose = text[: m.start()].strip()
+    return prose, proposal
 
 
 def build_bootstrap(ws: str, role: Optional[str], server_url: str) -> Dict[str, Any]:
@@ -344,6 +438,110 @@ def create_workspace_routes(rag, *, ontology_service=None, action_service=None,
         return PlainTextResponse(path.read_text(encoding="utf-8"),
                                  media_type="text/x-python; charset=utf-8")
 
+    @router.post("/onboard/chat", dependencies=[Depends(combined_auth)],
+                 summary="One turn of the conversational onboarding interview")
+    async def onboard_chat(req: OnboardChatRequest):
+        _require_cg(rag)
+        llm = getattr(rag, "llm_model_func", None)
+        if llm is None:
+            raise HTTPException(status_code=503, detail="Onboarding chat needs an LLM.")
+        ws = _ws()
+        repo_hint = ("This project already has a repo — when you propose, set "
+                     "backfill.recommended true so its history gets imported."
+                     if req.repo_present else
+                     "If the project already has code/docs, ask, and set backfill.recommended accordingly.")
+        system = _INTERVIEW_PROMPT.format(ws=ws, repo_hint=repo_hint)
+
+        history = [{"role": m.role, "content": m.content} for m in req.messages]
+        prompt = history.pop()["content"] if history else "Begin the onboarding interview."
+        try:
+            reply = await llm(prompt, system_prompt=system, history_messages=history)
+        except Exception as e:  # pragma: no cover - surface LLM errors cleanly
+            raise HTTPException(status_code=502, detail=f"interview LLM error: {e}")
+
+        assistant, proposal = _split_proposal(reply if isinstance(reply, str) else str(reply))
+        if proposal is not None:
+            proposal["workspace"] = ws  # never trust a model-invented workspace
+        return {"assistant": assistant, "ready": proposal is not None, "proposal": proposal}
+
+    @router.post("/onboard/apply", dependencies=[Depends(combined_auth)],
+                 summary="Install an approved onboarding proposal (config + first CR + brief)")
+    async def onboard_apply(req: OnboardApplyRequest, http_request: Request):
+        _require_cg(rag)
+        ws = _ws()
+        p = req.proposal
+        llm = getattr(rag, "llm_model_func", None)
+        if llm is None or ontology_service is None:
+            raise HTTPException(status_code=503, detail="Apply needs an LLM and the ontology service.")
+
+        # 1) Tailored ontology from the distilled description.
+        from context_graph.ontology.agent import OntologyAuthor
+        onto = await OntologyAuthor(llm).generate(p.description, max_repairs=1)
+        onto_saved = False
+        if onto.valid:
+            ontology_service.save(ws, onto.ontology)
+            onto_saved = True
+
+        # 2) Optional tailored rules from the distilled policy.
+        rules_out = None
+        if p.policy and rules_service is not None:
+            from context_graph.rules.agent import RuleAuthor
+            r = await RuleAuthor(llm).generate(p.policy, max_repairs=1)
+            rsaved = False
+            if r.valid:
+                rules_service.save(ws, r.dsl, r.concepts, enabled=True)
+                rsaved = True
+            rules_out = {"valid": r.valid, "saved": rsaved, "errors": r.errors}
+
+        # 3) Seed Role nodes.
+        seeded: List[str] = []
+        for role in p.roles:
+            try:
+                await rag.chunk_entity_relation_graph.upsert_node(role, {
+                    "entity_id": role, "entity_type": "Role", "source_id": "onboard",
+                    "description": f"{role} role", "file_path": "onboard"})
+                seeded.append(role)
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"onboard role seed failed for '{role}': {e}")
+
+        # 4) Seed the first change request as a governed, audited edge so the agent
+        #    opens its first session with a concrete starting point.
+        first_cr = None
+        if p.first_cr is not None:
+            from lightrag.context_graph_types import RelationContext
+            cr = p.first_cr
+            trace = cr.title if not cr.description else f"{cr.title} — {cr.description}"
+            rc = RelationContext(
+                decision_trace=trace, approved_by="onboarding", approved_via="system",
+                provenance="action:CreateChangeRequest",
+                supporting_sentences=[cr.description] if cr.description else [],
+                confidence_score=1.0)
+            try:
+                await rag.emit_decision_trace("lead", cr.id, "cr-created", rc)
+                first_cr = {"id": cr.id, "title": cr.title}
+            except Exception as e:  # pragma: no cover - never fail apply on the seed
+                logger.warning(f"onboard first-CR seed failed: {e}")
+
+        # 5) Save + ingest the onboarding brief so it's itself query-able.
+        brief_id = None
+        if p.brief and hasattr(rag, "ingest_decision_summary"):
+            try:
+                brief_id = await rag.ingest_decision_summary(p.brief, category="onboarding")
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"onboard brief ingest failed: {e}")
+
+        server_url = _server_url(http_request)
+        return {
+            "workspace": ws,
+            "ontology": {"valid": onto.valid, "saved": onto_saved,
+                         "object_types": [o["name"] for o in (onto.ontology or {}).get("object_types", [])]},
+            "rules": rules_out,
+            "roles_seeded": seeded,
+            "first_cr": first_cr,
+            "brief_id": brief_id,
+            "bootstrap": build_bootstrap(ws, p.roles[0] if p.roles else None, server_url),
+        }
+
     @router.post("/onboard", dependencies=[Depends(combined_auth)],
                  summary="Onboard a workspace: tailor + install config, return manifests")
     async def onboard(request: OnboardRequest, http_request: Request):
@@ -371,7 +569,7 @@ def create_workspace_routes(rag, *, ontology_service=None, action_service=None,
             r = await RuleAuthor(llm).generate(request.policy, max_repairs=request.max_repairs)
             rsaved = False
             if r.valid:
-                rules_service.save(ws, {"dsl": r.dsl, "concepts": r.concepts, "enabled": True})
+                rules_service.save(ws, r.dsl, r.concepts, enabled=True)
                 rsaved = True
             rules_out = {"valid": r.valid, "saved": rsaved, "attempts": r.attempts, "errors": r.errors}
 
