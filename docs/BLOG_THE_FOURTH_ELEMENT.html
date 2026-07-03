@@ -144,6 +144,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#rules">Business Rules: the decision gate</a></li>
     <li><a href="#ingest">Web ingestion: any site</a></li>
     <li><a href="#roadmap">What's next</a></li>
+    <li><a href="#agentdev">AI agents that remember</a></li>
     <li><a href="#fit">Where it fits · try it</a></li>
   </ol>
 </nav>
@@ -748,6 +749,39 @@ end</code></pre>
     The full gap analysis, architecture, and build log live in the companion
     <a href="CLOSING_THE_GAPS.html">“Closing the Gaps”</a> working document — including the diagrams for how a decision
     is matched to the graph and flows through the gate.
+  </div>
+</section>
+
+<section id="agentdev">
+  <div class="kicker">Use case</div>
+  <h2>AI agents that remember the why</h2>
+  <p class="lead-p">The sharpest place a decision-aware graph earns its keep is <b>AI-driven software development</b>. A
+  coding agent has perfect recall inside a session and near-total amnesia between them — so it rebuilds what already
+  exists, "fixes" deliberate choices whose reasoning it lost, and drifts from the team's methodology. Point it at
+  Context Graph and the project gets a shared memory <i>and</i> a process that runs.</p>
+
+  <div class="grid g3" style="margin:18px 0">
+    <div class="card"><span class="pill a">query before you build</span>
+      <p class="small" style="margin-top:10px">Ask the graph "does this already exist, and why is it like this?" before
+      writing a line. On our first live run it stopped a duplicate persistence module cold.</p></div>
+    <div class="card"><span class="pill b">record the why</span>
+      <p class="small" style="margin-top:10px">Every design choice — including the <i>rejected</i> option — becomes a
+      durable, queryable ADR. The <code>threading.Lock</code>-over-<code>asyncio.Lock</code> reasoning a later session
+      would have "fixed" is now on record.</p></div>
+    <div class="card"><span class="pill ctrl">act, governed</span>
+      <p class="small" style="margin-top:10px">Typed actions run a five-guard pipeline — RBAC → lifecycle → rules gate →
+      side effect → audit — so the methodology is enforced, not merely documented.</p></div>
+  </div>
+
+  <p>It's the same engine from the rest of this post, pointed at a new object graph: modules, APIs, tasks, change
+  requests, ADRs, commits. The methodology itself is <b>data</b> — an <code>agentic-dev</code> preset of ontology,
+  rules, actions, RBAC, and lifecycle — so the core stays generic while the agent gets a project that governs itself.</p>
+
+  <div class="callout key">
+    <div class="clabel">◆ Read the full use case</div>
+    <b><a href="AGENTIC_DEVELOPMENT.html">AI Agent Development on Context Graph</a></b> — the development loop, the
+    project graph, the five governance layers, onboarding &amp; backfill, the one-MCP-surface, and the field results
+    from a real single-agent project that shipped three features through the loop. With diagrams for every flow.
   </div>
 </section>
 

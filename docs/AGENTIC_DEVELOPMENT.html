@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Agent Development on Context Graph — Decision-Aware Memory & a Methodology That Runs</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(169,116,240,.12), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(91,141,239,.09), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(169,116,240,.09),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(32px,5.5vw,54px);line-height:1.04;margin:.3em 0 .25em;
+  background:linear-gradient(92deg,#cdb1f7,#8fd9c9 52%,#cfe0ff);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}
+.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:230px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(169,116,240,.20),transparent);color:#fff;border-left:2px solid var(--ctrl)}
+
+main{min-width:0;max-width:760px}
+article section{margin:0 0 52px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ctrl);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}
+p{margin:.7em 0}
+.lead-p{font-size:19px;color:var(--ink)}
+.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--ctrl);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)} .callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)} .callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(169,116,240,.55);background:rgba(169,116,240,.10)} .callout.key .clabel{color:#cdb1f7}
+
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--ctrl)}
+.stat.a::after{background:var(--a)} .stat.b::after{background:var(--b)} .stat.c::after{background:var(--c)}
+.stat .v{font-size:30px;font-weight:800;letter-spacing:-.02em} .stat .l{color:var(--ink-faint);font-size:13px;margin-top:3px}
+
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:540px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+
+figure{margin:22px 0}
+figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px} figcaption b{color:var(--ink-soft)}
+
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}
+.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);
+  border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#cdb1f7}
+.steps{counter-reset:st;margin:16px 0;padding:0;list-style:none}
+.steps>li{counter-increment:st;position:relative;padding:10px 0 10px 44px;border-bottom:1px solid var(--line-soft)}
+.steps>li:last-child{border-bottom:none}
+.steps>li::before{content:counter(st);position:absolute;left:0;top:10px;width:30px;height:30px;border-radius:8px;
+  background:rgba(169,116,240,.16);border:1px solid rgba(169,116,240,.45);color:#cdb1f7;font-weight:800;
+  display:flex;align-items:center;justify-content:center;font-size:14px}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Context Graph · Use Case</div>
+    <h1>AI Agent Development, Remembered</h1>
+    <p class="lede">Coding agents are brilliant and forgetful. Each session rebuilds what already exists, loses the
+      <i>why</i> behind last week's choices, and drifts from the team's methodology. Context Graph gives an agentic
+      project a <b>shared, decision-aware memory</b> — and a methodology that doesn't just live in a README, it
+      <b>runs</b>.</p>
+    <div class="byline">The full use case · from onboarding to governed execution · built on
+      <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a> ·
+      part of <a href="BLOG_THE_FOURTH_ELEMENT.html">Context Graph</a> · supported by
+      <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a></div>
+    <div class="hero-tags">
+      <span class="tag"><b>query</b>-before-build</span>
+      <span class="tag">record the <b>why</b></span>
+      <span class="tag"><b>governed</b> actions</span>
+      <span class="tag">ontology · rules · actions · RBAC · lifecycle</span>
+      <span class="tag">one surface: <b>MCP</b></span>
+      <span class="tag"><b>field-validated</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this use case</div>
+  <ol>
+    <li><a href="#gap">What agents forget</a></li>
+    <li><a href="#loop">The development loop</a></li>
+    <li><a href="#graph">The project graph</a></li>
+    <li><a href="#layers">Five governance layers</a></li>
+    <li><a href="#invoke">One action, five guards</a></li>
+    <li><a href="#onboard">Onboarding &amp; backfill</a></li>
+    <li><a href="#surface">One surface: MCP</a></li>
+    <li><a href="#field">Field-validated</a></li>
+    <li><a href="#generic">Generic by design</a></li>
+    <li><a href="#try">Where it sits · try it</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="gap">
+  <div class="kicker">The gap</div>
+  <h2>What an agent forgets between sessions</h2>
+  <p class="lead-p">An AI coding agent has near-perfect recall <i>inside</i> a session and near-total amnesia
+  <i>between</i> them. That amnesia has a shape, and it's expensive.</p>
+
+  <div class="grid g3" style="margin:18px 0">
+    <div class="card"><div class="pill danger">rebuilds</div>
+      <p class="small" style="margin-top:10px">It writes a second persistence module because it never knew the first one
+      existed. Duplicate seams, drift, wasted runs.</p></div>
+    <div class="card"><div class="pill danger">forgets the why</div>
+      <p class="small" style="margin-top:10px">Last week it chose <code>threading.Lock</code> over
+      <code>asyncio.Lock</code> for a reason. This week that reasoning is gone — so it "fixes" the deliberate choice.</p></div>
+    <div class="card"><div class="pill danger">drifts from process</div>
+      <p class="small" style="margin-top:10px">The methodology lives in a README nobody re-reads. Reviews get skipped,
+      states get jumped, no audit trail survives.</p></div>
+  </div>
+
+  <p>Commit messages and doc prose don't fix this: they record <i>what</i> changed, rarely <i>why</i>, and they aren't
+  queryable as decisions. Context Graph closes the loop by making the project's <b>decision lineage</b> a first-class,
+  queryable memory — every edge can carry <i>who</i> decided it, <i>why</i>, via which channel, under which policy, and
+  whether it still holds — and by turning the team's methodology into <b>data the graph enforces</b> rather than a
+  document it ignores.</p>
+
+  <div class="pull">The pitch in one line: query before you build, record the why, and let the methodology run itself.</div>
+</section>
+
+<!-- 2 -->
+<section id="loop">
+  <div class="kicker">The habit</div>
+  <h2>The development loop</h2>
+  <p>Working with Context Graph is three habits around one shared memory. They compound: every recorded decision makes
+  the next "does this exist / why is it like this" query sharper.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 300" role="img" aria-label="The Context Graph development loop">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .bx{rx:11;stroke-width:1}
+        .t{fill:#e7ebf3;font:14px "Segoe UI",sans-serif;font-weight:600}
+        .ts{fill:#aab3c5;font:11.5px "Segoe UI",sans-serif}
+        .ln{stroke:#8a93a8;stroke-width:1.8;fill:none;marker-end:url(#ah)}
+      </style>
+      <!-- three habit boxes across the top -->
+      <rect class="bx" x="18"  y="20" width="210" height="70" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="t"  x="123" y="46" text-anchor="middle">1 · Query before you build</text>
+      <text class="ts" x="123" y="66" text-anchor="middle">query_auto · query_cgr3</text>
+      <text class="ts" x="123" y="80" text-anchor="middle">“does this already exist? why?”</text>
+
+      <rect class="bx" x="255" y="20" width="210" height="70" fill="#231a33" stroke="rgba(169,116,240,.55)"/>
+      <text class="t"  x="360" y="46" text-anchor="middle">2 · Act via governed actions</text>
+      <text class="ts" x="360" y="66" text-anchor="middle">invoke_action · get_manifest</text>
+      <text class="ts" x="360" y="80" text-anchor="middle">validated · authorized · audited</text>
+
+      <rect class="bx" x="492" y="20" width="210" height="70" fill="#173a34" stroke="rgba(25,184,154,.55)"/>
+      <text class="t"  x="597" y="46" text-anchor="middle">3 · Record the why</text>
+      <text class="ts" x="597" y="66" text-anchor="middle">RecordDecision · CR / ADR</text>
+      <text class="ts" x="597" y="80" text-anchor="middle">who · why · channel · policy</text>
+
+      <!-- arrows between habits -->
+      <line class="ln" x1="228" y1="55" x2="252" y2="55"/>
+      <line class="ln" x1="465" y1="55" x2="489" y2="55"/>
+
+      <!-- central store -->
+      <rect class="bx" x="150" y="180" width="420" height="76" fill="#1a1330" stroke="rgba(169,116,240,.6)"/>
+      <text x="360" y="210" text-anchor="middle" fill="#cdb1f7" style="font:15px 'Segoe UI';font-weight:800">Context Graph</text>
+      <text class="ts" x="360" y="230" text-anchor="middle">shared, decision-aware project memory — one workspace per project</text>
+      <text class="ts" x="360" y="245" text-anchor="middle">modules · APIs · tasks · change requests · ADRs · commits · skills · (h, r, t, rc)</text>
+
+      <!-- feed arrows down into store, and back up to step 1 -->
+      <line class="ln" x1="360" y1="90"  x2="360" y2="178"/>
+      <line class="ln" x1="597" y1="90"  x2="520" y2="178"/>
+      <path class="ln" d="M150 218 C 60 218, 60 120, 118 70" />
+      <text class="ts" x="52" y="150" text-anchor="middle" transform="rotate(-90 52 150)">grounds the next query</text>
+    </svg>
+    <figcaption><b>Three habits, one memory.</b> Every action and decision flows back into the graph, so the next
+      <i>query-before-build</i> is grounded in the project's real, current reasoning — not last-known-good guesswork.</figcaption>
+  </div></figure>
+
+  <div class="callout key">
+    <div class="clabel">◆ The filter for what to record</div>
+    <i>If you can't say who decided it and why, it's telemetry, not memory.</i> The graph stores decisions, not
+    keystrokes — a design choice, a tech pick, an API contract, a <b>rejected</b> option. That discipline is what keeps
+    the decision log valuable instead of noisy.
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="graph">
+  <div class="kicker">The data model</div>
+  <h2>The project as a graph</h2>
+  <p>Onboarding installs a <b>dev-shaped ontology</b>: the object types an agentic project actually has, and the typed
+  relationships between them. This is the structure <i>query-before-build</i> searches and the shape governed actions
+  write into.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 320" role="img" aria-label="The project ontology">
+      <defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10z" fill="#7b8499"/></marker></defs>
+      <style>
+        .n{rx:10;stroke-width:1.2}
+        .nt{fill:#e7ebf3;font:13px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}
+        .e{stroke:#6d7690;stroke-width:1.6;fill:none;marker-end:url(#ah3)}
+        .el{fill:#8a93a8;font:11px var(--mono),monospace;text-anchor:middle}
+      </style>
+      <!-- nodes -->
+      <rect class="n" x="290" y="14"  width="140" height="40" fill="#161d33" stroke="rgba(91,141,239,.6)"/>
+      <text class="nt" x="360" y="39">Developer / Agent</text>
+
+      <rect class="n" x="285" y="120" width="150" height="40" fill="#173a34" stroke="rgba(25,184,154,.6)"/>
+      <text class="nt" x="360" y="145">Module</text>
+
+      <rect class="n" x="70"  y="120" width="130" height="40" fill="#3a2f17" stroke="rgba(240,167,60,.6)"/>
+      <text class="nt" x="135" y="145">API</text>
+
+      <rect class="n" x="70"  y="240" width="130" height="40" fill="#231a33" stroke="rgba(169,116,240,.6)"/>
+      <text class="nt" x="135" y="265">Task</text>
+
+      <rect class="n" x="285" y="240" width="150" height="40" fill="#231a33" stroke="rgba(169,116,240,.6)"/>
+      <text class="nt" x="360" y="265">Change Request</text>
+
+      <rect class="n" x="520" y="240" width="150" height="40" fill="#1a1330" stroke="rgba(169,116,240,.7)"/>
+      <text class="nt" x="595" y="265">Decision / ADR</text>
+
+      <rect class="n" x="520" y="120" width="150" height="40" fill="#1a2236" stroke="rgba(91,141,239,.5)"/>
+      <text class="nt" x="595" y="145">Commit</text>
+
+      <!-- edges -->
+      <line class="e" x1="360" y1="54"  x2="360" y2="118"/><text class="el" x="378" y="90">owns</text>
+      <line class="e" x1="285" y1="140" x2="202" y2="140"/><text class="el" x="243" y="132">exposes_api</text>
+      <line class="e" x1="290" y1="150" x2="200" y2="248"/><text class="el" x="212" y="205">implements</text>
+      <line class="e" x1="360" y1="160" x2="360" y2="238"/><text class="el" x="392" y="205">changed_by</text>
+      <line class="e" x1="435" y1="150" x2="520" y2="140"/><text class="el" x="478" y="132">touched_by</text>
+      <line class="e" x1="435" y1="255" x2="518" y2="255"/><text class="el" x="477" y="247">justified_by</text>
+      <line class="e" x1="360" y1="54"  x2="565" y2="238"/><text class="el" x="500" y="150" transform="rotate(34 500 150)">decided</text>
+    </svg>
+    <figcaption><b>Methodology, expressed as types.</b> Modules expose APIs and depend on each other; tasks and change
+      requests move a feature forward; every change request is <i>justified_by</i> an ADR. The ontology is per-workspace
+      data — see the <a href="ONTOLOGY.html">Ontology guide</a>.</figcaption>
+  </div></figure>
+
+  <p>Because relations are open-world, a keyword the ontology hasn't seen is a <i>warning, not an error</i> — the graph
+  keeps growing while the ontology stays a guide rather than a straitjacket.</p>
+</section>
+
+<!-- 4 -->
+<section id="layers">
+  <div class="kicker">The stack</div>
+  <h2>Five governance layers</h2>
+  <p>The methodology isn't prose — it's five composable, per-workspace layers. Each is optional; each mirrors the same
+  shape (schema · store · service); together they turn "please follow the process" into something the graph checks.</p>
+
+  <div class="grid g2" style="margin:18px 0">
+    <div class="card"><span class="pill c">Ontology</span>
+      <h3 style="margin:10px 0 4px">What can exist</h3>
+      <p class="small">Object types, their properties, and the legal relationships between them. The vocabulary every
+      other layer speaks. <a href="ONTOLOGY.html">Guide →</a></p></div>
+
+    <div class="card"><span class="pill b">Rules — the methodology gate</span>
+      <h3 style="margin:10px 0 4px">What to check</h3>
+      <p class="small">A concept-matching DSL (<code>sim()</code> over embeddings) that flags a decision for review,
+      passes it, or rejects it. Advisory by default. <a href="RULES_ENGINE.html">Guide →</a></p></div>
+
+    <div class="card"><span class="pill ctrl">Actions</span>
+      <h3 style="margin:10px 0 4px">What you can do</h3>
+      <p class="small">Typed operations bound to object types — <code>ProposeModule</code>, <code>RecordDecision</code>,
+      <code>AdvanceTask</code> — each validated, gated, and audited. <a href="ACTIONS.html">Guide →</a></p></div>
+
+    <div class="card"><span class="pill a">RBAC</span>
+      <h3 style="margin:10px 0 4px">Who may do it</h3>
+      <p class="small">Opt-in, deny-by-default <i>within</i> a policy, fully permissive when none is set — so a
+      single-agent project needs zero config, and a multi-agent team gets real boundaries.</p></div>
+
+    <div class="card"><span class="pill win">Lifecycle</span>
+      <h3 style="margin:10px 0 4px">What order it happens in</h3>
+      <p class="small">Declarative state machines per object type. A completed task can't jump back to pending; an
+      illegal transition is refused with <code>409</code>. The guardrail that keeps state honest.</p></div>
+
+    <div class="card" style="border-color:rgba(169,116,240,.4)"><span class="pill ctrl">Manifest</span>
+      <h3 style="margin:10px 0 4px">What an agent is told</h3>
+      <p class="small"><code>GET /workspace/manifest?role=</code> assembles ontology + actions (RBAC-filtered to the
+      role) + rules + lifecycle + skills into one self-describing bundle.</p></div>
+  </div>
+
+  <div class="callout info">
+    <div class="clabel">◆ Start with nothing, add what you need</div>
+    A brand-new single-agent project can run with just an ontology and open actions — no rules, no RBAC, no lifecycle.
+    Each layer is switched on the moment the project earns the complexity, and never before.
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="invoke">
+  <div class="kicker">Execution</div>
+  <h2>One action, five guards</h2>
+  <p>Every governed action runs the same ordered pipeline. The ordering is the point: authorization and legality are
+  checked <i>before</i> anything is written or done, and the whole thing lands as an audit record on the graph.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 250" role="img" aria-label="The invoke pipeline: RBAC, lifecycle, rules gate, side effect, audit">
+      <defs><marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .b2{rx:10;stroke-width:1.1}
+        .t2{fill:#e7ebf3;font:13px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}
+        .s2{fill:#aab3c5;font:10.5px "Segoe UI",sans-serif;text-anchor:middle}
+        .l2{stroke:#8a93a8;stroke-width:1.8;fill:none;marker-end:url(#ah4)}
+        .stop{fill:#f6a2ad;font:11px "Segoe UI",sans-serif;text-anchor:middle;font-weight:700}
+      </style>
+      <rect class="b2" x="14"  y="86" width="118" height="60" fill="#161d33" stroke="rgba(91,141,239,.55)"/>
+      <text class="t2" x="73" y="112">1 · RBAC</text><text class="s2" x="73" y="130">may this role?</text>
+
+      <rect class="b2" x="154" y="86" width="118" height="60" fill="#13251f" stroke="rgba(62,207,142,.55)"/>
+      <text class="t2" x="213" y="112">2 · Lifecycle</text><text class="s2" x="213" y="130">legal transition?</text>
+
+      <rect class="b2" x="294" y="86" width="118" height="60" fill="#3a2f17" stroke="rgba(240,167,60,.55)"/>
+      <text class="t2" x="353" y="112">3 · Rules gate</text><text class="s2" x="353" y="130">PASS · FLAG · REJECT</text>
+
+      <rect class="b2" x="434" y="86" width="118" height="60" fill="#231a33" stroke="rgba(169,116,240,.55)"/>
+      <text class="t2" x="493" y="112">4 · Side effect</text><text class="s2" x="493" y="130">handler runs</text>
+
+      <rect class="b2" x="574" y="86" width="132" height="60" fill="#1a1330" stroke="rgba(169,116,240,.7)"/>
+      <text class="t2" x="640" y="108">5 · Audit edge</text><text class="s2" x="640" y="124">on the graph</text>
+      <text class="s2" x="640" y="138">provenance = action:…</text>
+
+      <line class="l2" x1="132" y1="116" x2="152" y2="116"/>
+      <line class="l2" x1="272" y1="116" x2="292" y2="116"/>
+      <line class="l2" x1="412" y1="116" x2="432" y2="116"/>
+      <line class="l2" x1="552" y1="116" x2="572" y2="116"/>
+
+      <!-- reject/deny exits -->
+      <line class="l2" x1="73"  y1="86" x2="73"  y2="52"/><text class="stop" x="73"  y="42">403 deny</text>
+      <line class="l2" x1="213" y1="86" x2="213" y2="52"/><text class="stop" x="213" y="42">409 illegal</text>
+      <line class="l2" x1="353" y1="86" x2="353" y2="52"/><text class="stop" x="353" y="42">422 reject</text>
+      <text class="s2" x="493" y="176" style="font-weight:700;fill:#7ee3b4">FLAG still writes — advisory, not a block</text>
+    </svg>
+    <figcaption><b>Deny early, audit always.</b> RBAC and lifecycle can stop an action before it starts; the rules gate
+      can reject it; a <span class="pill b" style="padding:0 6px">FLAG</span> is advice, not a wall. Whatever passes is
+      recorded as its own edge with an <code>action:</code> provenance — see the <a href="ACTIONS.html">Action Layer</a>.</figcaption>
+  </div></figure>
+
+  <pre><code><span class="cm"># discover what you can do, then do it — both over MCP</span>
+get_manifest()                                           <span class="cm"># role-filtered actions, object types, lifecycle</span>
+invoke_action(action=<span class="str">"ProposeModule"</span>, object_ref=<span class="str">"state.sqlite_store"</span>,
+              args={<span class="str">"name"</span>: <span class="str">"state.sqlite_store"</span>})        <span class="cm"># → PASS | FLAG (reuse-check)</span>
+invoke_action(action=<span class="str">"AdvanceTask"</span>, object_ref=<span class="str">"task-42"</span>,
+              args={<span class="str">"to"</span>: <span class="str">"completed"</span>})                    <span class="cm"># → 409 if the jump is illegal</span></code></pre>
+</section>
+
+<!-- 6 -->
+<section id="onboard">
+  <div class="kicker">Getting started</div>
+  <h2>Onboarding &amp; backfill</h2>
+  <p>Two paths in, depending on whether the project is new or already has history.</p>
+
+  <div class="grid g2" style="margin:18px 0">
+    <div class="card">
+      <h3 style="margin:2px 0 6px"><span class="pill ctrl">new project</span> &nbsp;<code>POST /onboard</code></h3>
+      <p class="small">Describe the project in natural language. NL authors tailor the ontology and the methodology
+      rules to what you said, install the layers, and hand back the manifests. Minutes, not a config sprint.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin:2px 0 6px"><span class="pill b">existing repo</span> &nbsp;<code>backfill_git.py</code></h3>
+      <p class="small">For a project that predates the flow: a deterministic import of its <b>reality</b> — modules from
+      source dirs, the author, recent commits (and the modules they touched), the docs, and with <code>--code</code>
+      the source itself — so the graph knows the codebase from day one.</p>
+    </div>
+  </div>
+
+  <ol class="steps">
+    <li><b>Structural facts</b> (no LLM): source directories → <code>Module</code> nodes, git author →
+      <code>Developer</code>, recent commits → <code>Commit</code> nodes linked to the modules they changed.</li>
+    <li><b>Semantic layer:</b> README + <code>docs/</code> ingested through the extraction pipeline so the architecture
+      and the prose "why" become query-able with provenance.</li>
+    <li><b>Code layer</b> (<code>--code</code>): source files ingested full-content, so file- and symbol-level questions
+      ("where is <code>clear_on_start</code> handled?") resolve from the code, not guesswork.</li>
+  </ol>
+
+  <div class="callout ok">
+    <div class="clabel">◆ Read-your-writes for your own decisions</div>
+    A decision an agent records is query-able <b>immediately</b>: <code>/query</code> (and <code>query_auto</code>)
+    blend the decision store into every answer — semantically <i>and</i> by exact name — so asking
+    <code>"explain adr-m2-concurrency"</code> returns the recorded ADR with its full rationale, in the same session it
+    was written.
+  </div>
+</section>
+
+<!-- 7 -->
+<section id="surface">
+  <div class="kicker">The interface</div>
+  <h2>One surface: MCP</h2>
+  <p>An agent shouldn't juggle a dozen REST calls. Everything — querying, recording decisions, discovering what it can
+  do, and invoking governed actions — is a single <b>MCP</b> tool surface, wired once via <code>.mcp.json</code>. (The
+  same operations exist as REST endpoints if you ever want to <code>curl</code> them.)</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Habit</th><th>MCP tools</th><th>What it gives the agent</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill a">query</span></td><td><code>query_auto</code> · <code>query_cgr3</code> ·
+        <code>search_precedents</code> · <code>get_entity_context</code></td>
+        <td>Grounding: what exists, why it's like this, and precedents for the call it's about to make.</td></tr>
+      <tr><td><span class="pill b">record</span></td><td><code>record_decision</code> ·
+        <code>ingest_decision_summary</code></td>
+        <td>Durable, structured <i>why</i> — the ADR a future session would otherwise lose.</td></tr>
+      <tr><td><span class="pill ctrl">act</span></td><td><code>get_manifest</code> · <code>invoke_action</code></td>
+        <td>Discover the role's governed actions, then run one — validated, authorized, audited.</td></tr>
+      <tr><td><span class="pill c">inspect</span></td><td><code>list_decisions</code> · <code>get_edge_context</code></td>
+        <td>The audit trail: what was decided, by whom, under which rule.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p class="small">→ Deeper walkthrough of the agent-side setup and one feature end to end:
+    <a href="AGENTIC_DEV_WALKTHROUGH.html">The Project Graph — Onboarding, Flow &amp; Data</a>.</p>
+</section>
+
+<!-- 8 -->
+<section id="field">
+  <div class="kicker">Evidence</div>
+  <h2>Field-validated on a real project</h2>
+  <p>We onboarded a separate, single-agent project (an OSINT investigator) onto Context Graph and had its dev agent
+  ship three real features entirely through the loop — grumbling freely into a feedback file the whole time. The honest
+  read:</p>
+
+  <div class="grid g3" style="margin:18px 0">
+    <div class="stat b"><div class="v">1 build</div><div class="l">stopped before it started — <i>query-before-build</i>
+      surfaced an existing state repo, so the agent extended the seam instead of duplicating it</div></div>
+    <div class="stat"><div class="v">3 ADRs</div><div class="l">durable, structured <i>why</i> — incl. the
+      <code>threading.Lock</code>-over-<code>asyncio.Lock</code> rationale a later session would have "fixed"</div></div>
+    <div class="stat a"><div class="v">0 bad jumps</div><div class="l">the CR lifecycle
+      <code>open → in&nbsp;progress → closed</code> held as a real, enforced audit trail</div></div>
+  </div>
+
+  <p>The exercise also drove real fixes back into the product — an MCP request-body bug, a mis-firing query route, and
+  the read-your-writes gap on recorded decisions (a decision is now query-able the instant it's recorded). That
+  feedback-to-fix loop <i>is</i> the methodology working on itself.</p>
+
+  <div class="callout caveat">
+    <div class="clabel">◆ Honest about the ceiling</div>
+    Value climbs further with two upgrades the field run pinpointed: a <b>file-level module graph</b> with dependency
+    and API edges (so the reuse check names the overlap, not just flags the concept), and a <b>type flag</b> separating
+    recorded ADRs from decision-shaped sentences extracted out of docs. Both are on the roadmap — see
+    <a href="CLOSING_THE_GAPS.html">Closing the Gaps</a>.
+  </div>
+</section>
+
+<!-- 9 -->
+<section id="generic">
+  <div class="kicker">Positioning</div>
+  <h2>Generic by design</h2>
+  <p>None of this is hard-wired. Context Graph is a generic, decision-aware knowledge graph; <b>AI-agent development is
+  a use case, expressed entirely as data</b> — an <code>agentic-dev</code> preset of ontology, rules, actions, seed,
+  RBAC, and lifecycle files. The core ships none of those verbs.</p>
+
+  <div class="pull">Swap the preset and the same engine governs a sales desk, a claims pipeline, or a research team.
+    The methodology-as-data contract is the product; agentic dev is the first thing we pointed it at.</div>
+
+  <p class="small">This distinguishes it from code-indexing tools: those map the codebase; Context Graph remembers the
+  <i>decisions</i> made across it and enforces <i>how</i> the next one gets made. The graph is a control plane, not an
+  index.</p>
+</section>
+
+<!-- 10 -->
+<section id="try">
+  <div class="kicker">Go deeper</div>
+  <h2>Where it sits · try it</h2>
+  <p>This page is the map. The deeper documents:</p>
+  <ul>
+    <li><b><a href="AGENTIC_PROJECT_GRAPH.html">The Project Graph — Methodology Actor</a></b> — the design discussion:
+      roles as identities, methodology-as-data, the worked "don't rebuild that API" example, and the full gap analysis.</li>
+    <li><b><a href="AGENTIC_DEV_WALKTHROUGH.html">Onboarding, Flow &amp; Data</a></b> — new-project onboarding and one
+      feature carried end to end through the graph.</li>
+    <li>Per-layer guides: <a href="ONTOLOGY.html">Ontology</a> · <a href="RULES_ENGINE.html">Business Rules Engine</a> ·
+      <a href="ACTIONS.html">Action Layer</a>.</li>
+    <li><b><a href="CONTEXT_GRAPH_OVERVIEW.html">Context Graph — Technical Field Guide</a></b> — the full reference for
+      the whole system, and <a href="BLOG_THE_FOURTH_ELEMENT.html">The Fourth Element</a> for the concept behind it.</li>
+  </ul>
+
+  <div class="callout key">
+    <div class="clabel">◆ The one-sentence version</div>
+    Point an AI coding agent at Context Graph and it stops rebuilding what exists, stops losing the <i>why</i>, and
+    starts following a methodology the graph actually enforces — with an audit trail to prove it.
+  </div>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  The AI-agent-development use case for Context Graph — decision-aware project memory plus a methodology that runs
+  (ontology · rules · actions · RBAC · lifecycle), delivered over one MCP surface. Built on
+  <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a> (HKUDS). Supported by
+  <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>. Examples are illustrative;
+  identifiers, endpoints, and the field results are from the project and its first live run.
+</footer>
+
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('nav.toc a')), map={};
+  links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id); if(el)map[id]=a;});
+  var obs=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}
+  });},{rootMargin:'-20% 0px -70% 0px',threshold:0});
+  Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});
+  var btt=document.getElementById('btt');
+  window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});
+})();
+</script>
+</body>
+</html>
