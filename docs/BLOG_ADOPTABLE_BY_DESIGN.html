@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adoptable by Design — the regulatory &amp; business case for the constrained expert system</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.11), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.07), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(91,141,239,.08),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.05;margin:.3em 0 .25em;background:linear-gradient(92deg,#cfe0ff,#8fd9c9 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}.tag b{color:var(--ink)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(91,141,239,.2),transparent);color:#fff;border-left:2px solid var(--a)}
+main{min-width:0;max-width:772px}article section{margin:0 0 54px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}p{margin:.7em 0}.lead-p{font-size:19px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--a);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.1)}.callout.key .clabel{color:#9cc0ff}
+.callout.danger{border-color:rgba(239,91,110,.5);background:rgba(239,91,110,.08)}.callout.danger .clabel{color:#f6a2ad}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Essay · agentic systems · part II</div>
+    <h1>Adoptable by Design</h1>
+    <p class="lede">The first essay argued the constrained expert system is a good idea and a buildable one. But the
+      systems it descends from — Arden, GLIF, Drools — didn't fail on the tech. They failed on the <b>third question</b>:
+      will the real, regulated, risk-averse world actually let it in? Here's why this design is unusually well-placed to
+      survive that — and where it still might not.</p>
+    <div class="byline">A sequel to <a href="BLOG_CONSTRAINED_EXPERT_SYSTEM.html">The Constrained Expert System</a> ·
+      part of <a href="BLOG_THE_FOURTH_ELEMENT.html">Context Graph</a></div>
+    <div class="hero-tags">
+      <span class="tag">the <b>third question</b>: adoptable?</span>
+      <span class="tag">the CDS <b>exemption</b></span>
+      <span class="tag">audit trail as a <b>shield</b></span>
+      <span class="tag">why the barriers are <b>lower now</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this essay</div>
+  <ol>
+    <li><a href="#third">The third question</a></li>
+    <li><a href="#allowed">Is it even allowed?</a></li>
+    <li><a href="#liability">Who's on the hook?</a></li>
+    <li><a href="#buyers">Who buys it — and why "no" before</a></li>
+    <li><a href="#whynow">Why the barriers are lower now</a></li>
+    <li><a href="#risks">Where it still might fail</a></li>
+    <li><a href="#frame">Adoptable because trustworthy</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="third">
+  <div class="kicker">The gap the first essay left</div>
+  <h2>Innovative and buildable ≠ adoptable</h2>
+  <p class="lead-p">An idea can be genuinely new, and genuinely buildable, and still die — because it isn't legal to use,
+  nobody will pay for it, or the liability terrifies everyone. That third gate is where the ancestors of this idea
+  actually fell.</p>
+  <p>Arden Syntax and GLIF worked. Drools worked. They didn't collapse because the rules engine was broken; they
+  collapsed because integrating them cost a fortune per site, keeping them current was nobody's job, and no clinician
+  wanted to be the one who trusted the machine. So a serious case has to clear the gate the first essay skipped.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 132" role="img" aria-label="Three gates: innovative, buildable, adoptable">
+      <defs><marker id="g1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.gb{rx:11;stroke-width:1.2}.gt{fill:#e7ebf3;font:13px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}.gs{fill:#aab3c5;font:10.5px "Segoe UI",sans-serif;text-anchor:middle}.gl{stroke:#8a93a8;stroke-width:1.8;fill:none;marker-end:url(#g1)}</style>
+      <rect class="gb" x="16" y="46" width="118" height="46" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="gt" x="75" y="66">Innovative?</text><text class="gs" x="75" y="82">✓ essay I</text>
+      <rect class="gb" x="196" y="46" width="118" height="46" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="gt" x="255" y="66">Buildable?</text><text class="gs" x="255" y="82">✓ essay I</text>
+      <rect class="gb" x="376" y="46" width="140" height="46" fill="#2a1620" stroke="rgba(239,91,110,.6)"/><text class="gt" x="446" y="66" style="fill:#f6a2ad">Adoptable?</text><text class="gs" x="446" y="82">← the predecessors died here</text>
+      <rect class="gb" x="578" y="46" width="126" height="46" fill="#1a2130" stroke="#39425a"/><text class="gt" x="641" y="70">shipped</text>
+      <line class="gl" x1="134" y1="69" x2="194" y2="69"/><line class="gl" x1="314" y1="69" x2="374" y2="69"/><line class="gl" x1="516" y1="69" x2="576" y2="69"/>
+      <text class="gs" x="360" y="26" style="font-weight:700;fill:#7b8499">the same idea has to pass all three gates</text>
+    </svg>
+    <figcaption><b>Two gates cleared, one to go.</b> The tech was never the thing that buried Arden or Drools. This essay
+      is about the red gate.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 2 -->
+<section id="allowed">
+  <div class="kicker">Regulation</div>
+  <h2>Is it even allowed?</h2>
+  <p>Software that helps a clinician make a decision can, in principle, count as a <b>medical device</b> — which means a
+  slow, costly approval path. That alone has scared off plenty of good ideas.</p>
+  <p>But there's a well-known carve-out. In the US, following the 21st Century Cures Act, the FDA's <b>Clinical Decision
+  Support</b> guidance treats certain CDS software as <i>non-device</i> — roughly, when it:</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 178" role="img" aria-label="CDS exemption criteria mapped to the design">
+      <style>.cb{rx:10;stroke-width:1.1}.ct{fill:#e7ebf3;font:11.5px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.cs{fill:#aab3c5;font:10px "Segoe UI",sans-serif;text-anchor:middle}.ck{fill:#7ee3b4;font:13px "Segoe UI",sans-serif;font-weight:800;text-anchor:middle}</style>
+      <text class="cs" x="150" y="18" style="font-weight:800;fill:#9cc0ff">criteria (roughly)</text>
+      <text class="cs" x="560" y="18" style="font-weight:800;fill:#7fe3cf">our design</text>
+      <rect class="cb" x="20" y="30" width="256" height="34" fill="#161d33" stroke="rgba(91,141,239,.45)"/><text class="ct" x="148" y="51">shows the basis for its advice</text>
+      <rect class="cb" x="20" y="72" width="256" height="34" fill="#161d33" stroke="rgba(91,141,239,.45)"/><text class="ct" x="148" y="93">the clinician can review &amp; override</text>
+      <rect class="cb" x="20" y="114" width="256" height="34" fill="#161d33" stroke="rgba(91,141,239,.45)"/><text class="ct" x="148" y="135">not for a time-critical emergency</text>
+      <text class="ck" x="330" y="52">✓</text><text class="ck" x="330" y="94">✓</text><text class="ck" x="330" y="136">✓</text>
+      <rect class="cb" x="372" y="30" width="332" height="34" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="ct" x="538" y="51">every rule cites its guideline passage</text>
+      <rect class="cb" x="372" y="72" width="332" height="34" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="ct" x="538" y="93">human-gated by construction (approve / edit)</text>
+      <rect class="cb" x="372" y="114" width="332" height="34" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="ct" x="538" y="135">an advisory checker, not an autonomous actor</text>
+    </svg>
+    <figcaption><b>The exemption criteria read like our design spec.</b> Transparent, overridable, advisory — the exact
+      properties the "constrain more, keep the human in charge" discipline produces.</figcaption>
+  </div></figure>
+
+  <p class="pull">The same discipline that makes the system <i>trustworthy</i> is what makes it <i>lighter to regulate</i>.
+  "Constrain more" pays off twice — once in engineering, once at the regulator's door.</p>
+
+  <div class="callout danger"><div class="clabel">◆ Not legal advice — and this is the honest part</div>
+    The lines above are the <i>shape</i> of the argument, not a clearance. The real criteria have nuance, they've shifted
+    over time, they differ by jurisdiction, and some uses (autonomous, high-risk, or that a clinician can't reasonably
+    independently review) fall <b>back under</b> device rules. Any real product needs current regulatory guidance read by
+    someone who does this for a living — not an essay. The claim here is narrow: this architecture sits on the
+    <i>friendly</i> side of the line by design, not that it's automatically exempt.</div>
+</section>
+
+<!-- 3 -->
+<section id="liability">
+  <div class="kicker">Liability</div>
+  <h2>Who's on the hook if it's wrong?</h2>
+  <p>Clinicians dread "the computer told me to." It's the question that kills pilots. And here the architecture gives a
+  clean answer that a hot-path LLM simply cannot.</p>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill danger">hot-path LLM</span>
+      <p class="small" style="margin-top:8px">A recommendation generated fresh at decision time: non-reproducible, no
+      named author, no fixed basis. Under scrutiny, there's nothing to point at but "the model said so." A liability
+      black hole.</p></div>
+    <div class="card"><span class="pill win">constrained expert system</span>
+      <p class="small" style="margin-top:8px">Every rule was reviewed and <b>signed by a named clinician</b>, with its
+      guideline citation attached, evaluated deterministically, and logged. The audit trail is a <b>shield</b>: here is
+      the rule, the evidence, who approved it, and when.</p></div>
+  </div>
+  <p>The audit trail we built for <i>trust</i> turns out to be the same artifact you need for <i>defensibility</i>. Keeping
+  the LLM out of the live decision isn't just a reliability choice — it's a liability posture.</p>
+</section>
+
+<!-- 4 -->
+<section id="buyers">
+  <div class="kicker">The market</div>
+  <h2>Who buys it — and why they said no before</h2>
+  <p>The predecessors didn't lack buyers because the value was unclear. They lacked buyers because the <b>cost of getting
+  value</b> was brutal: plugging a rule system into each hospital's bespoke, messy data was a custom integration project
+  <i>every single time</i> (Arden's "curly braces," again), and once installed, keeping the rules current was a chore
+  nobody owned. The ROI never showed up.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Buyer</th><th>Their pain</th><th>What changed</th></tr></thead>
+    <tbody>
+      <tr><td>Health systems</td><td>outdated protocols, variation in care, audit pressure</td><td>FHIR lowers integration cost; LLM keeps rules current</td></tr>
+      <tr><td>EHR vendors</td><td>CDS is a checkbox feature that's expensive to maintain</td><td>authoring becomes cheap and continuous</td></tr>
+      <tr><td>Specialty societies</td><td>they publish the guideline; adoption is slow &amp; inconsistent</td><td>publish a <i>checkable</i> protocol, not just a PDF</td></tr>
+      <tr><td>Payers</td><td>enforcing evidence-based criteria consistently</td><td>deterministic, auditable eligibility logic</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">The wedge isn't "sell to everyone." It's one buyer with acute pain and a clean-ish data model —
+  most plausibly a specialty society that wants its guideline <i>used</i>, or a health system under audit pressure.</p>
+</section>
+
+<!-- 5 -->
+<section id="whynow">
+  <div class="kicker">Timing</div>
+  <h2>Why the barriers are lower now</h2>
+  <p>The "why now" for <i>adoption</i> is different from the "why now" for the tech — and just as important. Two of the
+  three things that buried the predecessors have quietly collapsed.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 166" role="img" aria-label="Adoption barriers then versus now">
+      <style>.tb{rx:10;stroke-width:1.1}.tt{fill:#e7ebf3;font:12px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}.ts{fill:#aab3c5;font:10.5px "Segoe UI",sans-serif;text-anchor:middle}</style>
+      <text class="tt" x="180" y="20" style="fill:#f6a2ad">THEN — why it stalled</text>
+      <rect class="tb" x="24" y="34" width="312" height="40" fill="#2a1620" stroke="rgba(239,91,110,.45)"/><text class="tt" x="180" y="52" style="font-size:11.5px">integration = custom per site</text><text class="ts" x="180" y="67">high cost, every hospital different</text>
+      <rect class="tb" x="24" y="82" width="312" height="40" fill="#2a1620" stroke="rgba(239,91,110,.45)"/><text class="tt" x="180" y="100" style="font-size:11.5px">maintenance = manual, unowned</text><text class="ts" x="180" y="115">rules rot as guidelines change</text>
+      <text class="tt" x="540" y="20" style="fill:#7ee3b4">NOW — why it's viable</text>
+      <rect class="tb" x="384" y="34" width="312" height="40" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="tt" x="540" y="52" style="font-size:11.5px">integration = FHIR, standardized</text><text class="ts" x="540" y="67">shared data model, mandated APIs</text>
+      <rect class="tb" x="384" y="82" width="312" height="40" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="tt" x="540" y="100" style="font-size:11.5px">maintenance = LLM-authored</text><text class="ts" x="540" y="115">updates arrive as reviewable diffs</text>
+      <text class="ts" x="360" y="146" style="font-weight:700">the third barrier — clinician trust — is the one still standing (see next section)</text>
+    </svg>
+    <figcaption><b>Two of three barriers fell.</b> The common data standard (FHIR) shrinks the integration tax that
+      killed the predecessors, and LLM-authoring removes the maintenance chore. The human barrier remains.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 6 -->
+<section id="risks">
+  <div class="kicker">The honest ledger</div>
+  <h2>Where it still might fail</h2>
+  <p>It would be its own kind of overselling to pretend the path is clear. The real risks:</p>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill danger">clinician trust</span>
+      <p class="small" style="margin-top:8px">A generation of clinicians was burned by noisy, low-value alert systems.
+      "Another CDS tool" starts underwater. Earning trust is a product and change-management problem, not a technical one.</p></div>
+    <div class="card"><span class="pill danger">messy data</span>
+      <p class="small" style="margin-top:8px">Even with FHIR, real records are dirty and incomplete. Mapping them to the
+      rules' terms — curly braces, still — is real work, and it's where a deterministic system quietly depends on
+      not-so-deterministic inputs.</p></div>
+    <div class="card"><span class="pill danger">glacial procurement</span>
+      <p class="small" style="margin-top:8px">Healthcare buys slowly, through long pilots and committees. Runway and
+      patience matter as much as the idea.</p></div>
+    <div class="card"><span class="pill danger">regulatory gray zones</span>
+      <p class="small" style="margin-top:8px">The exemption has fuzzy edges. Push into higher-risk or more-autonomous
+      territory and you're back under device rules — with the cost and timeline that implies.</p></div>
+  </div>
+  <div class="callout caveat"><div class="clabel">◆ The honest reframe</div>
+    None of these are reasons not to build it — they're the map of where the effort actually goes. Notice that
+    <b>three of the four are human and organizational, not technical.</b> That's usually a sign the technical bet is the
+    easy part.</div>
+</section>
+
+<!-- 7 -->
+<section id="frame">
+  <div class="kicker">The through-line</div>
+  <h2>Adoptable <i>because</i> trustworthy</h2>
+  <p class="lead-p">Here is the thing that makes me think this generation is different, and it's almost too neat: the
+  properties that make the constrained expert system <b>trustworthy</b> are the very same properties that make it
+  <b>adoptable</b>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Design property</th><th>Buys trust</th><th>Buys adoption</th></tr></thead>
+    <tbody>
+      <tr><td>Transparent (every rule cited)</td><td>the clinician can check it</td><td>fits the CDS exemption</td></tr>
+      <tr><td>Human-gated (approve / override)</td><td>a person owns each rule</td><td>fits the exemption + liability shield</td></tr>
+      <tr><td>Deterministic + audited</td><td>same answer, every time</td><td>defensible under review</td></tr>
+      <tr><td>LLM at authoring, not decision</td><td>reproducible</td><td>maintenance stops being a chore</td></tr>
+    </tbody>
+  </table></div>
+  <p>Every prior gap-closer had to <i>trade</i> trust for capability, or capability for compliance. This one doesn't. The
+  same discipline earns all three gates.</p>
+  <div class="callout key"><div class="clabel">◆ The one-sentence version</div>
+    It's innovative, it's buildable — and it may be adoptable precisely <i>because</i> the things that make it safe
+    (transparent, human-gated, auditable) are exactly what regulators, hospitals, and courts are already asking for. The
+    predecessors had to fight the gatekeepers. This one is shaped like what the gatekeepers want.</div>
+  <p class="small">Read part I: <a href="BLOG_CONSTRAINED_EXPERT_SYSTEM.html">The Constrained Expert System</a>. The
+  substrate: <a href="ARCHITECTURE.html">Context Graph architecture</a>. This essay makes a business/regulatory argument,
+  not a legal one — treat the regulatory sections as a starting hypothesis to verify, not a conclusion.</p>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  Part II of an essay on constrained expert systems — the regulatory and business case. A companion to
+  <a href="BLOG_CONSTRAINED_EXPERT_SYSTEM.html">The Constrained Expert System</a> and
+  <a href="https://github.com/dsivov/Context_Graph" target="_blank" rel="noopener">Context Graph</a>. Not legal advice.
+  Supported by <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>.
+</footer>
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
+</script>
+</body>
+</html>
