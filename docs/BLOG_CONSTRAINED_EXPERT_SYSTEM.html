@@ -228,6 +228,11 @@ b.hl{color:#cdb1f7}
   </div></figure>
   <p class="small">This one move buys reproducibility, an audit trail, and a defensible artifact — the three things a
   hot-path LLM cannot give you, and the three things a regulated domain demands.</p>
+  <div class="callout caveat"><div class="clabel">◆ One honest boundary</div>
+    "Deterministic" is a claim about the <i>rule logic</i>. Feeding it real-world inputs — mapping a messy record to the
+    ontology's terms — is a problem so classic it has a name (Arden's "curly braces," which we'll meet again), and that
+    mapping can still need fuzzy or LLM-assisted extraction. Determinism lives <i>downstream</i> of the mapping; the
+    mapping is where the meta-DSL's data bindings — and the residual effort — actually sit.</div>
 </section>
 
 <!-- 4 -->
@@ -287,7 +292,8 @@ b.hl{color:#cdb1f7}
       rule/constraint object, <i>not</i> arbitrary code. That's the doability proof: we're filling a known shape.</li>
     <li><b>They stalled on authoring, not execution.</b> Arden's infamous "curly-braces problem" — mapping each rule to
       a site's actual data was manual agony — is the knowledge-acquisition bottleneck by another name. And
-      <b>FHIR + SNOMED/LOINC</b> already give us the grounding ontology, so the LLM never invents a term.</li>
+      <b>FHIR + SNOMED/LOINC</b> already give us the grounding ontology, so the LLM generates against real, bound terms —
+      and anything unbound is flagged.</li>
   </ul>
   <p class="pull">The one-line framing: Arden Syntax, but the LLM is the medical knowledge engineer — grounded in
   FHIR/SNOMED, and every rule gated by a clinician.</p>
@@ -328,23 +334,27 @@ b.hl{color:#cdb1f7}
 <!-- 6 -->
 <section id="substrate">
   <div class="kicker">Buildable today</div>
-  <h2>The substrate mostly already exists</h2>
-  <p>The reason I'm confident this isn't another beautiful stall: most of the lean MVP is already running. We built
-  <a href="https://github.com/dsivov/Context_Graph" target="_blank" rel="noopener">Context Graph</a> as a
-  decision-aware knowledge graph, and — almost by accident — it turns out to be the substrate for exactly this.</p>
+  <h2>The building blocks already exist</h2>
+  <p>The reason I'm confident this isn't another beautiful stall: the <i>component categories</i> it needs already exist
+  and are reusable. We built <a href="https://github.com/dsivov/Context_Graph" target="_blank" rel="noopener">Context
+  Graph</a> as a decision-aware knowledge graph, and it happens to supply most of the <b>generic</b> machinery — the
+  authoring, grounding, and governance plumbing — that a system like this leans on. Not the clinical system; its
+  scaffolding.</p>
   <div class="tablewrap"><table>
     <thead><tr><th>The pattern needs…</th><th>Context Graph has, today</th></tr></thead>
     <tbody>
-      <tr><td>NL → grounded rules, dry-run</td><td><code>RuleAuthor</code> — generates a DSL rule <i>and dry-runs it against sample cases</i> (that's vignette testing)</td></tr>
+      <tr><td>NL → grounded rules, dry-run</td><td><code>RuleAuthor</code> — generates a business-rules DSL rule <i>and dry-runs it against sample cases</i> (the same <i>shape</i> as vignette testing)</td></tr>
       <tr><td>the ontology boundary</td><td>a typed ontology that validates &amp; coerces what generation writes</td></tr>
       <tr><td>per-rule citations</td><td><code>supporting_sentences</code> / provenance on every edge</td></tr>
       <tr><td>governed approval</td><td>the rules gate + lifecycle (draft → approved → superseded)</td></tr>
       <tr><td>the update-as-diff loop</td><td>versioned ontology &amp; rules</td></tr>
     </tbody>
   </table></div>
-  <p class="small">What's genuinely still to build: the <b>visual, reversible meta-DSL studio</b> (Step 1's UX), a
-  <b>span-level citation</b> review surface, and — for the roadmap — the <b>consistency-prover</b>. Notably, none of that
-  is AI magic; it's mostly bookkeeping and interface over machinery that runs on localhost right now.</p>
+  <p class="small">The table is the <i>generic</i> plumbing. The <b>clinical layer</b> is net-new: a FHIR/SNOMED-bound
+  ontology, the clinical rule language itself, the vignette format, and the <b>visual, reversible meta-DSL studio</b>
+  (Step 1's UX) with a <b>span-level citation</b> review surface — plus, for the roadmap, the <b>consistency-prover</b>.
+  Notably, none of that is AI magic; it's mostly bookkeeping and interface over machinery that runs on localhost right
+  now.</p>
 </section>
 
 <!-- 7 -->
@@ -361,7 +371,7 @@ b.hl{color:#cdb1f7}
   <div class="callout key"><div class="clabel">◆ The one-sentence version</div>
     Stop trying to make the LLM a compiler. Make it the world's fastest knowledge engineer, bound by an ontology, kept
     out of the decision loop, and gated by a human — and the thirty-year-old dream of closing the business–IT gap
-    stops being a pitch and starts being an implementation.</div>
+    stops being a pitch and becomes an engineering problem.</div>
   <p class="small">This essay is a companion to <a href="BLOG_THE_FOURTH_ELEMENT.html">The Fourth Element</a> and the
   <a href="ARCHITECTURE.html">Context Graph architecture</a>. The clinical design — meta-DSL primitives, the studio, the
   consistency-prover, regulatory posture — is a follow-up; this is the argument for why it's worth building.</p>
