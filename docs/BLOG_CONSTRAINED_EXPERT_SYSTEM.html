@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Constrained Expert System — why the AI should be limited more than a developer, not less</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(169,116,240,.11), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(240,167,60,.07), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(169,116,240,.09),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.05;margin:.3em 0 .25em;background:linear-gradient(92deg,#cdb1f7,#ffd79a 55%,#8fd9c9);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}.tag b{color:var(--ink)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(169,116,240,.2),transparent);color:#fff;border-left:2px solid var(--ctrl)}
+main{min-width:0;max-width:772px}article section{margin:0 0 54px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ctrl);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}p{margin:.7em 0}.lead-p{font-size:19px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--ctrl);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(169,116,240,.55);background:rgba(169,116,240,.1)}.callout.key .clabel{color:#cdb1f7}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#cdb1f7}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Essay · agentic systems</div>
+    <h1>The Constrained Expert System</h1>
+    <p class="lede">The dream is an AI you describe a problem to, and it builds the whole solution. I think that's the
+      wrong target. The right one is stranger: an AI <b>limited more than a human developer, not less</b> — and it may
+      be the thing that finally closes the gap between the people who understand the problem and the people who build the
+      software.</p>
+    <div class="byline">On expert systems, LLMs, and the one bottleneck that killed every prior attempt · part of
+      <a href="BLOG_THE_FOURTH_ELEMENT.html">Context Graph</a></div>
+    <div class="hero-tags">
+      <span class="tag">constrain <b>more</b>, not less</span>
+      <span class="tag">LLM at <b>authoring</b> time, not decision time</span>
+      <span class="tag">meta-DSL <b>once</b>, instances forever</span>
+      <span class="tag">worked proof: <b>clinical</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this essay</div>
+  <ol>
+    <li><a href="#lived">The gap I lived</a></li>
+    <li><a href="#trap">The LLM-as-compiler trap</a></li>
+    <li><a href="#inversion">Constrain more, not less</a></li>
+    <li><a href="#decision">Out of the decision loop</a></li>
+    <li><a href="#metadsl">Meta-DSL once</a></li>
+    <li><a href="#clinical">Proof: clinical protocols</a></li>
+    <li><a href="#substrate">The substrate exists</a></li>
+    <li><a href="#payoff">The payoff</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 0 -->
+<section id="lived">
+  <div class="kicker">Where I'm coming from</div>
+  <h2>The gap I lived — Drools &amp; jBPM</h2>
+  <p class="lead-p">Years ago I built expert systems on <b>JBoss Drools</b> and <b>jBPM</b> — a production rules engine
+  (real DRL rules, decision tables) and a BPM workflow layer, sold as the way to <i>finally</i> close the gap between
+  business and IT.</p>
+  <p>The pitch was intoxicating: business analysts would author the rules, the engine would execute them, developers
+  would step back. It did not happen. What I learned building those systems is that the gap didn't close — it just
+  <b>moved</b>:</p>
+  <ul>
+    <li>DRL was "for business analysts," but in practice only developers could author and maintain it. So the expert
+      still had to route their knowledge through a developer — the gap relocated, it didn't vanish.</li>
+    <li>That routing <i>was</i> the <b>knowledge-acquisition bottleneck</b>: the expert explained, a developer
+      translated to rules, slowly and lossily, and the expert couldn't verify the result.</li>
+    <li>Rule bases exploded. Hundreds of interacting rules, Rete conflict-resolution surprises, and no regression net —
+      change one rule and pray. They rotted.</li>
+    <li>jBPM's "no-code" leaked at every edge: the process model still needed developers to wire service tasks, data
+      mappings, and integrations.</li>
+  </ul>
+  <p class="pull">The problem was never the engine or the DSL. It was the human bottleneck in authoring and maintaining
+  the rules — and the expert's inability to self-serve.</p>
+  <p>Hold that thought. It is the entire argument, because it names the <i>one</i> thing an LLM is unusually good at —
+  and it is not "writing your app."</p>
+</section>
+
+<!-- 1 -->
+<section id="trap">
+  <div class="kicker">The seduction</div>
+  <h2>The LLM-as-compiler trap</h2>
+  <p>The fashionable dream is the LLM as a universal compiler: describe any problem in English, receive code, data
+  pipelines, and deployment. No formalism, no constraints — natural language in, working system out.</p>
+  <p>It is seductive and, as a general target, wrong. An unbounded generator is <b>ungrounded</b> (it invents entities,
+  APIs, and assumptions that don't exist), <b>unreliable</b> (ask twice, get two systems), and
+  <b>non-reproducible</b> (there's no artifact a human can certify — only an output you re-roll). For anything that has
+  to be <i>trusted</i>, that's disqualifying.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 210" role="img" aria-label="LLM as compiler versus constrained expert system">
+      <defs><marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.b1{rx:9;stroke-width:1.1}.t1{fill:#e7ebf3;font:12px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.h1{fill:#e7ebf3;font:12.5px "Segoe UI",sans-serif;font-weight:800;text-anchor:middle}.l1{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#m1)}.dl{stroke:#ef5b6e;stroke-width:1.5;fill:none;marker-end:url(#m1);opacity:.8}</style>
+      <text class="h1" x="176" y="20" style="fill:#f6a2ad">LLM as compiler</text>
+      <rect class="b1" x="18" y="70" width="86" height="34" fill="#1a2130" stroke="#39425a"/><text class="t1" x="61" y="91">problem</text>
+      <rect class="b1" x="126" y="66" width="66" height="42" fill="#231a33" stroke="rgba(169,116,240,.5)"/><text class="t1" x="159" y="91">LLM</text>
+      <rect class="b1" x="238" y="30" width="94" height="26" fill="#2a1620" stroke="rgba(239,91,110,.5)"/><text class="t1" x="285" y="47">code?</text>
+      <rect class="b1" x="238" y="64" width="94" height="26" fill="#2a1620" stroke="rgba(239,91,110,.5)"/><text class="t1" x="285" y="81">pipeline?</text>
+      <rect class="b1" x="238" y="98" width="94" height="26" fill="#2a1620" stroke="rgba(239,91,110,.5)"/><text class="t1" x="285" y="115">deploy?</text>
+      <rect class="b1" x="238" y="132" width="94" height="26" fill="#2a1620" stroke="rgba(239,91,110,.5)"/><text class="t1" x="285" y="149">???</text>
+      <line class="l1" x1="104" y1="87" x2="124" y2="87"/>
+      <line class="dl" x1="192" y1="82" x2="236" y2="43"/><line class="dl" x1="192" y1="86" x2="236" y2="77"/><line class="dl" x1="192" y1="90" x2="236" y2="111"/><line class="dl" x1="192" y1="94" x2="236" y2="145"/>
+      <line x1="360" y1="14" x2="360" y2="196" stroke="#2c3346" stroke-dasharray="4 4"/>
+      <text class="h1" x="544" y="20" style="fill:#7fe3cf">Constrained expert system</text>
+      <rect class="b1" x="392" y="70" width="86" height="34" fill="#1a2130" stroke="#39425a"/><text class="t1" x="435" y="91">problem</text>
+      <rect class="b1" x="500" y="60" width="96" height="54" fill="#231a33" stroke="rgba(169,116,240,.6)"/><text class="t1" x="548" y="82">LLM</text><text class="t1" x="548" y="99" style="font-size:9.5px;fill:#aab3c5">⊂ ontology</text>
+      <rect class="b1" x="620" y="54" width="88" height="30" fill="#132a24" stroke="rgba(25,184,154,.55)"/><text class="t1" x="664" y="73">rule</text>
+      <rect class="b1" x="620" y="92" width="88" height="30" fill="#13251f" stroke="rgba(62,207,142,.5)"/><text class="t1" x="664" y="111">deterministic</text>
+      <line class="l1" x1="478" y1="87" x2="498" y2="87"/><line class="l1" x1="596" y1="80" x2="618" y2="70"/><line class="l1" x1="664" y1="84" x2="664" y2="90"/>
+    </svg>
+    <figcaption><b>Left: unbounded → ungrounded.</b> The compiler dream fans out into artifacts nobody can certify.
+      <b>Right: bounded → grounded.</b> The LLM generates <i>one</i> ontology-constrained rule, checked and
+      deterministic. Same model; radically different trust.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 2 -->
+<section id="inversion">
+  <div class="kicker">The thesis</div>
+  <h2>Constrain the AI more, not less</h2>
+  <p class="lead-p">Here is the inversion. A good human developer isn't valuable because they can write anything — they're
+  valuable because they work <i>inside</i> an architecture: the data model, the APIs, the domain's rules. The constraints
+  are what make their output trustworthy.</p>
+  <p>So the move isn't to free the AI from those constraints. It's to <b>bind it tighter</b> — to make it play with
+  configurations and building blocks, not raw code; to make it a <b>rule generator bounded by an ontology</b>, not a
+  compiler bounded by nothing. Every prior attempt to close the business–IT gap — Drools/jBPM, classic expert systems,
+  model-driven development, low-code, DSLs — reached for exactly this constrained shape. They all stalled on the same
+  rock: <b>someone still had to acquire the knowledge and maintain the rules</b>, and that someone was a scarce human.</p>
+  <div class="callout key"><div class="clabel">◆ Why this time is different</div>
+    The LLM doesn't change the target — the constrained expert system was always the right target. It changes the
+    <i>economics of authoring</i>. Translating an expert's knowledge into grounded rules, keeping them in sync as the
+    domain shifts, and explaining them back — the exact bottleneck that killed the predecessors — is the one thing an
+    LLM is unreasonably good at. Not building the app. <b>Authoring the rules for a machine that runs them.</b></div>
+</section>
+
+<!-- 3 -->
+<section id="decision">
+  <div class="kicker">The core distinction</div>
+  <h2>Keep the LLM out of the decision loop</h2>
+  <p>This is the sentence the whole idea rests on. The current wave of "LLM + your data" systems keeps the model on the
+  <b>hot path</b>: every decision is a fresh generation. That's why they're hard to trust — a per-query answer is
+  non-reproducible and unaccountable.</p>
+  <p>Invert it. Put the LLM at <b>authoring</b> time — where it drafts and maintains the rules, with a human expert
+  approving — and take it <b>out</b> of the loop at <b>decision</b> time, where the approved rules execute
+  deterministically. Ask the system the same question twice and get the same answer, every time, from logic a human
+  signed.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 200" role="img" aria-label="LLM at authoring time, out at decision time">
+      <defs><marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.b2{rx:10;stroke-width:1.1}.t2{fill:#e7ebf3;font:12px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.s2{fill:#aab3c5;font:10.5px "Segoe UI",sans-serif;text-anchor:middle}.l2{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#m2)}</style>
+      <rect x="14" y="34" width="336" height="132" rx="12" fill="rgba(169,116,240,.06)" stroke="rgba(169,116,240,.4)"/>
+      <text class="s2" x="182" y="52" style="font-weight:800;fill:#cdb1f7">AUTHORING TIME · LLM present</text>
+      <rect class="b2" x="34" y="86" width="96" height="46" fill="#231a33" stroke="rgba(169,116,240,.55)"/><text class="t2" x="82" y="106">expert + LLM</text><text class="s2" x="82" y="122">draft rules</text>
+      <rect class="b2" x="150" y="86" width="86" height="46" fill="#3a2f17" stroke="rgba(240,167,60,.5)"/><text class="t2" x="193" y="106">gate</text><text class="s2" x="193" y="122">validate</text>
+      <rect class="b2" x="256" y="86" width="80" height="46" fill="#13251f" stroke="rgba(62,207,142,.5)"/><text class="t2" x="296" y="106">approve</text><text class="s2" x="296" y="122">sign-off</text>
+      <line class="l2" x1="130" y1="109" x2="148" y2="109"/><line class="l2" x1="236" y1="109" x2="254" y2="109"/>
+      <rect x="386" y="34" width="320" height="132" rx="12" fill="rgba(62,207,142,.05)" stroke="rgba(62,207,142,.35)"/>
+      <text class="s2" x="546" y="52" style="font-weight:800;fill:#7ee3b4">DECISION TIME · LLM absent</text>
+      <rect class="b2" x="406" y="86" width="86" height="46" fill="#1a2236" stroke="rgba(91,141,239,.5)"/><text class="t2" x="449" y="106">input</text><text class="s2" x="449" y="122">a case</text>
+      <rect class="b2" x="512" y="86" width="96" height="46" fill="#132a24" stroke="rgba(25,184,154,.6)"/><text class="t2" x="560" y="106">rules run</text><text class="s2" x="560" y="122">deterministic</text>
+      <rect class="b2" x="628" y="86" width="72" height="46" fill="#13251f" stroke="rgba(62,207,142,.5)"/><text class="t2" x="664" y="109">answer</text>
+      <line class="l2" x1="492" y1="109" x2="510" y2="109"/><line class="l2" x1="608" y1="109" x2="626" y2="109"/>
+      <line class="l2" x1="336" y1="100" x2="384" y2="100"/><text class="s2" x="360" y="90" style="fill:#7fe3cf">approved artifact</text>
+    </svg>
+    <figcaption><b>The LLM is a tool the expert uses to write the rules — then it leaves.</b> Everything trustworthy
+      happens on the right, where no model is in the loop: same input, same output, from logic a human approved.</figcaption>
+  </div></figure>
+  <p class="small">This one move buys reproducibility, an audit trail, and a defensible artifact — the three things a
+  hot-path LLM cannot give you, and the three things a regulated domain demands.</p>
+</section>
+
+<!-- 4 -->
+<section id="metadsl">
+  <div class="kicker">The mechanism</div>
+  <h2>Meta-DSL once, instances forever</h2>
+  <p>The hardest part of every expert system was <i>defining the DSL</i> — the vocabulary and building blocks the rules
+  are written in. Get it wrong and everything downstream is wrong; getting it right took standards committees years.
+  That's the rock to get past, and the trick is to split the problem in two.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 210" role="img" aria-label="Two-step: define the meta-DSL once, instantiate forever">
+      <defs><marker id="m3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.b3{rx:10;stroke-width:1.1}.t3{fill:#e7ebf3;font:12px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.s3{fill:#aab3c5;font:10.5px "Segoe UI",sans-serif;text-anchor:middle}.l3{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#m3)}</style>
+      <text class="s3" x="180" y="20" style="font-weight:800;fill:#ffce86">STEP 1 · define once (high-touch)</text>
+      <rect class="b3" x="20" y="40" width="120" height="52" fill="#231a33" stroke="rgba(169,116,240,.55)"/><text class="t3" x="80" y="62">expert + LLM</text><text class="s3" x="80" y="78">visual · reversible</text>
+      <rect class="b3" x="188" y="40" width="132" height="52" fill="#241c10" stroke="rgba(240,167,60,.6)"/><text class="t3" x="254" y="62">the meta-DSL</text><text class="s3" x="254" y="78">ontology + blocks</text>
+      <line class="l3" x1="140" y1="66" x2="186" y2="66"/>
+      <line class="l3" x1="120" y1="92" x2="90" y2="120" stroke-dasharray="3 3"/><text class="s3" x="70" y="112" transform="rotate(-90 70 112)" style="fill:#7b8499">iterate</text>
+      <text class="s3" x="530" y="20" style="font-weight:800;fill:#7fe3cf">STEP 2 · instantiate forever (low-touch)</text>
+      <rect class="b3" x="392" y="40" width="92" height="52" fill="#1a2236" stroke="rgba(91,141,239,.5)"/><text class="t3" x="438" y="62">a protocol</text><text class="s3" x="438" y="78">(NL)</text>
+      <rect class="b3" x="500" y="40" width="92" height="52" fill="#231a33" stroke="rgba(169,116,240,.5)"/><text class="t3" x="546" y="62">LLM fills</text><text class="s3" x="546" y="78">an instance</text>
+      <rect class="b3" x="608" y="40" width="98" height="52" fill="#132a24" stroke="rgba(25,184,154,.55)"/><text class="t3" x="657" y="62">rule instance</text><text class="s3" x="657" y="78">gated</text>
+      <line class="l3" x1="484" y1="66" x2="498" y2="66"/><line class="l3" x1="592" y1="66" x2="606" y2="66"/>
+      <line class="l3" x1="320" y1="66" x2="390" y2="66"/><text class="s3" x="355" y="56" style="fill:#ffce86">reuse</text>
+      <rect class="b3" x="392" y="132" width="314" height="42" fill="#12141c" stroke="#2c3346"/><text class="s3" x="549" y="150" style="font-weight:700">many instances · one meta-DSL</text><text class="s3" x="549" y="165">each cheap, grounded, versioned</text>
+      <line class="l3" x1="549" y1="94" x2="549" y2="130"/>
+    </svg>
+    <figcaption><b>Define the meta-DSL once, high-touch and reversible; instantiate cheaply forever.</b> The expensive,
+      expert-heavy act happens a single time per domain; every feature after is a bounded fill-in-the-blanks the LLM
+      does and a human approves.</figcaption>
+  </div></figure>
+
+  <p><b>Step 1</b> is the one place you spend real expert time: co-design the meta-DSL with the LLM through a
+  <i>visual, reversible</i> wizard — go forward, go back, watch the model take shape, ground every term in the ontology.
+  <b>Step 2</b> reuses that fixed meta-DSL to generate an instance per feature, at near-zero cost.</p>
+  <div class="callout caveat"><div class="clabel">◆ "Fixed" means versioned, not frozen</div>
+    A meta-DSL still evolves as the domain does. "Fixed" has to mean <b>versioned + migratable</b>: when the meta-DSL
+    ships a v2, existing instances migrate. Skip this and you've rebuilt the maintenance rot that killed Drools rule
+    bases.</div>
+</section>
+
+<!-- 5 -->
+<section id="clinical">
+  <div class="kicker">The worked proof</div>
+  <h2>Where it gets real: clinical protocols</h2>
+  <p class="lead-p">Pick a domain that is unforgiving and already semi-formal, and the whole argument stops being
+  abstract. Clinical-protocol checking is that domain — and it comes with a graveyard that proves both the doability and
+  the "why now."</p>
+
+  <h3>The ruins tell you what to do</h3>
+  <p>This has been attempted, formally, for thirty years: <b>Arden Syntax</b> (HL7 Medical Logic Modules — literally a
+  clinical rule DSL), <b>GLIF</b>, <b>PROforma</b>, <b>SAGE</b>, and today's <b>CDS Hooks / FHIR Clinical Reasoning</b>.
+  These are the constrained-expert-system idea, <i>minus the LLM</i>. Two lessons fall out of the wreckage:</p>
+  <ul>
+    <li><b>The solution shape is known and bounded</b> — eligibility criteria, dosing rules, decision trees. A
+      rule/constraint object, <i>not</i> arbitrary code. That's the doability proof: we're filling a known shape.</li>
+    <li><b>They stalled on authoring, not execution.</b> Arden's infamous "curly-braces problem" — mapping each rule to
+      a site's actual data was manual agony — is the knowledge-acquisition bottleneck by another name. And
+      <b>FHIR + SNOMED/LOINC</b> already give us the grounding ontology, so the LLM never invents a term.</li>
+  </ul>
+  <p class="pull">The one-line framing: Arden Syntax, but the LLM is the medical knowledge engineer — grounded in
+  FHIR/SNOMED, and every rule gated by a clinician.</p>
+
+  <h3>Trust, without a black box</h3>
+  <p>Clinical is unforgiving: one hallucinated dosing rule and the system is radioactive. So a clinician can't
+  rubber-stamp raw logic — they review the way guideline committees already do: <b>behaviour and evidence</b>. The lean
+  bar needs no patient data and no solver:</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 210" role="img" aria-label="The clinical verification loop">
+      <defs><marker id="m4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.b4{rx:10;stroke-width:1.1}.t4{fill:#e7ebf3;font:12px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.s4{fill:#aab3c5;font:10px "Segoe UI",sans-serif;text-anchor:middle}.l4{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#m4)}</style>
+      <rect class="b4" x="14" y="70" width="108" height="52" fill="#231a33" stroke="rgba(169,116,240,.5)"/><text class="t4" x="68" y="90">LLM drafts</text><text class="s4" x="68" y="106">a rule instance</text>
+      <rect class="b4" x="158" y="42" width="120" height="34" fill="#1a2236" stroke="rgba(91,141,239,.45)"/><text class="t4" x="218" y="63">+ citation</text>
+      <rect class="b4" x="158" y="116" width="120" height="34" fill="#241c10" stroke="rgba(240,167,60,.45)"/><text class="t4" x="218" y="137">+ test vignettes</text>
+      <rect class="b4" x="314" y="70" width="118" height="52" fill="#132a24" stroke="rgba(25,184,154,.6)"/><text class="t4" x="373" y="90">clinician</text><text class="s4" x="373" y="106">reviews · edits · signs</text>
+      <rect class="b4" x="470" y="70" width="110" height="52" fill="#13251f" stroke="rgba(62,207,142,.55)"/><text class="t4" x="525" y="90">approved</text><text class="s4" x="525" y="106">deterministic eval</text>
+      <rect class="b4" x="616" y="70" width="90" height="52" fill="#1a2130" stroke="#39425a"/><text class="t4" x="661" y="90">guideline</text><text class="s4" x="661" y="106">update = diff</text>
+      <line class="l4" x1="122" y1="88" x2="156" y2="62"/><line class="l4" x1="122" y1="104" x2="156" y2="130"/>
+      <line class="l4" x1="278" y1="60" x2="312" y2="86"/><line class="l4" x1="278" y1="132" x2="312" y2="106"/>
+      <line class="l4" x1="432" y1="96" x2="468" y2="96"/>
+      <line class="l4" x1="616" y1="96" x2="582" y2="96"/>
+      <path class="l4" d="M661 122 C 661 175, 120 175, 68 124"/><text class="s4" x="360" y="192" style="fill:#7b8499">a guideline update re-runs the vignettes → the clinician approves a diff, not the whole thing</text>
+    </svg>
+    <figcaption><b>The clinician reviews behaviour + evidence, never naked logic.</b> Every rule arrives with its
+      guideline citation and a set of test vignettes; the clinician edits the vignettes (the load-bearing human act) and
+      signs; the approved instance runs deterministically. Updates return as diffs.</figcaption>
+  </div></figure>
+
+  <div class="callout ok"><div class="clabel">◆ Honest about the load-bearing part</div>
+    In this lean version, cross-rule contradictions are caught by vignette coverage and the reviewer — not
+    <i>proven</i> absent. The clinician-edited vignette carries the trust. That's not a hidden weakness; it <b>is</b> the
+    human-in-the-loop the whole thesis rests on. (A symbolic consistency-prover over the boolean eligibility logic, and
+    a retrospective-cohort shadow mode, are the credible next rungs — not the ask.)</div>
+</section>
+
+<!-- 6 -->
+<section id="substrate">
+  <div class="kicker">Buildable today</div>
+  <h2>The substrate mostly already exists</h2>
+  <p>The reason I'm confident this isn't another beautiful stall: most of the lean MVP is already running. We built
+  <a href="https://github.com/dsivov/Context_Graph" target="_blank" rel="noopener">Context Graph</a> as a
+  decision-aware knowledge graph, and — almost by accident — it turns out to be the substrate for exactly this.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>The pattern needs…</th><th>Context Graph has, today</th></tr></thead>
+    <tbody>
+      <tr><td>NL → grounded rules, dry-run</td><td><code>RuleAuthor</code> — generates a DSL rule <i>and dry-runs it against sample cases</i> (that's vignette testing)</td></tr>
+      <tr><td>the ontology boundary</td><td>a typed ontology that validates &amp; coerces what generation writes</td></tr>
+      <tr><td>per-rule citations</td><td><code>supporting_sentences</code> / provenance on every edge</td></tr>
+      <tr><td>governed approval</td><td>the rules gate + lifecycle (draft → approved → superseded)</td></tr>
+      <tr><td>the update-as-diff loop</td><td>versioned ontology &amp; rules</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">What's genuinely still to build: the <b>visual, reversible meta-DSL studio</b> (Step 1's UX), a
+  <b>span-level citation</b> review surface, and — for the roadmap — the <b>consistency-prover</b>. Notably, none of that
+  is AI magic; it's mostly bookkeeping and interface over machinery that runs on localhost right now.</p>
+</section>
+
+<!-- 7 -->
+<section id="payoff">
+  <div class="kicker">Why it matters</div>
+  <h2>The payoff: two tiers, one closed gap</h2>
+  <p>Land this and you get a two-tier world. <b>Experts</b> — a clinician, an underwriter, a compliance officer — use the
+  define-once studio to build a domain application by declaring its objects, rules, and building blocks, with the LLM
+  doing the translation they could never do alone. <b>Non-experts</b> then use those applications without touching code
+  or infrastructure, trusting them because every rule is grounded, cited, and signed.</p>
+  <p>That's the gap — the one Drools and jBPM and every expert system reached for and couldn't close — finally closing.
+  Not because the AI got powerful enough to build anything, but because we got disciplined enough to <b>let it build
+  almost nothing</b>: just the rules, for a machine that runs them, checked by the human who owns the risk.</p>
+  <div class="callout key"><div class="clabel">◆ The one-sentence version</div>
+    Stop trying to make the LLM a compiler. Make it the world's fastest knowledge engineer, bound by an ontology, kept
+    out of the decision loop, and gated by a human — and the thirty-year-old dream of closing the business–IT gap
+    stops being a pitch and starts being an implementation.</div>
+  <p class="small">This essay is a companion to <a href="BLOG_THE_FOURTH_ELEMENT.html">The Fourth Element</a> and the
+  <a href="ARCHITECTURE.html">Context Graph architecture</a>. The clinical design — meta-DSL primitives, the studio, the
+  consistency-prover, regulatory posture — is a follow-up; this is the argument for why it's worth building.</p>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  An essay on constrained expert systems — the LLM as an ontology-bounded rule generator, kept out of the decision loop
+  and gated by a human. Companion to <a href="https://github.com/dsivov/Context_Graph" target="_blank" rel="noopener">Context
+  Graph</a>. Supported by <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>.
+</footer>
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
+</script>
+</body>
+</html>
