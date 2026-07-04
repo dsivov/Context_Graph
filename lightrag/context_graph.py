@@ -943,6 +943,18 @@ class ContextGraph(LightRAG):
         # escape braces so the block survives str.format() in kg_query
         return block.replace("{", "{{").replace("}", "}}")
 
+    def _format_named_nodes_context(self, nodes: list[dict]) -> str:
+        """Render nodes the query named by exact id (with their neighbourhood)."""
+        lines = ["## Entities named in the question (exact matches from the graph)"]
+        for n in nodes:
+            typ = f" ({n['type']})" if n.get("type") else ""
+            desc = n.get("description") or n["name"]
+            lines.append(f"- {n['name']}{typ}: {desc}")
+            if n.get("neighbours"):
+                lines.append(f"  related: {', '.join(n['neighbours'][:8])}")
+        block = "\n".join(lines)
+        return block.replace("{", "{{").replace("}", "}}")
+
     async def aquery_llm(self, query, param=None, system_prompt=None):
         """Blend recorded decisions into the normal retrieval context.
 
@@ -963,6 +975,7 @@ class ContextGraph(LightRAG):
             param = QueryParam()
 
         precedents: list[dict] = []
+        named_nodes: list[dict] = []
         should_blend = (
             getattr(self, "decisions_vdb", None) is not None
             and getattr(param, "mode", "mix") != "bypass"
@@ -974,19 +987,39 @@ class ContextGraph(LightRAG):
             except Exception as e:  # pragma: no cover - never break a query
                 logger.warning(f"aquery decision-blend skipped: {e}")
                 precedents = []
-            # Structural fallback: pull decisions attached to any node the query
-            # names by id (e.g. "explain adr-m2-concurrency") — an opaque slug is
-            # not semantically close to its decision text, so vector search misses it.
+            # By-name structural pass: a query naming a node by its (often opaque) id —
+            # "TASK-048 details", "explain adr-m2-concurrency" — won't match it
+            # semantically. So for any exact node name in the query, inject the node's
+            # own description + neighbourhood, plus any decisions attached to it.
             try:
                 import re
 
                 seen = {(p.get("src_id"), p.get("tgt_id")) for p in precedents}
+                named_seen: set[str] = set()
                 graph = self.chunk_entity_relation_graph
                 for cand in dict.fromkeys(re.findall(r"[A-Za-z][A-Za-z0-9_.-]{3,}", query)):
-                    if len(precedents) >= 8 or not await graph.has_node(cand):
+                    if not await graph.has_node(cand):
                         continue
-                    for s, t in (await graph.get_node_edges(cand) or []):
-                        if (s, t) in seen:
+                    edges = await graph.get_node_edges(cand) or []
+                    # (a) the node itself — its description + a few neighbours
+                    if cand not in named_seen and len(named_nodes) < 6:
+                        node = await graph.get_node(cand)
+                        if node:
+                            nbrs = []
+                            for s, t in edges[:8]:
+                                other = t if s == cand else s
+                                e = await graph.get_edge(s, t)
+                                nbrs.append(f"{(e or {}).get('keywords', 'related')} → {other}")
+                            named_nodes.append({
+                                "name": cand,
+                                "type": node.get("entity_type", ""),
+                                "description": (node.get("description") or "").strip(),
+                                "neighbours": nbrs,
+                            })
+                            named_seen.add(cand)
+                    # (b) decisions attached to it
+                    for s, t in edges:
+                        if len(precedents) >= 8 or (s, t) in seen:
                             continue
                         edge = await graph.get_edge(s, t)
                         if edge and edge.get("relation_context"):
@@ -995,8 +1028,14 @@ class ContextGraph(LightRAG):
                                 precedents.append({"src_id": s, "tgt_id": t, "relation_context": rc})
                                 seen.add((s, t))
             except Exception as e:  # pragma: no cover
-                logger.warning(f"aquery decision by-name include skipped: {e}")
+                logger.warning(f"aquery by-name include skipped: {e}")
+
+            blocks = []
             if precedents:
+                blocks.append(self._format_decisions_context(precedents))
+            if named_nodes:
+                blocks.append(self._format_named_nodes_context(named_nodes))
+            if blocks:
                 from lightrag.prompt import PROMPTS
 
                 tmpl_key = (
@@ -1006,41 +1045,44 @@ class ContextGraph(LightRAG):
                 )
                 base = PROMPTS.get(tmpl_key, PROMPTS["rag_response"])
                 if "{context_data}" in base:
-                    block = self._format_decisions_context(precedents)
                     system_prompt = base.replace(
-                        "{context_data}", "{context_data}\n\n" + block, 1
+                        "{context_data}", "{context_data}\n\n" + "\n\n".join(blocks), 1
                     )
 
         result = await super().aquery_llm(query, param, system_prompt=system_prompt)
 
-        # Fallback: the base retrieval short-circuits and returns no answer when it
-        # finds no entities/chunks (a pure decision lookup like "explain
-        # adr-m2-concurrency" hits nothing in the code/doc index). In that case the
-        # blended system_prompt above never rendered — so answer from the decisions
-        # we found directly, closing the read-your-writes gap for recorded ADRs/CRs.
-        if precedents:
+        # Fallback: base retrieval short-circuits (returns no answer) when it finds no
+        # entities/chunks — a pure by-id lookup. If we located the named node(s) or
+        # decisions structurally, answer from them directly instead of "no information".
+        if precedents or named_nodes:
             lr = result.get("llm_response") or {}
             content = lr.get("content") or ""
             if lr.get("response_iterator") is None and (
                 not content.strip() or "enough information" in content.lower()
             ):
-                block = (
-                    self._format_decisions_context(precedents)
-                    .replace("{{", "{")
-                    .replace("}}", "}")
-                )
+                parts = []
+                if named_nodes:
+                    parts.append(
+                        self._format_named_nodes_context(named_nodes)
+                        .replace("{{", "{").replace("}}", "}")
+                    )
+                if precedents:
+                    parts.append(
+                        self._format_decisions_context(precedents)
+                        .replace("{{", "{").replace("}}", "}")
+                    )
                 try:
                     ans = await self.llm_model_func(
-                        "Answer the question using ONLY these recorded project "
-                        "decisions (quote the relevant one and its rationale). If "
-                        "none apply, say so briefly.\n\n"
-                        f"{block}\n\n---\nQuestion: {query}"
+                        "Answer the question using ONLY this project context (quote the "
+                        "relevant entity or decision). If it doesn't apply, say so briefly.\n\n"
+                        + "\n\n".join(parts)
+                        + f"\n\n---\nQuestion: {query}"
                     )
                     if isinstance(ans, str) and ans.strip():
                         result.setdefault("llm_response", {})["content"] = ans
                         result["status"] = "success"
                 except Exception as e:  # pragma: no cover - never break a query
-                    logger.warning(f"aquery decision fallback failed: {e}")
+                    logger.warning(f"aquery by-name fallback failed: {e}")
         return result
 
     async def get_all_decisions(
