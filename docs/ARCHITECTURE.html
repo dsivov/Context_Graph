@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context Graph — Architecture & Data Flow</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(25,184,154,.10), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(91,141,239,.09), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(25,184,154,.08),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.04;margin:.3em 0 .25em;background:linear-gradient(92deg,#8fd9c9,#cfe0ff 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}.tag b{color:var(--ink)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(25,184,154,.18),transparent);color:#fff;border-left:2px solid var(--b)}
+main{min-width:0;max-width:772px}article section{margin:0 0 54px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--b);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}p{margin:.7em 0}.lead-p{font-size:19px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--b);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3,.g4{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(25,184,154,.55);background:rgba(25,184,154,.1)}.callout.key .clabel{color:#7fe3cf}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Context Graph · technical architecture</div>
+    <h1>Architecture &amp; Data Flow</h1>
+    <p class="lede">One idea holds the whole system together: <b>the graph is the single source of truth</b>. Every
+      vector index — including the one for decisions — is a <i>derived, rebuildable projection</i> of it. This guide
+      walks the storage layer, the data structures, the indices, and every write and read path, and shows how they
+      compose.</p>
+    <div class="byline">The end-to-end reference · built on
+      <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a> ·
+      part of <a href="BLOG_THE_FOURTH_ELEMENT.html">Context Graph</a></div>
+    <div class="hero-tags">
+      <span class="tag">graph = <b>source of truth</b></span>
+      <span class="tag"><b>4</b> derived indices</span>
+      <span class="tag">rc = the <b>4th element</b> on edges</span>
+      <span class="tag"><b>6</b> query modes</span>
+      <span class="tag">insert &amp; retrieve paths</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this guide</div>
+  <ol>
+    <li><a href="#thesis">Source of truth</a></li>
+    <li><a href="#storage">The storage layer</a></li>
+    <li><a href="#graph">The graph &amp; the 4th element</a></li>
+    <li><a href="#indices">The derived indices</a></li>
+    <li><a href="#write">Write paths</a></li>
+    <li><a href="#read">Read paths</a></li>
+    <li><a href="#governance">The governance layers</a></li>
+    <li><a href="#tenancy">Multi-tenancy</a></li>
+    <li><a href="#together">How it fits together</a></li>
+    <li><a href="#recent">Recent additions</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="thesis">
+  <div class="kicker">The one idea</div>
+  <h2>The graph is the single source of truth</h2>
+  <p class="lead-p">Context Graph is a <b>labeled property graph</b> of entities (nodes) and relations (edges), extended
+  so that every edge can carry a <b>RelationContext</b> — the decision record: who, why, via which channel, under which
+  policy, for how long. That graph is the truth. Everything else is built <i>from</i> it.</p>
+
+  <p>Around the graph sit <b>vector indices</b> — for entities, relations, chunks, and decisions. It is tempting to
+  think of these as separate stores. They are not: they are <b>projections</b> of the graph and the source documents,
+  kept for fast semantic lookup, and <b>rebuildable at any time</b>. A decision is not a row in a "decisions database" —
+  it is an <i>edge in the graph</i>, and the decision index is just one projection of that edge.</p>
+
+  <div class="callout key"><div class="clabel">◆ Why this matters</div>
+    If the truth lives in one place and every index is derived, then drift is a non-event (rebuild the index), migration
+    is a non-event (re-project into the new index), and no query surface can ever hold a "decision" the graph doesn't.
+    Getting this wrong — treating an index as a second source of truth — is the single most expensive architectural
+    mistake, and the one this design is built to avoid.</div>
+</section>
+
+<!-- 2 -->
+<section id="storage">
+  <div class="kicker">Foundations</div>
+  <h2>The storage layer — four pluggable backends</h2>
+  <p>Every stateful thing lives in one of four storage roles. Each is an interface with multiple implementations, so a
+  deployment mixes and matches (file-based for a laptop, Neo4j + PostgreSQL for production).</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 220" role="img" aria-label="The four storage backends">
+      <style>.s{rx:11;stroke-width:1.2}.t{fill:#e7ebf3;font:13.5px "Segoe UI";font-weight:700;text-anchor:middle}.d{fill:#aab3c5;font:11px "Segoe UI";text-anchor:middle}.m{fill:#7b8499;font:10.5px var(--mono),monospace;text-anchor:middle}</style>
+      <rect class="s" x="14"  y="30" width="164" height="150" fill="#132a24" stroke="rgba(25,184,154,.5)"/>
+      <text class="t" x="96" y="54">GRAPH</text><text class="d" x="96" y="74">entities + relations</text><text class="d" x="96" y="90">(+ RelationContext)</text><text class="m" x="96" y="150">Neo4j ·</text><text class="m" x="96" y="165">NetworkX</text>
+      <rect class="s" x="192" y="30" width="164" height="150" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="t" x="274" y="54">VECTOR</text><text class="d" x="274" y="74">entity · relation ·</text><text class="d" x="274" y="90">chunk · decision</text><text class="m" x="274" y="150">Nano · Qdrant ·</text><text class="m" x="274" y="165">Milvus · Faiss</text>
+      <rect class="s" x="370" y="30" width="164" height="150" fill="#2a1f3a" stroke="rgba(169,116,240,.5)"/>
+      <text class="t" x="452" y="54">KV</text><text class="d" x="452" y="74">docs · chunks ·</text><text class="d" x="452" y="90">entities · relations ·</text><text class="d" x="452" y="106">LLM cache</text><text class="m" x="452" y="150">JSON · Redis ·</text><text class="m" x="452" y="165">Postgres · Mongo</text>
+      <rect class="s" x="548" y="30" width="158" height="150" fill="#3a2f17" stroke="rgba(240,167,60,.5)"/>
+      <text class="t" x="627" y="54">DOC STATUS</text><text class="d" x="627" y="74">processing state</text><text class="d" x="627" y="90">per document</text><text class="m" x="627" y="150">JSON · Postgres ·</text><text class="m" x="627" y="165">Mongo</text>
+      <text class="d" x="360" y="205" style="font-weight:700">GRAPH holds the truth · VECTOR + KV are derived / operational</text>
+    </svg>
+    <figcaption><b>Four roles, many backends.</b> The default config runs Neo4j for the graph and file-based stores for
+      the rest. Only the <span class="pill b" style="padding:0 6px">GRAPH</span> is authoritative for entities,
+      relations, and decisions.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 3 -->
+<section id="graph">
+  <div class="kicker">Data structure</div>
+  <h2>The graph &amp; the fourth element</h2>
+  <p>A <b>node</b> is an entity: an <code>entity_id</code>, an <code>entity_type</code>, a <code>description</code>
+  (the text that gets embedded), and open properties. An <b>edge</b> is a relation: <code>keywords</code> (the relation
+  type), a <code>description</code>, a <code>weight</code>, provenance — and, optionally, the <b>RelationContext</b>.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 210" role="img" aria-label="Node, edge, and RelationContext">
+      <defs><marker id="e1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.nt{fill:#e7ebf3;font:13px "Segoe UI";font-weight:700;text-anchor:middle}.np{fill:#aab3c5;font:11px var(--mono),monospace;text-anchor:middle}.el{stroke:#8a93a8;stroke-width:2;fill:none;marker-end:url(#e1)}</style>
+      <circle cx="130" cy="70" r="46" fill="#161d33" stroke="rgba(91,141,239,.6)" stroke-width="1.4"/>
+      <text class="nt" x="130" y="64">Entity (node)</text><text class="np" x="130" y="82">entity_type</text>
+      <circle cx="560" cy="70" r="46" fill="#161d33" stroke="rgba(91,141,239,.6)" stroke-width="1.4"/>
+      <text class="nt" x="560" y="64">Entity (node)</text><text class="np" x="560" y="82">description ↦ embedded</text>
+      <line class="el" x1="178" y1="70" x2="510" y2="70"/>
+      <text class="np" x="344" y="58" style="fill:#e7ebf3;font-weight:700">relation (edge): keywords · weight</text>
+      <rect x="250" y="112" width="200" height="78" rx="10" fill="#1a1330" stroke="rgba(169,116,240,.6)"/>
+      <text x="350" y="132" text-anchor="middle" fill="#cdb1f7" style="font:12px 'Segoe UI';font-weight:800">RelationContext (rc)</text>
+      <text class="np" x="350" y="150" style="fill:#cdb1f7">the 4th element · on the edge</text>
+      <text class="np" x="350" y="166">decision_trace · approved_by</text>
+      <text class="np" x="350" y="180">policy_ref · valid_from/until · …</text>
+      <line class="el" x1="350" y1="112" x2="350" y2="74" stroke="#a974f0" stroke-dasharray="3 3"/>
+    </svg>
+    <figcaption><b>The quadruple <code>(h, r, t, rc)</code>.</b> Most edges are plain triples; a decision edge adds the
+      rc. It's a property <i>on the edge</i> — connected and traversable, never a floating record.</figcaption>
+  </div></figure>
+
+  <p><b>RelationContext</b> has 11 fields — the decision lineage. The important ones:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>decision_trace</code></td><td>The rationale / why — the searchable heart of the decision.</td></tr>
+      <tr><td><code>approved_by</code> · <code>approved_via</code></td><td>Who decided, and through which channel (slack, email, jira, system…).</td></tr>
+      <tr><td><code>policy_ref</code></td><td>The policy it operated under.</td></tr>
+      <tr><td><code>valid_from</code> · <code>valid_until</code></td><td>Temporal validity — is it still in force?</td></tr>
+      <tr><td><code>supporting_sentences</code></td><td>Verbatim evidence quotes.</td></tr>
+      <tr><td><code>provenance</code> · <code>confidence_score</code></td><td>Source reference and extraction reliability.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 4 -->
+<section id="indices">
+  <div class="kicker">The keystone</div>
+  <h2>The derived indices</h2>
+  <p class="lead-p">Four vector indices make the graph searchable by meaning. Each is a <b>projection</b> — embed some
+  text drawn from the graph (or the source docs), keyed back to the node/edge it came from.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Index</th><th>What it embeds</th><th>Projected from</th></tr></thead>
+    <tbody>
+      <tr><td><code>entities_vdb</code></td><td>each entity's <code>description</code></td><td>graph nodes</td></tr>
+      <tr><td><code>relationships_vdb</code></td><td>each relation's <code>keywords + description</code></td><td>graph edges (incl. decision edges)</td></tr>
+      <tr><td><code>chunks_vdb</code></td><td>raw document chunks</td><td>source documents</td></tr>
+      <tr><td><code>decisions_vdb</code></td><td>each <code>decision_trace</code></td><td>graph edges that carry an rc</td></tr>
+    </tbody>
+  </table></div>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 250" role="img" aria-label="Graph as source of truth, indices as projections">
+      <defs><marker id="p1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#7fe3cf"/></marker>
+        <marker id="p2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ffce86"/></marker></defs>
+      <style>.b4{rx:10;stroke-width:1.1}.tt{fill:#e7ebf3;font:12.5px "Segoe UI";font-weight:600;text-anchor:middle}.ss{fill:#aab3c5;font:10.5px var(--mono),monospace;text-anchor:middle}.proj{stroke:#7fe3cf;stroke-width:1.7;fill:none;marker-end:url(#p1)}.rebuild{stroke:#ffce86;stroke-width:1.8;fill:none;marker-end:url(#p2);stroke-dasharray:5 3}</style>
+      <rect class="b4" x="250" y="16" width="220" height="58" fill="#132a24" stroke="rgba(25,184,154,.65)"/>
+      <text x="360" y="40" text-anchor="middle" fill="#7fe3cf" style="font:14px 'Segoe UI';font-weight:800">THE GRAPH</text>
+      <text class="ss" x="360" y="58">entities · relations · rc — source of truth</text>
+      <rect class="b4" x="20"  y="150" width="150" height="54" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="tt" x="95" y="172">entities_vdb</text><text class="ss" x="95" y="190">node descriptions</text>
+      <rect class="b4" x="190" y="150" width="150" height="54" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="tt" x="265" y="172">relationships_vdb</text><text class="ss" x="265" y="190">edges (+ decisions)</text>
+      <rect class="b4" x="380" y="150" width="150" height="54" fill="#2a1f3a" stroke="rgba(169,116,240,.5)"/><text class="tt" x="455" y="172">decisions_vdb</text><text class="ss" x="455" y="190">decision_trace</text>
+      <rect class="b4" x="550" y="150" width="150" height="54" fill="#241c10" stroke="rgba(240,167,60,.5)"/><text class="tt" x="625" y="172">chunks_vdb</text><text class="ss" x="625" y="190">source docs</text>
+      <line class="proj" x1="300" y1="74" x2="110" y2="148"/><line class="proj" x1="335" y1="74" x2="265" y2="148"/>
+      <line class="proj" x1="390" y1="74" x2="452" y2="148"/><line class="proj" x1="425" y1="74" x2="610" y2="148"/>
+      <text class="ss" x="150" y="112" style="fill:#7fe3cf;font-weight:700">project (embed)</text>
+      <path class="rebuild" d="M470 60 C 610 70, 600 120, 505 148"/>
+      <text class="ss" x="600" y="108" style="fill:#ffce86">reindex ↺ rebuild</text>
+    </svg>
+    <figcaption><b>Truth at the top, projections below.</b> The green arrows build the indices from the graph; the amber
+      arrow is <code>reindex_decisions()</code> — rebuild the projections from the truth any time.</figcaption>
+  </div></figure>
+
+  <div class="callout ok"><div class="clabel">◆ The clarification we standardized on</div>
+    A decision lives in <b>two</b> derived indices — <code>relationships_vdb</code> (so ordinary retrieval finds it,
+    like any relation) and <code>decisions_vdb</code> (fast semantic precedent search). Both are projections of the same
+    graph edge. That edge is where the decision <i>is</i>; the indices are how it's <i>found</i>.</div>
+</section>
+
+<!-- 5 -->
+<section id="write">
+  <div class="kicker">Getting data in</div>
+  <h2>Write paths</h2>
+  <p>Five ways data enters. They all end in the graph; the indices update alongside.</p>
+
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill a">extraction</span> <code>ainsert()</code>
+      <p class="small" style="margin-top:8px">Documents → chunk (~1200 tokens) → an LLM extracts entities, relations, and
+      <b>RelationContext from the prose</b> → graph + entities/relationships/chunks indices. This is how a corpus becomes
+      a graph, and one of the <b>two paths to an rc</b> (extracted).</p></div>
+    <div class="card"><span class="pill ctrl">emit</span> <code>emit_decision_trace()</code>
+      <p class="small" style="margin-top:8px">Agent code writes a structured rc directly onto an edge at the moment a
+      decision is made → graph edge + relationships_vdb + decisions_vdb. The <b>second path to an rc</b> (emitted). Runs
+      the rules gate first.</p></div>
+    <div class="card"><span class="pill b">graph CRUD</span> <code>/graph/entity·relation/create</code>
+      <p class="small" style="margin-top:8px">Create nodes/edges directly (node → entities_vdb, edge → relationships_vdb).
+      Used by backfill and manual curation. <i>Give nodes a real <code>description</code></i> — that's the retrieval payload.</p></div>
+    <div class="card"><span class="pill win">governed action</span> <code>/actions/invoke</code>
+      <p class="small" style="margin-top:8px">RBAC → lifecycle → rules gate → <code>emit_decision_trace</code> → side
+      effect → audit edge. Every standard operation, authorized and recorded.</p></div>
+  </div>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 176" role="img" aria-label="Two paths to a RelationContext converge on the graph">
+      <defs><marker id="w1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.wb{rx:10;stroke-width:1.1}.wt{fill:#e7ebf3;font:12.5px "Segoe UI";font-weight:600;text-anchor:middle}.ws{fill:#aab3c5;font:10.5px "Segoe UI";text-anchor:middle}.wl{stroke:#8a93a8;stroke-width:1.8;fill:none;marker-end:url(#w1)}</style>
+      <rect class="wb" x="14" y="20" width="150" height="46" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="wt" x="89" y="40">Documents</text><text class="ws" x="89" y="56">extraction (LLM)</text>
+      <rect class="wb" x="14" y="108" width="150" height="46" fill="#2a1f3a" stroke="rgba(169,116,240,.5)"/><text class="wt" x="89" y="128">Agent code</text><text class="ws" x="89" y="144">emit / action</text>
+      <rect class="wb" x="270" y="64" width="170" height="48" fill="#132a24" stroke="rgba(25,184,154,.6)"/><text x="355" y="84" text-anchor="middle" fill="#7fe3cf" style="font:13px 'Segoe UI';font-weight:800">GRAPH EDGE (+ rc)</text><text class="ws" x="355" y="100">the source of truth</text>
+      <rect class="wb" x="540" y="20" width="166" height="42" fill="#161d33" stroke="rgba(91,141,239,.45)"/><text class="wt" x="623" y="46">relationships_vdb</text>
+      <rect class="wb" x="540" y="72" width="166" height="42" fill="#2a1f3a" stroke="rgba(169,116,240,.45)"/><text class="wt" x="623" y="98">decisions_vdb</text>
+      <line class="wl" x1="164" y1="43" x2="268" y2="80"/><line class="wl" x1="164" y1="131" x2="268" y2="94"/>
+      <line class="wl" x1="440" y1="82" x2="538" y2="44"/><line class="wl" x1="440" y1="90" x2="538" y2="92"/>
+      <text class="ws" x="490" y="126" style="fill:#7fe3cf;font-weight:700">both paths → both indices (unified)</text>
+    </svg>
+    <figcaption><b>Extraction and emit converge.</b> Both write the rc onto a graph edge and project it into both indices,
+      so a decision is retrievable the same way no matter how it arrived. Bulk paths (backfill) call <code>reindex</code>
+      once extraction drains.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 6 -->
+<section id="read">
+  <div class="kicker">Getting answers out</div>
+  <h2>Read paths</h2>
+  <p>Retrieval assembles a context from the indices, walks the graph for structure, and hands it to the LLM. The
+  <b>mode</b> chooses which fabrics to consult.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Mode</th><th>Consults</th><th>Good for</th></tr></thead>
+    <tbody>
+      <tr><td><code>local</code></td><td>entities_vdb → graph neighborhood</td><td>entity-centric questions</td></tr>
+      <tr><td><code>global</code></td><td>relationships_vdb → patterns</td><td>themes, relationships, decisions</td></tr>
+      <tr><td><code>hybrid</code></td><td>local + global</td><td>most questions</td></tr>
+      <tr><td><code>naive</code></td><td>chunks_vdb only</td><td>plain vector RAG</td></tr>
+      <tr><td><code>mix</code> <span class="pill win" style="padding:0 6px">default</span></td><td>KG + chunks together</td><td>the recommended all-rounder</td></tr>
+      <tr><td><code>bypass</code></td><td>nothing — direct LLM</td><td>no-retrieval passthrough</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Beyond the modes, three specialized reads:</p>
+  <ul>
+    <li><b>CGR3</b> (<code>/cgr3/query</code>) — iterative multi-hop <i>Retrieve → Rank → Reason</i> for "why" questions
+      that need several hops.</li>
+    <li><b>Precedent search</b> (<code>/graph/decisions/search</code>) — semantic nearest-neighbours over
+      <code>decisions_vdb</code>: "find past decisions like this one."</li>
+    <li><b>Decision filter</b> (<code>/graph/decisions</code>) — structured query over rc-bearing edges by approver,
+      channel, policy, confidence, or validity date. Reads the graph, not a search index.</li>
+  </ul>
+
+  <div class="callout info"><div class="clabel">◆ Because decisions are in the retrieval fabric…</div>
+    a plain <code>mix</code> query surfaces a recorded decision like any other fact — no special path needed. (An earlier
+    "query-blend" shim compensated for decisions living <i>only</i> in <code>decisions_vdb</code>; unifying them into
+    <code>relationships_vdb</code> is what let normal retrieval do the job.)</div>
+</section>
+
+<!-- 7 -->
+<section id="governance">
+  <div class="kicker">On top of the graph</div>
+  <h2>The governance layers</h2>
+  <p>Five optional, per-workspace layers turn the graph from a system you reason <i>from</i> into one you operate
+  <i>from</i>. Each is data, installed into a workspace; the core ships none of them.</p>
+  <div class="grid g3" style="margin:14px 0">
+    <div class="card"><span class="pill c">Ontology</span><p class="small" style="margin-top:8px">Object types + link types; validates &amp; coerces what extraction writes. <a href="ONTOLOGY.html">→</a></p></div>
+    <div class="card"><span class="pill b">Rules</span><p class="small" style="margin-top:8px">A pre-emit methodology gate (<code>sim()</code> concept matching): PASS · FLAG · REJECT. <a href="RULES_ENGINE.html">→</a></p></div>
+    <div class="card"><span class="pill ctrl">Actions</span><p class="small" style="margin-top:8px">Typed operations bound to object types, invoked and audited. <a href="ACTIONS.html">→</a></p></div>
+    <div class="card"><span class="pill a">RBAC</span><p class="small" style="margin-top:8px">Deny-by-default grants per role; permissive when absent.</p></div>
+    <div class="card"><span class="pill win">Lifecycle</span><p class="small" style="margin-top:8px">State machines per object type; illegal transition → 409.</p></div>
+    <div class="card"><span class="pill ctrl">Manifest</span><p class="small" style="margin-top:8px">Assembles a role-scoped operating view for an agent.</p></div>
+  </div>
+  <p class="small">Full treatment: the <a href="AGENTIC_DEVELOPMENT.html">AI Agent Development</a> use case walks all five
+  as a working system.</p>
+</section>
+
+<!-- 8 -->
+<section id="tenancy">
+  <div class="kicker">Isolation</div>
+  <h2>Multi-tenancy — workspaces</h2>
+  <p>Every request carries a <code>LIGHTRAG-WORKSPACE</code> header. A workspace is a hard isolation boundary: Neo4j
+  nodes are tagged with a per-workspace label, vector collections and KV stores are namespaced, and the decision index
+  is per-workspace. One server hosts many tenants; a query in workspace A can never see workspace B — the graph, the
+  indices, the governance config, and the decisions are all scoped.</p>
+</section>
+
+<!-- 9 -->
+<section id="together">
+  <div class="kicker">The whole picture</div>
+  <h2>How it fits together</h2>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 300" role="img" aria-label="End to end architecture">
+      <defs><marker id="f1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.fb{rx:10;stroke-width:1.1}.ft{fill:#e7ebf3;font:12px "Segoe UI";font-weight:600;text-anchor:middle}.fs{fill:#aab3c5;font:10px "Segoe UI";text-anchor:middle}.fl{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#f1)}</style>
+      <text class="fs" x="90" y="18" style="font-weight:700;fill:#9cc0ff">IN</text>
+      <rect class="fb" x="14" y="28" width="150" height="34" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="ft" x="89" y="49">docs · web ingest</text>
+      <rect class="fb" x="14" y="70" width="150" height="34" fill="#2a1f3a" stroke="rgba(169,116,240,.5)"/><text class="ft" x="89" y="91">emit · actions</text>
+      <rect class="fb" x="14" y="112" width="150" height="34" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="ft" x="89" y="133">backfill · onboard</text>
+
+      <!-- governance gate -->
+      <rect class="fb" x="210" y="60" width="120" height="54" fill="#241c10" stroke="rgba(240,167,60,.55)"/><text class="ft" x="270" y="82">governance</text><text class="fs" x="270" y="98">ontology · rules</text><text class="fs" x="270" y="110">rbac · lifecycle</text>
+
+      <!-- graph -->
+      <rect class="fb" x="300" y="150" width="130" height="60" fill="#132a24" stroke="rgba(25,184,154,.7)"/><text x="365" y="176" text-anchor="middle" fill="#7fe3cf" style="font:13px 'Segoe UI';font-weight:800">GRAPH</text><text class="fs" x="365" y="194">source of truth</text>
+
+      <!-- indices -->
+      <rect class="fb" x="470" y="132" width="240" height="30" fill="#161d33" stroke="rgba(91,141,239,.45)"/><text class="ft" x="590" y="152">entities_vdb · relationships_vdb</text>
+      <rect class="fb" x="470" y="168" width="240" height="30" fill="#2a1f3a" stroke="rgba(169,116,240,.45)"/><text class="ft" x="590" y="188">decisions_vdb · chunks_vdb</text>
+
+      <!-- retrieval + out -->
+      <rect class="fb" x="300" y="240" width="130" height="44" fill="#1a2236" stroke="rgba(91,141,239,.5)"/><text class="ft" x="365" y="260">retrieval</text><text class="fs" x="365" y="275">6 modes · CGR3</text>
+      <rect class="fb" x="470" y="240" width="150" height="44" fill="#13251f" stroke="rgba(62,207,142,.5)"/><text class="ft" x="545" y="260">LLM answer</text><text class="fs" x="545" y="275">grounded + cited</text>
+      <text class="fs" x="545" y="300" style="font-weight:700;fill:#7ee3b4">OUT</text>
+
+      <line class="fl" x1="164" y1="45" x2="208" y2="72"/><line class="fl" x1="164" y1="87" x2="208" y2="87"/><line class="fl" x1="164" y1="129" x2="298" y2="168"/>
+      <line class="fl" x1="330" y1="92" x2="352" y2="148"/>
+      <line class="fl" x1="430" y1="172" x2="468" y2="150"/><text class="fs" x="450" y="140" style="fill:#7fe3cf">project</text>
+      <line class="fl" x1="590" y1="198" x2="430" y2="252" stroke-dasharray="3 3"/><text class="fs" x="470" y="228">retrieve</text>
+      <line class="fl" x1="365" y1="210" x2="365" y2="238"/>
+      <line class="fl" x1="430" y1="262" x2="468" y2="262"/>
+    </svg>
+    <figcaption><b>In → graph → projections → retrieval → out.</b> Every input path is gated by governance and lands in
+      the graph; the indices project from it; retrieval reads the indices and walks the graph; the LLM answers, grounded
+      and cited. The graph is always the pivot.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 10 -->
+<section id="recent">
+  <div class="kicker">What changed lately</div>
+  <h2>Recent additions</h2>
+  <ul>
+    <li><b>Decision unification</b> — emitted decisions now project into <code>relationships_vdb</code> (not just
+      <code>decisions_vdb</code>), so normal <code>/query</code> surfaces them. Both indices are now <b>derived</b>, with
+      <code>reindex_decisions()</code> rebuilding them from the graph (fast filtered lookup + a background endpoint).</li>
+    <li><b>Governed operations</b> — the Actions, RBAC, and Lifecycle layers, plus the role-scoped Manifest.</li>
+    <li><b>Onboarding surface</b> — <code>/onboard</code> (NL → tailored config), the served
+      <code>/workspace/playbook</code> + <code>/workspace/bootstrap</code>, and the conversational Get Started studio.</li>
+    <li><b>WebUI</b> — workspace creation, Rules/Ontology editing, and the Get Started tab.</li>
+  </ul>
+
+  <div class="callout key"><div class="clabel">◆ The takeaway</div>
+    One graph holds the truth — entities, relations, and the decisions on their edges. Everything else — four vector
+    indices, the governance layers, the retrieval modes — is built on top of it and rebuildable from it. Keep that
+    picture and the whole system stays legible.</div>
+
+  <p class="small">See also: the <a href="CONTEXT_GRAPH_OVERVIEW.html">Technical Field Guide</a>,
+    <a href="BLOG_THE_FOURTH_ELEMENT.html">The Fourth Element</a> for the concept, and the per-feature guides
+    (<a href="RULES_ENGINE.html">Rules</a> · <a href="ONTOLOGY.html">Ontology</a> · <a href="ACTIONS.html">Actions</a> ·
+    <a href="SCRAPER.html">Web Ingester</a>).</p>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  Context Graph architecture — a property graph as the single source of truth, with four derived vector indices, a
+  governed write path, and six retrieval modes. Built on
+  <a href="https://github.com/HKUDS/LightRAG" target="_blank" rel="noopener">LightRAG</a> (HKUDS). Supported by
+  <a href="https://www.sellence.com/" target="_blank" rel="noopener">Sellence</a>.
+</footer>
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
+</script>
+</body>
+</html>
