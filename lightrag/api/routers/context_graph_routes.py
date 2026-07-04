@@ -972,4 +972,47 @@ def create_context_graph_routes(
             logger.error(f"get_decisions error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
+    @router.post(
+        "/graph/decisions/reindex",
+        dependencies=[Depends(combined_auth)],
+        summary="Rebuild the decision search indices from the graph (source of truth)",
+        responses={
+            200: {"description": "Number of decision edges re-projected."},
+            503: {"description": "Context Graph mode is not enabled."},
+        },
+    )
+    async def reindex_decisions(
+        wait: bool = Query(
+            default=False,
+            description="Run inline and return the count (for scripts). Default: run in "
+            "the background and return immediately.",
+        ),
+    ):
+        """Re-project every rc-bearing graph edge into the derived search indices
+        (``relationships_vdb`` for normal retrieval + ``decisions_vdb`` for precedent
+        search). The graph edge is the single source of truth; this makes the vector
+        indices rebuildable and repairs any drift. Idempotent.
+
+        Backend-agnostic and fast where the graph supports a filtered edge lookup. By
+        default it runs in the background so the request never blocks; pass
+        ``?wait=true`` to run inline and get the reindexed count."""
+        _require_context_graph(rag)
+        if wait:
+            try:
+                return await rag.reindex_decisions()
+            except Exception as e:
+                logger.error(f"reindex_decisions error: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+
+        import asyncio
+
+        async def _run():
+            try:
+                await rag.reindex_decisions()
+            except Exception as e:  # pragma: no cover - background best-effort
+                logger.error(f"background reindex_decisions error: {e}", exc_info=True)
+
+        asyncio.create_task(_run())
+        return {"status": "started"}
+
     return router

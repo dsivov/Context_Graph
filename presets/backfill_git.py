@@ -100,6 +100,8 @@ def main() -> int:
     ap.add_argument("--max-code-files", type=int, default=60)
     ap.add_argument("--include-tests", action="store_true",
                     help="Include tests/ when ingesting code (default: skip).")
+    ap.add_argument("--no-reindex", action="store_true",
+                    help="Skip reindexing decisions after extraction drains (default: reindex).")
     args = ap.parse_args()
 
     repo = os.path.abspath(args.repo)
@@ -119,6 +121,17 @@ def main() -> int:
                 return True
         except urllib.error.HTTPError:
             return False
+
+    def get(path):
+        headers = {"LIGHTRAG-WORKSPACE": args.workspace}
+        if args.api_key:
+            headers["X-API-Key"] = args.api_key
+        req = urllib.request.Request(args.url.rstrip("/") + path, method="GET", headers=headers)
+        try:
+            with urllib.request.urlopen(req) as r:
+                return json.loads(r.read())
+        except Exception:
+            return None
 
     def entity(name, etype, **props):
         return post("/graph/entity/create", {"entity_name": name,
@@ -196,6 +209,23 @@ def main() -> int:
         if total:
             print(f"queued {total} source files for extraction (async — poll "
                   f"/documents/pipeline_status)", flush=True)
+
+    # --- decisions reindex: extraction can produce RelationContext-bearing edges
+    #     (decisions in prose). Those bypass the emit path, so once the pipeline
+    #     drains, reindex projects them into the search fabric. Bounded + best-effort.
+    if not args.no_docs and not args.no_reindex:
+        import time
+        print("waiting for extraction to drain before reindexing decisions…", flush=True)
+        time.sleep(5)  # let the pipeline pick up the queued jobs
+        for _ in range(240):  # ~20 min cap
+            st = get("/documents/pipeline_status") or {}
+            if not st.get("busy") and not st.get("request_pending"):
+                break
+            time.sleep(5)
+        if post("/graph/decisions/reindex?wait=true", {}):
+            print("reindexed decisions from the graph", flush=True)
+        else:
+            print("decision reindex skipped (endpoint unavailable — run it later)", flush=True)
     return 0
 
 

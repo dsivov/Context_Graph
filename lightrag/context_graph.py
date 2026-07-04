@@ -742,20 +742,90 @@ class ContextGraph(LightRAG):
             edge_data["rules_audit"] = json.dumps(gate_decision.audit, ensure_ascii=False)
         await self.chunk_entity_relation_graph.upsert_edge(src, tgt, edge_data=edge_data)
 
-        # Index decision_trace text in decisions_vdb for later precedent search
+        # Project the decision into the search fabrics. Both are DERIVED from the
+        # edge written above (the single source of truth) and are rebuildable via
+        # reindex_decisions(): relationships_vdb so ordinary /query retrieval surfaces
+        # the decision, and decisions_vdb for semantic precedent search.
         if rc.decision_trace:
-            decision_id = compute_mdhash_id(f"{src}>{tgt}", prefix="dec-")
-            await self.decisions_vdb.upsert(
+            await self._index_decision(src, tgt, relation_type, rc)
+
+        return gate_decision
+
+    async def _index_decision(
+        self, src: str, tgt: str, relation_type: str, rc: RelationContext
+    ) -> None:
+        """Project a decision edge into the derived search indices.
+
+        Writes the same relationships_vdb record shape the extraction pipeline uses
+        for any relation (so the decision is retrievable by a normal /query), plus the
+        decisions_vdb precedent-search entry. Never raises — a failed index write must
+        not undo the graph edge, which is the source of truth (repair via
+        :meth:`reindex_decisions`).
+        """
+        trace = (rc.decision_trace or "").strip()
+        if not trace:
+            return
+        # 1) main retrieval fabric — decisions become first-class relations
+        try:
+            rel_id = compute_mdhash_id(src + tgt, prefix="rel-")
+            await self.relationships_vdb.upsert(
                 {
-                    decision_id: {
-                        "content": rc.decision_trace,
+                    rel_id: {
                         "src_id": src,
                         "tgt_id": tgt,
+                        "source_id": "emit_decision_trace",
+                        "content": f"{relation_type}\t{src}\n{tgt}\n{trace}",
+                        "keywords": relation_type,
+                        "description": trace,
+                        "weight": rc.confidence_score,
+                        "file_path": rc.provenance or "agent_runtime",
                     }
                 }
             )
+        except Exception as e:  # pragma: no cover - index write must not break emit
+            logger.warning(f"decision relationships_vdb index failed for {src}->{tgt}: {e}")
+        # 2) precedent-search index
+        try:
+            dec_id = compute_mdhash_id(f"{src}>{tgt}", prefix="dec-")
+            await self.decisions_vdb.upsert(
+                {dec_id: {"content": trace, "src_id": src, "tgt_id": tgt}}
+            )
+        except Exception as e:  # pragma: no cover
+            logger.warning(f"decision decisions_vdb index failed for {src}->{tgt}: {e}")
 
-        return gate_decision
+    async def reindex_decisions(self) -> dict:
+        """Rebuild the decision search indices from the graph (the source of truth).
+
+        Scans every rc-bearing edge and re-projects it into relationships_vdb and
+        decisions_vdb via :meth:`_index_decision`. This is what makes those indices
+        *derived*: drop them and this repopulates from the graph, and it repairs drift
+        (edges recorded through other write paths, or partial failures, that never
+        reached the vector stores). Idempotent — safe to run any time.
+        """
+        graph = self.chunk_entity_relation_graph
+        n = 0
+        if hasattr(graph, "get_edges_with_relation_context"):
+            # Fast path: a filtered lookup returns only decision edges.
+            for e in await graph.get_edges_with_relation_context():
+                rc_json = e.get("relation_context")
+                if not rc_json:
+                    continue
+                rc = RelationContext.from_json(rc_json)
+                if not rc.decision_trace:
+                    continue
+                rtype = e.get("keywords") or "decision"
+                await self._index_decision(e["source"], e["target"], rtype, rc)
+                n += 1
+        else:
+            # Fallback: scan all edges (backends without a filtered query).
+            for d in await self.get_all_decisions():
+                src, tgt = d["src_id"], d["tgt_id"]
+                edge = await graph.get_edge(src, tgt)
+                rtype = (edge or {}).get("keywords") or "decision"
+                await self._index_decision(src, tgt, rtype, d["relation_context"])
+                n += 1
+        logger.info(f"reindex_decisions: re-projected {n} decision edges from the graph")
+        return {"reindexed": n}
 
     # ------------------------------------------------------------------
     # Decision summary ingestion (makes decisions visible to /query)

@@ -1645,6 +1645,31 @@ class Neo4JStorage(BaseGraphStorage):
             await result.consume()
             return nodes
 
+    async def get_edges_with_relation_context(self) -> list[dict]:
+        """Get only edges that carry a ``relation_context`` property (decision edges).
+
+        A filtered lookup so decision reindexing doesn't scan the whole graph — on a
+        large workspace this returns a handful of edges instead of thousands.
+        """
+        workspace_label = self._get_workspace_label()
+        async with self._driver.session(
+            database=self._DATABASE, default_access_mode="READ"
+        ) as session:
+            query = f"""
+            MATCH (a:`{workspace_label}`)-[r]-(b:`{workspace_label}`)
+            WHERE r.relation_context IS NOT NULL
+            RETURN DISTINCT a.entity_id AS source, b.entity_id AS target, properties(r) AS properties
+            """
+            result = await session.run(query)
+            edges = []
+            async for record in result:
+                props = record["properties"]
+                props["source"] = record["source"]
+                props["target"] = record["target"]
+                edges.append(props)
+            await result.consume()
+            return edges
+
     async def get_all_edges(self) -> list[dict]:
         """Get all edges in the graph.
 
