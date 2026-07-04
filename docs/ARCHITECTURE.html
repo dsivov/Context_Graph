@@ -168,21 +168,28 @@ b.hl{color:#8fd9c9}
   type), a <code>description</code>, a <code>weight</code>, provenance — and, optionally, the <b>RelationContext</b>.</p>
 
   <figure><div class="fig">
-    <svg viewBox="0 0 720 210" role="img" aria-label="Node, edge, and RelationContext">
+    <svg viewBox="0 0 720 232" role="img" aria-label="Node, edge, and RelationContext">
       <defs><marker id="e1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
-      <style>.nt{fill:#e7ebf3;font:13px "Segoe UI";font-weight:700;text-anchor:middle}.np{fill:#aab3c5;font:11px var(--mono),monospace;text-anchor:middle}.el{stroke:#8a93a8;stroke-width:2;fill:none;marker-end:url(#e1)}</style>
-      <circle cx="130" cy="70" r="46" fill="#161d33" stroke="rgba(91,141,239,.6)" stroke-width="1.4"/>
-      <text class="nt" x="130" y="64">Entity (node)</text><text class="np" x="130" y="82">entity_type</text>
-      <circle cx="560" cy="70" r="46" fill="#161d33" stroke="rgba(91,141,239,.6)" stroke-width="1.4"/>
-      <text class="nt" x="560" y="64">Entity (node)</text><text class="np" x="560" y="82">description ↦ embedded</text>
-      <line class="el" x1="178" y1="70" x2="510" y2="70"/>
-      <text class="np" x="344" y="58" style="fill:#e7ebf3;font-weight:700">relation (edge): keywords · weight</text>
-      <rect x="250" y="112" width="200" height="78" rx="10" fill="#1a1330" stroke="rgba(169,116,240,.6)"/>
-      <text x="350" y="132" text-anchor="middle" fill="#cdb1f7" style="font:12px 'Segoe UI';font-weight:800">RelationContext (rc)</text>
-      <text class="np" x="350" y="150" style="fill:#cdb1f7">the 4th element · on the edge</text>
-      <text class="np" x="350" y="166">decision_trace · approved_by</text>
-      <text class="np" x="350" y="180">policy_ref · valid_from/until · …</text>
-      <line class="el" x1="350" y1="112" x2="350" y2="74" stroke="#a974f0" stroke-dasharray="3 3"/>
+      <style>.nt{fill:#e7ebf3;font:13px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}.np{fill:#aab3c5;font:11px var(--mono),monospace;text-anchor:middle}.el{stroke:#8a93a8;stroke-width:2;fill:none;marker-end:url(#e1)}</style>
+      <!-- edge label, well above the line -->
+      <text class="nt" x="360" y="42" style="fill:#e7ebf3"><tspan fill="#8fd9c9">r</tspan> — relation (keywords · weight)</text>
+      <!-- head node -->
+      <circle cx="108" cy="78" r="42" fill="#161d33" stroke="rgba(91,141,239,.6)" stroke-width="1.4"/>
+      <text class="nt" x="108" y="74">Entity</text><text class="np" x="108" y="92" style="fill:#9cc0ff">h</text>
+      <text class="np" x="108" y="140">entity_id · type</text>
+      <!-- tail node -->
+      <circle cx="612" cy="78" r="42" fill="#161d33" stroke="rgba(91,141,239,.6)" stroke-width="1.4"/>
+      <text class="nt" x="612" y="74">Entity</text><text class="np" x="612" y="92" style="fill:#9cc0ff">t</text>
+      <text class="np" x="612" y="140">description → embedded</text>
+      <!-- edge -->
+      <line class="el" x1="152" y1="78" x2="566" y2="78"/>
+      <!-- rc, below the edge -->
+      <line x1="360" y1="112" x2="360" y2="80" stroke="#a974f0" stroke-width="1.6" stroke-dasharray="3 3"/>
+      <rect x="276" y="112" width="168" height="94" rx="10" fill="#1a1330" stroke="rgba(169,116,240,.6)"/>
+      <text x="360" y="133" text-anchor="middle" fill="#cdb1f7" style="font:12px 'Segoe UI',sans-serif;font-weight:800">RelationContext (rc)</text>
+      <text class="np" x="360" y="151" style="fill:#cdb1f7">the 4th element, on the edge</text>
+      <text class="np" x="360" y="171">decision_trace · approved_by</text>
+      <text class="np" x="360" y="189">policy_ref · valid_until · …</text>
     </svg>
     <figcaption><b>The quadruple <code>(h, r, t, rc)</code>.</b> Most edges are plain triples; a decision edge adds the
       rc. It's a property <i>on the edge</i> — connected and traversable, never a floating record.</figcaption>
@@ -251,7 +258,8 @@ b.hl{color:#8fd9c9}
 <section id="write">
   <div class="kicker">Getting data in</div>
   <h2>Write paths</h2>
-  <p>Five ways data enters. They all end in the graph; the indices update alongside.</p>
+  <p>Data enters through several paths — all gated by the governance layers, all ending in the graph, with the indices
+  updating alongside.</p>
 
   <div class="grid g2" style="margin:16px 0">
     <div class="card"><span class="pill a">extraction</span> <code>ainsert()</code>
@@ -268,20 +276,33 @@ b.hl{color:#8fd9c9}
     <div class="card"><span class="pill win">governed action</span> <code>/actions/invoke</code>
       <p class="small" style="margin-top:8px">RBAC → lifecycle → rules gate → <code>emit_decision_trace</code> → side
       effect → audit edge. Every standard operation, authorized and recorded.</p></div>
+    <div class="card"><span class="pill c">web ingester</span> <code>/scrape</code>
+      <p class="small" style="margin-top:8px">The <b>web site processor</b>: point it at any site and a polite,
+      JS-capable crawler with pluggable platform connectors and an LLM <b>site analyst</b> (judges relevance, extracts
+      the document URLs) pulls the real documents in — feeding the extraction path with the source URL carried through as
+      provenance. <a href="SCRAPER.html">Guide →</a></p></div>
+    <div class="card"><span class="pill b">backfill</span> <code>backfill_git.py</code>
+      <p class="small" style="margin-top:8px">Import an existing repo's reality — modules, author, commits, docs, and
+      (with <code>--code</code>) source — then auto-reindex decisions once extraction drains. The greenfield-vs-existing
+      on-ramp.</p></div>
   </div>
 
   <figure><div class="fig">
-    <svg viewBox="0 0 720 176" role="img" aria-label="Two paths to a RelationContext converge on the graph">
+    <svg viewBox="0 0 720 184" role="img" aria-label="Two paths to a RelationContext converge on the graph">
       <defs><marker id="w1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
-      <style>.wb{rx:10;stroke-width:1.1}.wt{fill:#e7ebf3;font:12.5px "Segoe UI";font-weight:600;text-anchor:middle}.ws{fill:#aab3c5;font:10.5px "Segoe UI";text-anchor:middle}.wl{stroke:#8a93a8;stroke-width:1.8;fill:none;marker-end:url(#w1)}</style>
-      <rect class="wb" x="14" y="20" width="150" height="46" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="wt" x="89" y="40">Documents</text><text class="ws" x="89" y="56">extraction (LLM)</text>
-      <rect class="wb" x="14" y="108" width="150" height="46" fill="#2a1f3a" stroke="rgba(169,116,240,.5)"/><text class="wt" x="89" y="128">Agent code</text><text class="ws" x="89" y="144">emit / action</text>
-      <rect class="wb" x="270" y="64" width="170" height="48" fill="#132a24" stroke="rgba(25,184,154,.6)"/><text x="355" y="84" text-anchor="middle" fill="#7fe3cf" style="font:13px 'Segoe UI';font-weight:800">GRAPH EDGE (+ rc)</text><text class="ws" x="355" y="100">the source of truth</text>
-      <rect class="wb" x="540" y="20" width="166" height="42" fill="#161d33" stroke="rgba(91,141,239,.45)"/><text class="wt" x="623" y="46">relationships_vdb</text>
-      <rect class="wb" x="540" y="72" width="166" height="42" fill="#2a1f3a" stroke="rgba(169,116,240,.45)"/><text class="wt" x="623" y="98">decisions_vdb</text>
-      <line class="wl" x1="164" y1="43" x2="268" y2="80"/><line class="wl" x1="164" y1="131" x2="268" y2="94"/>
-      <line class="wl" x1="440" y1="82" x2="538" y2="44"/><line class="wl" x1="440" y1="90" x2="538" y2="92"/>
-      <text class="ws" x="490" y="126" style="fill:#7fe3cf;font-weight:700">both paths → both indices (unified)</text>
+      <style>.wb{rx:10;stroke-width:1.1}.wt{fill:#e7ebf3;font:12.5px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.ws{fill:#aab3c5;font:10.5px "Segoe UI",sans-serif;text-anchor:middle}.wl{stroke:#8a93a8;stroke-width:1.8;fill:none;marker-end:url(#w1)}</style>
+      <!-- inputs (left), symmetric about y=88 -->
+      <rect class="wb" x="14" y="30" width="150" height="46" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="wt" x="89" y="52">Documents</text><text class="ws" x="89" y="67">extraction (LLM)</text>
+      <rect class="wb" x="14" y="100" width="150" height="46" fill="#2a1f3a" stroke="rgba(169,116,240,.5)"/><text class="wt" x="89" y="122">Agent code</text><text class="ws" x="89" y="137">emit · action</text>
+      <!-- graph edge (center) -->
+      <rect class="wb" x="282" y="64" width="176" height="48" fill="#132a24" stroke="rgba(25,184,154,.6)"/><text x="370" y="84" text-anchor="middle" fill="#7fe3cf" style="font:13px 'Segoe UI',sans-serif;font-weight:800">GRAPH EDGE (+ rc)</text><text class="ws" x="370" y="100">the source of truth</text>
+      <!-- outputs (right), symmetric about y=88 -->
+      <rect class="wb" x="548" y="30" width="160" height="46" fill="#161d33" stroke="rgba(91,141,239,.45)"/><text class="wt" x="628" y="57">relationships_vdb</text>
+      <rect class="wb" x="548" y="100" width="160" height="46" fill="#2a1f3a" stroke="rgba(169,116,240,.45)"/><text class="wt" x="628" y="127">decisions_vdb</text>
+      <!-- converging + fanning arrows, mirrored -->
+      <line class="wl" x1="164" y1="53" x2="280" y2="80"/><line class="wl" x1="164" y1="123" x2="280" y2="96"/>
+      <line class="wl" x1="458" y1="80" x2="546" y2="53"/><line class="wl" x1="458" y1="96" x2="546" y2="123"/>
+      <text class="ws" x="370" y="172" style="fill:#7fe3cf;font-weight:700">both paths → the graph edge → both indices (unified)</text>
     </svg>
     <figcaption><b>Extraction and emit converge.</b> Both write the rc onto a graph edge and project it into both indices,
       so a decision is retrievable the same way no matter how it arrived. Bulk paths (backfill) call <code>reindex</code>
@@ -308,8 +329,15 @@ b.hl{color:#8fd9c9}
     </tbody>
   </table></div>
 
-  <p>Beyond the modes, three specialized reads:</p>
+  <p>Beyond the modes, several more read surfaces:</p>
   <ul>
+    <li><b>Smart router</b> (<code>/query/auto</code>, the <code>query_auto</code> tool) — inspects the question and
+      <b>picks the retrieval mode for you</b> (and reports why, via <code>mode_reason</code>), so callers never have to
+      choose local vs global vs mix. The recommended default entry point for agents.</li>
+    <li><b>Raw context</b> (<code>/query/data</code>) — returns the <b>retrieved facts themselves — entities, relations,
+      chunks, citations — without the LLM synthesis step</b>. Often more useful than a prose answer: feeding another
+      system, building a UI over the results, grounding a downstream agent, or debugging exactly what retrieval found.
+      Same modes and router apply; you just get structured data instead of generated text.</li>
     <li><b>CGR3</b> (<code>/cgr3/query</code>) — iterative multi-hop <i>Retrieve → Rank → Reason</i> for "why" questions
       that need several hops.</li>
     <li><b>Precedent search</b> (<code>/graph/decisions/search</code>) — semantic nearest-neighbours over
