@@ -1001,6 +1001,34 @@ export const checkEntityNameExists = async (entityName: string): Promise<boolean
   }
 }
 
+/** A decision (rc-bearing edge) attached to a node — the "why" recorded on the graph. */
+export type EntityDecision = {
+  src_id: string
+  tgt_id: string
+  keywords?: string
+  relation_context: {
+    decision_trace?: string
+    approved_by?: string
+    approved_via?: string
+    policy_ref?: string
+    valid_until?: string
+    confidence_score?: number
+  }
+}
+
+/** The decision-bearing edges attached to an entity (Context Graph mode). Empty otherwise. */
+export const getEntityDecisions = async (entityName: string): Promise<EntityDecision[]> => {
+  try {
+    const r = await axiosInstance.get(
+      `/graph/entity/edges-with-context?entity_name=${encodeURIComponent(entityName)}`
+    )
+    const edges = (r.data?.edges || []) as EntityDecision[]
+    return edges.filter((e) => e?.relation_context?.decision_trace)
+  } catch {
+    return []
+  }
+}
+
 /**
  * Get the processing status of documents by tracking ID
  * @param trackId The tracking ID returned from upload, text, or texts endpoints

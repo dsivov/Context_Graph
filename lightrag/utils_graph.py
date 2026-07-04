@@ -933,11 +933,31 @@ async def acreate_entity(
             if existing_node:
                 raise ValueError(f"Entity '{entity_name}' already exists")
 
-            # Prepare node data with defaults if missing
+            # Prepare node data with defaults if missing.
+            entity_type = entity_data.get("entity_type", "UNKNOWN")
+            description = (entity_data.get("description") or "").strip()
+            if not description:
+                # The description is the text embedded into entities_vdb — a node with
+                # none is retrievable only by its opaque name, i.e. effectively invisible
+                # to semantic /query. Synthesize a minimal fallback (folding in a title/
+                # name property if the caller passed one) so it's at least findable, and
+                # warn so the caller provides a real one.
+                extra = entity_data.get("title") or entity_data.get("name")
+                bits = [entity_name]
+                if entity_type and entity_type != "UNKNOWN":
+                    bits.append(f"({entity_type})")
+                if extra and str(extra).strip() and str(extra).strip() != entity_name:
+                    bits.append(f"— {str(extra).strip()}")
+                description = " ".join(bits)
+                logger.warning(
+                    f"acreate_entity: '{entity_name}' created without a description; "
+                    f"synthesized a fallback ({description!r}). Provide a real description "
+                    f"— it is the payload embedded for retrieval."
+                )
             node_data = {
                 "entity_id": entity_name,
-                "entity_type": entity_data.get("entity_type", "UNKNOWN"),
-                "description": entity_data.get("description", ""),
+                "entity_type": entity_type,
+                "description": description,
                 "source_id": entity_data.get("source_id", "manual_creation"),
                 "file_path": entity_data.get("file_path", "manual_creation"),
                 "created_at": int(time.time()),

@@ -6,6 +6,7 @@ import useLightragGraph from '@/hooks/useLightragGraph'
 import { useTranslation } from 'react-i18next'
 import { GitBranchPlus, Scissors } from 'lucide-react'
 import EditablePropertyRow from './EditablePropertyRow'
+import { getEntityDecisions, type EntityDecision } from '@/api/lightrag'
 
 /**
  * Component that view properties of elements in graph.
@@ -266,6 +267,19 @@ const PropertyRow = ({
 
 const NodePropertiesView = ({ node }: { node: NodeType }) => {
   const { t } = useTranslation()
+  const [decisions, setDecisions] = useState<EntityDecision[]>([])
+
+  // Fetch the decision-bearing edges (the "why") attached to this node.
+  useEffect(() => {
+    let cancelled = false
+    const name = node.properties['entity_id'] || String(node.id)
+    getEntityDecisions(name).then((d) => {
+      if (!cancelled) setDecisions(d)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [node.id, node.properties])
 
   const handleExpandNode = () => {
     useGraphStore.getState().triggerNodeExpand(node.id)
@@ -349,6 +363,43 @@ const NodePropertiesView = ({ node }: { node: NodeType }) => {
                 />
               )
             })}
+          </div>
+        </>
+      )}
+      {decisions.length > 0 && (
+        <>
+          <h3 className="text-md pl-1 font-bold tracking-wide text-purple-700">
+            {t('graphPanel.propertiesView.node.decisions', 'Decisions')}
+          </h3>
+          <div className="bg-primary/5 flex max-h-96 flex-col gap-1.5 overflow-auto rounded p-1">
+            {decisions.map((d, i) => (
+              <div key={i} className="hover:bg-primary/10 rounded p-1">
+                <div className="text-primary/80 whitespace-pre-wrap">
+                  {d.relation_context.decision_trace}
+                </div>
+                <div className="text-primary/50 mt-0.5 text-[10px]">
+                  <button
+                    className="hover:text-primary underline-offset-2 hover:underline"
+                    onClick={() => useGraphStore.getState().setSelectedNode(d.src_id, true)}
+                  >
+                    {d.src_id}
+                  </button>
+                  {' → '}
+                  <button
+                    className="hover:text-primary underline-offset-2 hover:underline"
+                    onClick={() => useGraphStore.getState().setSelectedNode(d.tgt_id, true)}
+                  >
+                    {d.tgt_id}
+                  </button>
+                  {d.relation_context.approved_by ? ` · by ${d.relation_context.approved_by}` : ''}
+                  {d.relation_context.approved_via ? ` · via ${d.relation_context.approved_via}` : ''}
+                  {d.relation_context.policy_ref ? ` · ${d.relation_context.policy_ref}` : ''}
+                  {typeof d.relation_context.confidence_score === 'number'
+                    ? ` · conf ${d.relation_context.confidence_score}`
+                    : ''}
+                </div>
+              </div>
+            ))}
           </div>
         </>
       )}
