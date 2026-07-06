@@ -113,8 +113,14 @@ def _make_cg(graph, vdb, gate):
     cg = MagicMock()
     cg.chunk_entity_relation_graph = graph
     cg.decisions_vdb = vdb
+    # emit_decision_trace also projects into the retrieval fabric (_index_decision)
+    cg.relationships_vdb = AsyncMock()
     cg.rules_gate = gate
     cg.emit_decision_trace = ContextGraph.emit_decision_trace.__get__(cg, type(cg))
+    cg._index_decision = ContextGraph._index_decision.__get__(cg, type(cg))
+    cg._persist_decision_indices = ContextGraph._persist_decision_indices.__get__(
+        cg, type(cg)
+    )
     return cg
 
 

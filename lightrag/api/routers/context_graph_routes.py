@@ -135,6 +135,8 @@ class RelationContextData(BaseModel):
     )
     confidence_score: float = Field(
         default=1.0,
+        ge=0.0,
+        le=1.0,
         description="Extraction reliability (0.0–1.0).",
     )
 
@@ -185,14 +187,23 @@ class EdgesWithContextResponse(BaseModel):
 class EmitDecisionRequest(BaseModel):
     """Request body for recording a decision trace directly into the graph."""
 
-    src: str = Field(description="Head entity name.")
-    tgt: str = Field(description="Tail entity name.")
+    src: str = Field(min_length=1, description="Head entity name.")
+    tgt: str = Field(min_length=1, description="Tail entity name.")
     relation_type: str = Field(
-        description="Relationship keyword stored as edge keywords."
+        min_length=1, description="Relationship keyword stored as edge keywords."
     )
     relation_context: RelationContextData = Field(
         description="The RelationContext capturing this decision."
     )
+
+    @field_validator("src", "tgt", "relation_type", mode="before")
+    @classmethod
+    def _strip(cls, v):
+        # Strip BEFORE validation so a whitespace-only id fails the min_length=1
+        # check (a clean Pydantic 422) rather than writing an empty-id graph node
+        # or 500-ing in storage. Done in 'before' mode so we don't raise a bare
+        # ValueError (which this app's error handler can't JSON-serialize).
+        return v.strip() if isinstance(v, str) else v
 
 
 class EmitDecisionResponse(BaseModel):
@@ -346,6 +357,13 @@ def create_context_graph_routes(
     router = APIRouter(tags=["context-graph"])
 
     combined_auth = get_combined_auth_dependency(api_key)
+
+    # Background reindex bookkeeping (per app instance):
+    #  - _reindex_tasks holds strong refs so a fire-and-forget task is not
+    #    garbage-collected mid-run (documented asyncio pitfall);
+    #  - _reindex_running guards against overlapping rebuilds on the same workspace.
+    _reindex_tasks: set = set()
+    _reindex_running: set = set()
 
     # ── CGR3 Query ────────────────────────────────────────────────────────────
 
@@ -1006,13 +1024,23 @@ def create_context_graph_routes(
 
         import asyncio
 
+        ws = getattr(rag, "workspace", "") or "default"
+        if ws in _reindex_running:
+            return {"status": "already_running", "workspace": ws}
+        _reindex_running.add(ws)
+
         async def _run():
             try:
                 await rag.reindex_decisions()
             except Exception as e:  # pragma: no cover - background best-effort
                 logger.error(f"background reindex_decisions error: {e}", exc_info=True)
+            finally:
+                _reindex_running.discard(ws)
 
-        asyncio.create_task(_run())
-        return {"status": "started"}
+        # Keep a strong reference until the task completes so it isn't GC'd mid-run.
+        task = asyncio.create_task(_run())
+        _reindex_tasks.add(task)
+        task.add_done_callback(_reindex_tasks.discard)
+        return {"status": "started", "workspace": ws}
 
     return router

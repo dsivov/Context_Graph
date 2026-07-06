@@ -102,17 +102,25 @@ class RelationContext:
     def is_active(self, as_of: Optional[str] = None) -> bool:
         """True if this decision is currently valid based on valid_from/valid_until.
 
-        Returns True if neither date is set (validity unknown).
-        Dates must be ISO-8601 strings (YYYY-MM-DD).
+        Returns True if neither date is set (validity unknown). Dates are ISO-8601;
+        a time component (``2026-07-06T10:00``) is ignored — comparison is by
+        calendar date, so a decision is still active on its final ``valid_until`` day
+        regardless of the time of day in ``as_of``.
         """
         import datetime
 
         if not self.valid_from and not self.valid_until:
             return True
-        today = as_of or datetime.date.today().isoformat()
-        if self.valid_from and today < self.valid_from:
+
+        def _date_part(s: Optional[str]) -> Optional[str]:
+            return s.split("T", 1)[0].strip() if s else s
+
+        today = _date_part(as_of) or datetime.date.today().isoformat()
+        valid_from = _date_part(self.valid_from)
+        valid_until = _date_part(self.valid_until)
+        if valid_from and today < valid_from:
             return False
-        if self.valid_until and today > self.valid_until:
+        if valid_until and today > valid_until:
             return False
         return True
 
@@ -189,7 +197,10 @@ class RelationContext:
             valid_from=valid_from,
             valid_until=valid_until,
             policy_ref=policy_ref,
-            confidence_score=max_confidence if max_confidence > 0 else 1.0,
+            # Keep the true max even when it is 0.0 (a deliberately low-confidence
+            # decision must not be silently promoted to full confidence); only fall
+            # back to the 1.0 default when there is nothing to merge.
+            confidence_score=max_confidence if contexts else 1.0,
         )
 
 

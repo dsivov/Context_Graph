@@ -55,7 +55,7 @@ curl -X POST http://localhost:9621/graph/decision/emit \
   -H "X-API-Key: $LIGHTRAG_API_KEY" -H "LIGHTRAG-WORKSPACE: company_acme" \
   -H "Content-Type: application/json" \
   -d '{
-        "head": "Sarah Chen", "tail": "MegaCorp", "relation": "discount_approval",
+        "src": "Sarah Chen", "tgt": "MegaCorp", "relation_type": "discount_approval",
         "relation_context": {
           "decision_trace": "VP approved 20% discount",
           "approved_by": "Sarah Chen", "approved_via": "in_person",
@@ -69,14 +69,14 @@ curl "http://localhost:9621/graph/decisions?approved_via=slack&min_confidence=0.
   -H "X-API-Key: $LIGHTRAG_API_KEY" -H "LIGHTRAG-WORKSPACE: company_acme"
 
 # semantic precedent search
-curl "http://localhost:9621/graph/decisions/search?query=waive%20setup%20fee&top_k=5" \
+curl "http://localhost:9621/graph/decisions/search?q=waive%20setup%20fee&top_k=5" \
   -H "X-API-Key: $LIGHTRAG_API_KEY" -H "LIGHTRAG-WORKSPACE: company_acme"
 ```
 
 ## MCP server
 
 When `ENABLE_MCP=true` (default), the server mounts a
-[Model Context Protocol](https://modelcontextprotocol.io) sub-app exposing **8 tools**, each
+[Model Context Protocol](https://modelcontextprotocol.io) sub-app exposing **12 tools**, each
 wrapping one `rag` method. Properties:
 
 - `FastMCP(name="ContextGraph", stateless_http=True)` — no session state.

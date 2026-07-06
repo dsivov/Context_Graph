@@ -41,9 +41,8 @@ Both paths feed the same graph and the same vector indexes, so extracted and emi
 are queried together. Emitted decisions are also embedded into the **decision-trace index** for
 precedent search.
 
-> Note (see [CODE_REVIEW.md](CODE_REVIEW.md) H2): deleting a document currently rebuilds the graph
-> through the 5-field parser, which drops CG relations + rc. Treat document deletion with caution
-> until that path is CG-aware.
+> Note: the graph-rebuild path on document deletion is now CG-aware — it preserves the 6th-field
+> `relation_context` so decision lineage survives rebuilds (fixed in commit 058a26e3, H2).
 
 ## Querying
 
@@ -83,8 +82,9 @@ answer = await cg.cgr3_query(
 
 Repeats up to `max_iterations` (default 3); context accumulates and is deduped across passes.
 
-> Note (see [CODE_REVIEW.md](CODE_REVIEW.md) C1/H1): the reason-step JSON parser mishandles fenced
-> output and can crash on non-object JSON. Apply those fixes for CGR3 iteration to work reliably.
+> Note: the reason-step JSON parser is now fence-tolerant and treats non-object JSON as "stop and
+> synthesize" rather than crashing (fixed in commit 058a26e3, C1/H1). A residual robustness gap
+> remains when the LLM returns entities as objects rather than strings — see the review backlog.
 
 ## Decisions & precedents
 

@@ -1655,10 +1655,13 @@ class Neo4JStorage(BaseGraphStorage):
         async with self._driver.session(
             database=self._DATABASE, default_access_mode="READ"
         ) as session:
+            # Directed match: relationships are stored once as (:DIRECTED), so an
+            # undirected `-[r]-` pattern would return every edge twice (once per
+            # orientation) and DISTINCT cannot dedupe because source/target swap.
             query = f"""
-            MATCH (a:`{workspace_label}`)-[r]-(b:`{workspace_label}`)
+            MATCH (a:`{workspace_label}`)-[r:DIRECTED]->(b:`{workspace_label}`)
             WHERE r.relation_context IS NOT NULL
-            RETURN DISTINCT a.entity_id AS source, b.entity_id AS target, properties(r) AS properties
+            RETURN a.entity_id AS source, b.entity_id AS target, properties(r) AS properties
             """
             result = await session.run(query)
             edges = []
@@ -1680,9 +1683,12 @@ class Neo4JStorage(BaseGraphStorage):
         async with self._driver.session(
             database=self._DATABASE, default_access_mode="READ"
         ) as session:
+            # Directed match: each relationship is stored once as (:DIRECTED); an
+            # undirected pattern would return every edge twice with source/target
+            # swapped (DISTINCT cannot collapse the two orientations).
             query = f"""
-            MATCH (a:`{workspace_label}`)-[r]-(b:`{workspace_label}`)
-            RETURN DISTINCT a.entity_id AS source, b.entity_id AS target, properties(r) AS properties
+            MATCH (a:`{workspace_label}`)-[r:DIRECTED]->(b:`{workspace_label}`)
+            RETURN a.entity_id AS source, b.entity_id AS target, properties(r) AS properties
             """
             result = await session.run(query)
             edges = []

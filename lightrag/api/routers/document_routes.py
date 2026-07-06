@@ -2491,6 +2491,11 @@ def create_document_routes(
                 rag.chunk_entity_relation_graph,
                 rag.doc_status,
             ]
+            # ContextGraph-only: the decision precedent index must be cleared too,
+            # otherwise stale decision vectors survive a full wipe and re-surface.
+            decisions_vdb = getattr(rag, "decisions_vdb", None)
+            if decisions_vdb is not None:
+                storages.append(decisions_vdb)
 
             # Log storage drop start
             if "history_messages" in pipeline_status:

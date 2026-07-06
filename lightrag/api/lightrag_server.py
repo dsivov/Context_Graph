@@ -1319,13 +1319,17 @@ def create_app(args):
         import os
 
         initialized = set(workspace_pool.workspaces)
-        # Discover workspaces from working directory (each subdirectory is a workspace)
+        # Discover workspaces from working directory (each subdirectory is a workspace).
+        # The governance services keep their per-workspace stores in reserved
+        # subdirectories of working_dir (rules/ontology/actions/rbac/lifecycle); those
+        # are NOT tenants, so exclude them from the workspace list.
+        reserved = {"rules", "ontology", "actions", "rbac", "lifecycle"}
         storage_dir = str(args.working_dir)
         on_disk = set()
         if os.path.isdir(storage_dir):
             for name in os.listdir(storage_dir):
                 full = os.path.join(storage_dir, name)
-                if os.path.isdir(full) and not name.startswith("."):
+                if os.path.isdir(full) and not name.startswith(".") and name not in reserved:
                     on_disk.add(name)
         all_workspaces = sorted(initialized | on_disk)
         return {"workspaces": all_workspaces}

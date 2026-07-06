@@ -15,12 +15,13 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Dict, List, Optional
+import socket
 from urllib import robotparser
 from urllib.parse import urlsplit
 
 from lightrag.utils import logger
 
-from context_graph.webingest.urls import host_of, is_http
+from context_graph.webingest.urls import host_of, is_http, is_public_url
 
 DEFAULT_USER_AGENT = "ContextGraphBot/1.0 (+https://github.com/dsivov/Context_Graph)"
 
@@ -74,6 +75,8 @@ class StaticFetcher:
         max_bytes: int = 40 * 1024 * 1024,   # skip data payloads larger than this
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         clock: Callable[[], float] = time.monotonic,
+        block_private_hosts: bool = True,      # SSRF guard (default on)
+        host_resolver: Callable = socket.getaddrinfo,
     ) -> None:
         self._client = client
         self._ua = user_agent
@@ -83,8 +86,20 @@ class StaticFetcher:
         self._respect_robots = respect_robots
         self._sleep = sleep
         self._clock = clock
+        # SSRF guard: block URLs whose host resolves to a private/internal address.
+        # On by default; offline tests that use fake hostnames disable it. The
+        # resolver is injectable so a test can exercise the guard without real DNS.
+        self._block_private_hosts = block_private_hosts
+        self._host_resolver = host_resolver
         self._robots: Dict[str, Optional[robotparser.RobotFileParser]] = {}
         self._last_fetch: Dict[str, float] = {}
+
+    def _ssrf_reason(self, url: str) -> Optional[str]:
+        """Return a block reason if the SSRF guard rejects *url*, else None."""
+        if not self._block_private_hosts:
+            return None
+        ok, reason = is_public_url(url, resolver=self._host_resolver)
+        return None if ok else reason
 
     async def _robots_for(self, url: str) -> Optional[robotparser.RobotFileParser]:
         host = host_of(url)
@@ -126,6 +141,10 @@ class StaticFetcher:
         """Fetch one URL. Never raises — failures come back as ``ok=False``."""
         if not is_http(url):
             return FetchResult(url, 0, reason="non-http URL")
+        blocked = self._ssrf_reason(url)
+        if blocked:
+            logger.warning(f"SSRF guard blocked fetch of {url}: {blocked}")
+            return FetchResult(url, 0, reason=f"blocked: {blocked}")
         if not await self.allowed(url):
             return FetchResult(url, 0, reason="blocked by robots.txt")
         await self._throttle(host_of(url))
@@ -139,6 +158,12 @@ class StaticFetcher:
 
         ctype = resp.headers.get("content-type", "").lower()
         final = str(resp.url)
+        # Re-check after redirects: a public URL can 30x to an internal host.
+        if final != url:
+            blocked = self._ssrf_reason(final)
+            if blocked:
+                logger.warning(f"SSRF guard blocked redirect to {final}: {blocked}")
+                return FetchResult(final, 0, reason=f"blocked redirect: {blocked}")
         if not (200 <= resp.status_code < 300):
             return FetchResult(final, resp.status_code, reason=f"HTTP {resp.status_code}")
         kind = classify_content_type(ctype)
@@ -157,7 +182,7 @@ class StaticFetcher:
 
     async def download(self, url: str) -> Optional[bytes]:
         """Fetch raw bytes (e.g. a PDF), honouring robots + rate limit. None on failure."""
-        if not is_http(url) or not await self.allowed(url):
+        if not is_http(url) or self._ssrf_reason(url) or not await self.allowed(url):
             return None
         await self._throttle(host_of(url))
         try:

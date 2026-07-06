@@ -231,6 +231,63 @@ class TestInvoke:
         assert "error" in res["handler"]
 
 
+class TestTransitionSerialization:
+    """D5: a transition invoke serializes its read-validate-apply under the
+    per-object lock so concurrent invokes can't race the state machine."""
+
+    def _transition_svc(self):
+        from context_graph.actions.schema import ActionTransition
+
+        store = InMemoryActionStore()
+        action = ActionDefinition("MoveOrder", object_type="Order",
+                                  relation_type="MOVED", effect="transition")
+        action.add(ActionParam("to", kind="text", required=True))
+        action.transition = ActionTransition(to_param="to")
+        store.save("sales", ActionCatalog(name="sales").define(action))
+        return ActionService(store)
+
+    def test_transition_invoke_acquires_object_lock(self):
+        entered = []
+
+        class _SpyLock:
+            async def __aenter__(self):
+                entered.append(True)
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+        class _FakeMachine:
+            def can(self, frm, to, role):
+                from context_graph.lifecycle.schema import Decision
+                return Decision(allowed=True, reason="")
+
+        class _FakeLifecycle:
+            def __init__(self):
+                self.applied = []
+
+            def machine_for(self, ws, obj_type):
+                return _FakeMachine()
+
+            async def current_state(self, rag, ref, machine):
+                return "open"
+
+            async def apply(self, rag, ref, machine, to):
+                self.applied.append((ref, to))
+
+        svc = self._transition_svc()
+        svc._object_lock = lambda ws, ref: _SpyLock()  # spy on lock acquisition
+        lc = _FakeLifecycle()
+        res = asyncio.run(svc.invoke(
+            _FakeRag(outcome="PASS"), "sales", "MoveOrder",
+            object_ref="Order#1", args={"to": "closed"},
+            lifecycle=lc, principal_role="manager",
+        ))
+        assert res["ok"] is True
+        assert entered == [True]            # the object lock WAS acquired
+        assert lc.applied == [("Order#1", "closed")]  # transition applied inside it
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HTTP layer  (real router via FastAPI TestClient; fake rag)
 # ─────────────────────────────────────────────────────────────────────────────

@@ -111,7 +111,7 @@ def _site(handler):
         ticks["t"] += s
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    f = StaticFetcher(client, min_interval=2.0, sleep=sleep, clock=lambda: ticks["t"])
+    f = StaticFetcher(client, min_interval=2.0, sleep=sleep, clock=lambda: ticks["t"], block_private_hosts=False)
     return f, slept
 
 
@@ -195,3 +195,46 @@ async def test_fetch_http_error():
     f, _ = _site(handler)
     r = await f.fetch("https://x.org/missing")
     assert not r.ok and r.status == 404
+
+
+# ── SSRF guard (D1) ──────────────────────────────────────────────────────────
+
+
+def _resolver_to(ip):
+    """Fake getaddrinfo that maps every host to a fixed IP."""
+    def _r(host, port, **kw):
+        return [(2, 1, 6, "", (ip, port or 0))]
+    return _r
+
+
+@pytest.mark.offline
+def test_is_public_url_blocks_private_and_metadata():
+    from context_graph.webingest.urls import is_public_url
+
+    for bad_ip in ("127.0.0.1", "10.0.0.5", "192.168.1.1", "169.254.169.254", "0.0.0.0"):
+        ok, reason = is_public_url("http://internal.example", resolver=_resolver_to(bad_ip))
+        assert ok is False and "non-public" in reason
+
+    ok, reason = is_public_url("http://public.example", resolver=_resolver_to("93.184.216.34"))
+    assert ok is True and reason == ""
+
+    # non-http scheme and unresolvable host are rejected too
+    assert is_public_url("file:///etc/passwd")[0] is False
+
+
+@pytest.mark.offline
+@pytest.mark.asyncio
+async def test_fetch_blocks_ssrf_to_metadata_endpoint():
+    def handler(req):  # would serve if we ever reached the network
+        return httpx.Response(200, text="secret", headers={"content-type": "text/html"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    f = StaticFetcher(
+        client, respect_robots=False,
+        block_private_hosts=True, host_resolver=_resolver_to("169.254.169.254"),
+    )
+    res = await f.fetch("http://metadata.internal/latest/meta-data/")
+    assert res.ok is False
+    assert "blocked" in res.reason
+    # download() is guarded too
+    assert await f.download("http://metadata.internal/x") is None

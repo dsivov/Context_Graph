@@ -35,6 +35,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import time
 from collections import defaultdict
@@ -64,6 +65,7 @@ from lightrag.utils import (
     use_llm_func_with_cache,
 )
 from lightrag.constants import DEFAULT_ENTITY_NAME_MAX_LENGTH, DEFAULT_SUMMARY_LANGUAGE
+from lightrag.kg.shared_storage import get_storage_keyed_lock
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -456,7 +458,16 @@ async def extract_entities_with_context(
                         )
                         glean_len = len(edge_list[0].get("description", "") or "")
                         if glean_len > orig_len:
-                            maybe_edges[edge_key] = list(edge_list)
+                            # Prefer the longer glean description, but do not drop a
+                            # relation_context the first pass captured if this glean
+                            # pass re-emitted the edge without a 6th field — otherwise
+                            # decision lineage silently disappears on the glean pass.
+                            new_list = list(edge_list)
+                            orig_rc = maybe_edges[edge_key][0].get("relation_context")
+                            if orig_rc and not new_list[0].get("relation_context"):
+                                new_list[0] = dict(new_list[0])
+                                new_list[0]["relation_context"] = orig_rc
+                            maybe_edges[edge_key] = new_list
                     else:
                         maybe_edges[edge_key] = list(edge_list)
 
@@ -583,6 +594,40 @@ class ContextGraph(LightRAG):
         except Exception as e:
             logger.error(f"Failed to finalize decisions_vdb: {e}")
 
+    async def _insert_done(
+        self, pipeline_status=None, pipeline_status_lock=None
+    ) -> None:
+        # The base persists a hard-coded storage list; decisions_vdb is ours, so
+        # flush it alongside so pipeline-driven writes (e.g. ingest_decision_summary)
+        # reach disk. Runtime emits flush via _persist_decision_indices() directly.
+        await super()._insert_done(pipeline_status, pipeline_status_lock)
+        try:
+            await self.decisions_vdb.index_done_callback()
+        except Exception as e:
+            logger.error(f"Failed to persist decisions_vdb: {e}")
+
+    async def _persist_decision_indices(self) -> None:
+        """Flush the decision edge and its derived indices to disk.
+
+        emit_decision_trace / reindex_decisions write outside the ingestion
+        pipeline, so nothing else calls index_done_callback() on these stores.
+        Without this, a file-based graph backend (NetworkX) keeps the new edge in
+        memory only and NanoVectorDB keeps the vectors in memory only — both lost
+        on restart. The graph is flushed first because it is the source of truth;
+        the two vector indices are derived and rebuildable via reindex_decisions().
+        """
+        stores = (
+            self.chunk_entity_relation_graph,
+            self.decisions_vdb,
+            self.relationships_vdb,
+        )
+        for store in stores:
+            try:
+                await store.index_done_callback()
+            except Exception as e:  # pragma: no cover - persistence must not break emit
+                name = getattr(store, "namespace", type(store).__name__)
+                logger.warning(f"Failed to persist decision store {name}: {e}")
+
     # ------------------------------------------------------------------
     # Extraction override
     # ------------------------------------------------------------------
@@ -693,63 +738,99 @@ class ContextGraph(LightRAG):
             RuleViolation: if the attached gate REJECTs the decision (nothing is
                 persisted). Callers/endpoints should map this to HTTP 422.
         """
-        # Merge with existing RC when upsert=True. Done first (read-only) so the
-        # gate below evaluates the FINAL context the edge will carry.
-        if upsert and await self.chunk_entity_relation_graph.has_edge(src, tgt):
-            existing = await self.chunk_entity_relation_graph.get_edge(src, tgt)
-            if existing and existing.get("relation_context"):
-                existing_rc = RelationContext.from_json(existing["relation_context"])
-                rc = RelationContext.merge([existing_rc, rc])
-
-        # ── Pre-emit rules gate (wiring step 5) ──────────────────────────────
-        # If a RulesGate is attached, evaluate before any write. REJECT raises
-        # here (nothing persisted); FLAG annotates the edge with needs_review.
-        # Guarded by isinstance so a default/mocked attribute is a no-op.
-        gate_decision = None
-        gate = getattr(self, "rules_gate", None)
         from context_graph.rules.gate import RulesGate, RuleViolation
 
-        if isinstance(gate, RulesGate):
-            gate_decision = gate.check(src, tgt, relation_type, rc)
-            if gate_decision.blocked:
-                raise RuleViolation(gate_decision)
+        # Serialize the whole read-merge-write on this edge under the same per-edge
+        # lock the extraction pipeline uses (get_storage_keyed_lock, GraphDB
+        # namespace). Without it two concurrent emits on the same (src,tgt) both read
+        # the old rc, both merge, and the last upsert wins — silently dropping one
+        # decision's lineage. Degrades to a no-op lock when shared storage is not
+        # initialized (library use / unit tests).
+        async with self._graph_edge_lock(src, tgt):
+            # Merge with existing RC when upsert=True. Done first (read) so the gate
+            # below evaluates the FINAL context the edge will carry.
+            if upsert and await self.chunk_entity_relation_graph.has_edge(src, tgt):
+                existing = await self.chunk_entity_relation_graph.get_edge(src, tgt)
+                if existing and existing.get("relation_context"):
+                    existing_rc = RelationContext.from_json(existing["relation_context"])
+                    # New decision first so it wins on scalar fields (merge is
+                    # first-non-None-wins) — mirrors the extraction pipeline's
+                    # new-over-existing convention in _collect_relation_context. The
+                    # newest approval/validity/trace supersedes the prior one, while
+                    # supporting_sentences still union and confidence takes the max.
+                    rc = RelationContext.merge([rc, existing_rc])
 
-        # Ensure nodes exist in the graph with all fields the merge pipeline expects
-        provenance = rc.provenance or "agent_runtime"
-        for name in (src, tgt):
-            await self.chunk_entity_relation_graph.upsert_node(
-                name,
-                {
-                    "entity_id": name,
-                    "entity_type": "ENTITY",
-                    "source_id": "emit_decision_trace",
-                    "description": name,
-                    "file_path": provenance,
-                },
+            # ── Pre-emit rules gate (wiring step 5) ──────────────────────────
+            # If a RulesGate is attached, evaluate before any write. REJECT raises
+            # here (nothing persisted); FLAG annotates the edge with needs_review.
+            # Guarded by isinstance so a default/mocked attribute is a no-op.
+            gate_decision = None
+            gate = getattr(self, "rules_gate", None)
+            if isinstance(gate, RulesGate):
+                gate_decision = gate.check(src, tgt, relation_type, rc)
+                if gate_decision.blocked:
+                    raise RuleViolation(gate_decision)
+
+            # Ensure the endpoint nodes exist — but never clobber a richer, already
+            # extracted node. upsert_node does SET n += props (Neo4j) / add_node
+            # overwrite (NetworkX), so writing description=name/entity_type=ENTITY onto
+            # an existing entity would erase its extracted profile. Only create when absent.
+            provenance = rc.provenance or "agent_runtime"
+            for name in (src, tgt):
+                if await self.chunk_entity_relation_graph.get_node(name) is not None:
+                    continue
+                await self.chunk_entity_relation_graph.upsert_node(
+                    name,
+                    {
+                        "entity_id": name,
+                        "entity_type": "ENTITY",
+                        "source_id": "emit_decision_trace",
+                        "description": name,
+                        "file_path": provenance,
+                    },
+                )
+
+            edge_data = dict(
+                keywords=relation_type,
+                description=rc.decision_trace or relation_type,
+                weight=rc.confidence_score,
+                source_id="emit_decision_trace",
+                file_path=rc.provenance or "agent_runtime",
+                timestamp=int(time.time()),
+                relation_context=rc.to_json(),
+            )
+            if gate_decision is not None and gate_decision.flagged:
+                edge_data["needs_review"] = True
+                edge_data["rules_audit"] = json.dumps(
+                    gate_decision.audit, ensure_ascii=False
+                )
+            await self.chunk_entity_relation_graph.upsert_edge(
+                src, tgt, edge_data=edge_data
             )
 
-        edge_data = dict(
-            keywords=relation_type,
-            description=rc.decision_trace or relation_type,
-            weight=rc.confidence_score,
-            source_id="emit_decision_trace",
-            file_path=rc.provenance or "agent_runtime",
-            timestamp=int(time.time()),
-            relation_context=rc.to_json(),
-        )
-        if gate_decision is not None and gate_decision.flagged:
-            edge_data["needs_review"] = True
-            edge_data["rules_audit"] = json.dumps(gate_decision.audit, ensure_ascii=False)
-        await self.chunk_entity_relation_graph.upsert_edge(src, tgt, edge_data=edge_data)
-
-        # Project the decision into the search fabrics. Both are DERIVED from the
-        # edge written above (the single source of truth) and are rebuildable via
-        # reindex_decisions(): relationships_vdb so ordinary /query retrieval surfaces
-        # the decision, and decisions_vdb for semantic precedent search.
-        if rc.decision_trace:
-            await self._index_decision(src, tgt, relation_type, rc)
+            # Project the decision into the search fabrics. Both are DERIVED from the
+            # edge written above (the single source of truth) and are rebuildable via
+            # reindex_decisions(): relationships_vdb so ordinary /query retrieval
+            # surfaces the decision, and decisions_vdb for semantic precedent search.
+            if rc.decision_trace:
+                await self._index_decision(src, tgt, relation_type, rc)
+                await self._persist_decision_indices()
 
         return gate_decision
+
+    def _graph_edge_lock(self, src: str, tgt: str):
+        """Per-edge lock matching the extraction pipeline (operate.py merge path).
+
+        Returns the shared keyed lock for this edge so concurrent writers serialize.
+        Falls back to a no-op context when shared storage is not initialized (library
+        use without the server, or unit tests with mocked instances).
+        """
+        workspace = getattr(self, "workspace", "") or ""
+        namespace = f"{workspace}:GraphDB" if workspace else "GraphDB"
+        try:
+            return get_storage_keyed_lock(sorted([src, tgt]), namespace=namespace)
+        except RuntimeError:
+            return contextlib.nullcontext()
 
     async def _index_decision(
         self, src: str, tgt: str, relation_type: str, rc: RelationContext
@@ -765,16 +846,27 @@ class ContextGraph(LightRAG):
         trace = (rc.decision_trace or "").strip()
         if not trace:
             return
+        # Canonicalize the pair (smaller id first) so the derived record ids match
+        # the extraction pipeline's (operate.py) and there is exactly ONE record per
+        # undirected edge regardless of which orientation emit/reindex sees. Graph
+        # get_edge is undirected on both backends, so ordering src/tgt is safe.
+        a, b = (src, tgt) if src <= tgt else (tgt, src)
         # 1) main retrieval fabric — decisions become first-class relations
         try:
-            rel_id = compute_mdhash_id(src + tgt, prefix="rel-")
+            rel_id = compute_mdhash_id(a + b, prefix="rel-")
+            rel_id_reverse = compute_mdhash_id(b + a, prefix="rel-")
+            # Drop any stale reverse-orientation record left by a prior write path.
+            try:
+                await self.relationships_vdb.delete([rel_id_reverse])
+            except Exception:  # pragma: no cover - best-effort cleanup
+                pass
             await self.relationships_vdb.upsert(
                 {
                     rel_id: {
-                        "src_id": src,
-                        "tgt_id": tgt,
+                        "src_id": a,
+                        "tgt_id": b,
                         "source_id": "emit_decision_trace",
-                        "content": f"{relation_type}\t{src}\n{tgt}\n{trace}",
+                        "content": f"{relation_type}\t{a}\n{b}\n{trace}",
                         "keywords": relation_type,
                         "description": trace,
                         "weight": rc.confidence_score,
@@ -783,15 +875,20 @@ class ContextGraph(LightRAG):
                 }
             )
         except Exception as e:  # pragma: no cover - index write must not break emit
-            logger.warning(f"decision relationships_vdb index failed for {src}->{tgt}: {e}")
+            logger.warning(f"decision relationships_vdb index failed for {a}->{b}: {e}")
         # 2) precedent-search index
         try:
-            dec_id = compute_mdhash_id(f"{src}>{tgt}", prefix="dec-")
+            dec_id = compute_mdhash_id(f"{a}>{b}", prefix="dec-")
+            dec_id_reverse = compute_mdhash_id(f"{b}>{a}", prefix="dec-")
+            try:
+                await self.decisions_vdb.delete([dec_id_reverse])
+            except Exception:  # pragma: no cover - best-effort cleanup
+                pass
             await self.decisions_vdb.upsert(
-                {dec_id: {"content": trace, "src_id": src, "tgt_id": tgt}}
+                {dec_id: {"content": trace, "src_id": a, "tgt_id": b}}
             )
         except Exception as e:  # pragma: no cover
-            logger.warning(f"decision decisions_vdb index failed for {src}->{tgt}: {e}")
+            logger.warning(f"decision decisions_vdb index failed for {a}->{b}: {e}")
 
     async def reindex_decisions(self) -> dict:
         """Rebuild the decision search indices from the graph (the source of truth).
@@ -801,8 +898,20 @@ class ContextGraph(LightRAG):
         *derived*: drop them and this repopulates from the graph, and it repairs drift
         (edges recorded through other write paths, or partial failures, that never
         reached the vector stores). Idempotent — safe to run any time.
+
+        Authoritative rebuild: ``decisions_vdb`` holds only decision records, so it is
+        dropped first and repopulated — this removes orphans for edges deleted from the
+        graph (upsert alone would leave them, crowding out real precedents). The shared
+        ``relationships_vdb`` cannot be dropped (it also holds pipeline relations); its
+        per-edge reverse-orientation duplicates are cleaned inside :meth:`_index_decision`.
         """
         graph = self.chunk_entity_relation_graph
+        # Drop the exclusively-decision index so deleted-edge orphans don't survive.
+        try:
+            await self.decisions_vdb.drop()
+        except Exception as e:
+            logger.warning(f"reindex_decisions: could not drop decisions_vdb, "
+                           f"orphans may persist: {e}")
         n = 0
         if hasattr(graph, "get_edges_with_relation_context"):
             # Fast path: a filtered lookup returns only decision edges.
@@ -824,6 +933,7 @@ class ContextGraph(LightRAG):
                 rtype = (edge or {}).get("keywords") or "decision"
                 await self._index_decision(src, tgt, rtype, d["relation_context"])
                 n += 1
+        await self._persist_decision_indices()
         logger.info(f"reindex_decisions: re-projected {n} decision edges from the graph")
         return {"reindexed": n}
 
@@ -866,11 +976,15 @@ class ContextGraph(LightRAG):
         file_path = f"decision_summary/{category}"
         doc_id = summary_id or compute_mdhash_id(text, prefix="dsum-")
 
-        # Upsert: remove stale version if re-ingesting with the same ID
+        # Upsert: fully remove any stale version before re-ingesting. Deleting only
+        # full_docs left the doc_status entry behind, so the pipeline deduped the
+        # re-add as a "[DUPLICATE]" and the update was silently dropped (while the
+        # original doc + chunks/entities were already gone). adelete_by_doc_id clears
+        # doc_status, chunks, graph elements and vectors so the re-ingest proceeds.
         if summary_id:
             existing = await self.full_docs.get_by_id(summary_id)
             if existing is not None:
-                await self.full_docs.delete([summary_id])
+                await self.adelete_by_doc_id(summary_id)
 
         return await self.ainsert(
             text,
@@ -927,7 +1041,7 @@ class ContextGraph(LightRAG):
         return results
 
     def _format_decisions_context(self, precedents: list[dict]) -> str:
-        """Render recorded decisions as a format-safe LLM context block."""
+        """Render recorded decisions as an LLM context block (raw text)."""
         lines = [
             "## Recorded decisions (the project's own decision log — ADRs, change "
             "requests, approvals; captured at the moment they were made)"
@@ -939,9 +1053,7 @@ class ContextGraph(LightRAG):
                 continue
             who = f" — recorded by {rc.approved_by}" if getattr(rc, "approved_by", None) else ""
             lines.append(f"- [{p.get('src_id')} → {p.get('tgt_id')}]{who}: {trace}")
-        block = "\n".join(lines)
-        # escape braces so the block survives str.format() in kg_query
-        return block.replace("{", "{{").replace("}", "}}")
+        return "\n".join(lines)
 
     def _format_named_nodes_context(self, nodes: list[dict]) -> str:
         """Render nodes the query named by exact id (with their neighbourhood)."""
@@ -952,8 +1064,13 @@ class ContextGraph(LightRAG):
             lines.append(f"- {n['name']}{typ}: {desc}")
             if n.get("neighbours"):
                 lines.append(f"  related: {', '.join(n['neighbours'][:8])}")
-        block = "\n".join(lines)
-        return block.replace("{", "{{").replace("}", "}}")
+        return "\n".join(lines)
+
+    # Bounds for the query-time blend (keep the injected context small and cheap).
+    _BLEND_MAX_PRECEDENTS = 8
+    _BLEND_MAX_NAMED_NODES = 6
+    _BLEND_MAX_SCAN_TOKENS = 40  # cap graph probes per query (C6)
+    _BLEND_CHAR_BUDGET = 4000  # ~1k tokens ceiling on injected text (C5)
 
     async def aquery_llm(self, query, param=None, system_prompt=None):
         """Blend recorded decisions into the normal retrieval context.
@@ -963,8 +1080,15 @@ class ContextGraph(LightRAG):
         search — invisible to ``/query`` and the WebUI Retrieval tab. This
         override fetches the decisions most relevant to *query* and injects them
         into the LLM context, so a single query returns code, docs, **and** the
-        project's own decisions together. Skipped for ``bypass`` mode,
-        ``only_need_context``, or when a custom ``system_prompt`` is supplied.
+        project's own decisions together.
+
+        The injected block is appended to ``param.user_prompt`` rather than spliced
+        into the system-prompt template. That makes it (a) mode-agnostic — both the
+        kg and naive templates render ``{user_prompt}``, so ``naive`` no longer
+        crashes on a ``context_data`` placeholder; (b) cache-correct — ``user_prompt``
+        is part of the query cache key, so a new decision actually invalidates a stale
+        cached answer; and (c) non-destructive — a caller-supplied ``system_prompt`` is
+        passed through untouched. Skipped for ``bypass`` and ``only_need_context``.
 
         Overrides ``aquery_llm`` (not ``aquery``) because the REST query routes
         call ``aquery_llm`` directly; ``aquery`` wraps it, so this covers both.
@@ -982,95 +1106,42 @@ class ContextGraph(LightRAG):
             and not getattr(param, "only_need_context", False)
         )
         if should_blend:
-            try:
-                precedents = await self.find_precedents(query, top_k=5)
-            except Exception as e:  # pragma: no cover - never break a query
-                logger.warning(f"aquery decision-blend skipped: {e}")
-                precedents = []
-            # By-name structural pass: a query naming a node by its (often opaque) id —
-            # "TASK-048 details", "explain adr-m2-concurrency" — won't match it
-            # semantically. So for any exact node name in the query, inject the node's
-            # own description + neighbourhood, plus any decisions attached to it.
-            try:
-                import re
-
-                seen = {(p.get("src_id"), p.get("tgt_id")) for p in precedents}
-                named_seen: set[str] = set()
-                graph = self.chunk_entity_relation_graph
-                for cand in dict.fromkeys(re.findall(r"[A-Za-z][A-Za-z0-9_.-]{3,}", query)):
-                    if not await graph.has_node(cand):
-                        continue
-                    edges = await graph.get_node_edges(cand) or []
-                    # (a) the node itself — its description + a few neighbours
-                    if cand not in named_seen and len(named_nodes) < 6:
-                        node = await graph.get_node(cand)
-                        if node:
-                            nbrs = []
-                            for s, t in edges[:8]:
-                                other = t if s == cand else s
-                                e = await graph.get_edge(s, t)
-                                nbrs.append(f"{(e or {}).get('keywords', 'related')} → {other}")
-                            named_nodes.append({
-                                "name": cand,
-                                "type": node.get("entity_type", ""),
-                                "description": (node.get("description") or "").strip(),
-                                "neighbours": nbrs,
-                            })
-                            named_seen.add(cand)
-                    # (b) decisions attached to it
-                    for s, t in edges:
-                        if len(precedents) >= 8 or (s, t) in seen:
-                            continue
-                        edge = await graph.get_edge(s, t)
-                        if edge and edge.get("relation_context"):
-                            rc = RelationContext.from_json(edge["relation_context"])
-                            if rc.decision_trace:
-                                precedents.append({"src_id": s, "tgt_id": t, "relation_context": rc})
-                                seen.add((s, t))
-            except Exception as e:  # pragma: no cover
-                logger.warning(f"aquery by-name include skipped: {e}")
-
-            blocks = []
-            if precedents:
-                blocks.append(self._format_decisions_context(precedents))
-            if named_nodes:
-                blocks.append(self._format_named_nodes_context(named_nodes))
-            if blocks:
-                from lightrag.prompt import PROMPTS
-
-                tmpl_key = (
-                    "rag_response_annotated"
-                    if getattr(param, "context_format", "annotated") == "annotated"
-                    else "rag_response"
+            precedents, named_nodes = await self._collect_blend_context(query)
+            block = self._build_blend_block(precedents, named_nodes)
+            if block:
+                # Inject as an additional-context instruction on user_prompt. This is
+                # cache-keyed and rendered by every retrieval mode's template.
+                instruction = (
+                    "Additional authoritative context — the project's own recorded "
+                    "decisions and the entities named in the question. Use these and "
+                    "cite them when they apply:\n\n" + block
                 )
-                base = PROMPTS.get(tmpl_key, PROMPTS["rag_response"])
-                if "{context_data}" in base:
-                    system_prompt = base.replace(
-                        "{context_data}", "{context_data}\n\n" + "\n\n".join(blocks), 1
-                    )
+                existing = (getattr(param, "user_prompt", "") or "").strip()
+                param.user_prompt = (
+                    f"{existing}\n\n{instruction}" if existing else instruction
+                )
 
         result = await super().aquery_llm(query, param, system_prompt=system_prompt)
 
-        # Fallback: base retrieval short-circuits (returns no answer) when it finds no
-        # entities/chunks — a pure by-id lookup. If we located the named node(s) or
-        # decisions structurally, answer from them directly instead of "no information".
-        if precedents or named_nodes:
+        # Fallback: retrieval short-circuits with the fail_response marker
+        # ("[no-context]") when it finds no entities/chunks — a pure by-id lookup.
+        # In that case the LLM was never called, so our user_prompt injection never
+        # reached it; answer directly from the structural context we located. Keyed
+        # strictly on the marker (not on any answer that mentions "enough
+        # information"), and never for only_need_prompt/only_need_context/streaming.
+        if (
+            (precedents or named_nodes)
+            and not getattr(param, "only_need_prompt", False)
+            and not getattr(param, "only_need_context", False)
+        ):
             lr = result.get("llm_response") or {}
             content = lr.get("content") or ""
-            if lr.get("response_iterator") is None and (
-                not content.strip() or "enough information" in content.lower()
-            ):
+            if lr.get("response_iterator") is None and "[no-context]" in content:
                 parts = []
                 if named_nodes:
-                    parts.append(
-                        self._format_named_nodes_context(named_nodes)
-                        .replace("{{", "{").replace("}}", "}")
-                    )
+                    parts.append(self._format_named_nodes_context(named_nodes))
                 if precedents:
-                    parts.append(
-                        self._format_decisions_context(precedents)
-                        .replace("{{", "{").replace("}}", "}")
-                    )
+                    parts.append(self._format_decisions_context(precedents))
                 try:
                     ans = await self.llm_model_func(
                         "Answer the question using ONLY this project context (quote the "
@@ -1084,6 +1155,87 @@ class ContextGraph(LightRAG):
                 except Exception as e:  # pragma: no cover - never break a query
                     logger.warning(f"aquery by-name fallback failed: {e}")
         return result
+
+    async def _collect_blend_context(self, query: str) -> tuple[list[dict], list[dict]]:
+        """Gather precedent decisions + exact-named graph nodes for the blend.
+
+        Bounded work: at most ``_BLEND_MAX_SCAN_TOKENS`` graph probes, stopping once
+        the precedent/named-node caps are hit — so a paragraph-length query or a query
+        that happens to name a high-degree hub node can't trigger an unbounded fan-out
+        of graph roundtrips.
+        """
+        precedents: list[dict] = []
+        named_nodes: list[dict] = []
+        try:
+            precedents = await self.find_precedents(query, top_k=5)
+        except Exception as e:  # pragma: no cover - never break a query
+            logger.warning(f"aquery decision-blend skipped: {e}")
+            precedents = []
+        try:
+            import re
+
+            seen = {(p.get("src_id"), p.get("tgt_id")) for p in precedents}
+            named_seen: set[str] = set()
+            graph = self.chunk_entity_relation_graph
+            candidates = list(
+                dict.fromkeys(re.findall(r"[A-Za-z][A-Za-z0-9_.-]{3,}", query))
+            )[: self._BLEND_MAX_SCAN_TOKENS]
+            for cand in candidates:
+                if (
+                    len(named_nodes) >= self._BLEND_MAX_NAMED_NODES
+                    and len(precedents) >= self._BLEND_MAX_PRECEDENTS
+                ):
+                    break
+                if not await graph.has_node(cand):
+                    continue
+                edges = await graph.get_node_edges(cand) or []
+                # (a) the node itself — its description + a few neighbours
+                if cand not in named_seen and len(named_nodes) < self._BLEND_MAX_NAMED_NODES:
+                    node = await graph.get_node(cand)
+                    if node:
+                        nbrs = []
+                        for s, t in edges[:8]:
+                            other = t if s == cand else s
+                            e = await graph.get_edge(s, t)
+                            nbrs.append(f"{(e or {}).get('keywords', 'related')} → {other}")
+                        named_nodes.append({
+                            "name": cand,
+                            "type": node.get("entity_type", ""),
+                            "description": (node.get("description") or "").strip(),
+                            "neighbours": nbrs,
+                        })
+                        named_seen.add(cand)
+                # (b) decisions attached to it
+                for s, t in edges:
+                    if len(precedents) >= self._BLEND_MAX_PRECEDENTS or (s, t) in seen:
+                        continue
+                    edge = await graph.get_edge(s, t)
+                    if edge and edge.get("relation_context"):
+                        rc = RelationContext.from_json(edge["relation_context"])
+                        if rc.decision_trace:
+                            precedents.append(
+                                {"src_id": s, "tgt_id": t, "relation_context": rc}
+                            )
+                            seen.add((s, t))
+        except Exception as e:  # pragma: no cover
+            logger.warning(f"aquery by-name include skipped: {e}")
+        return precedents, named_nodes
+
+    def _build_blend_block(self, precedents: list[dict], named_nodes: list[dict]) -> str:
+        """Render the blend context, capped at ``_BLEND_CHAR_BUDGET`` chars.
+
+        Injected text bypasses the retrieval context's token-fitting, so it is bounded
+        here to keep the final prompt from overflowing the model window.
+        """
+        blocks = []
+        if named_nodes:
+            blocks.append(self._format_named_nodes_context(named_nodes))
+        if precedents:
+            blocks.append(self._format_decisions_context(precedents))
+        text = "\n\n".join(b for b in blocks if b.strip())
+        if len(text) > self._BLEND_CHAR_BUDGET:
+            text = text[: self._BLEND_CHAR_BUDGET].rstrip() + "\n… (truncated)"
+        return text
 
     async def get_all_decisions(
         self,

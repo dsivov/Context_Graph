@@ -17,7 +17,7 @@ ROBOTS_ALLOW = "User-agent: *\nAllow: /\n"
 
 def _static(handler):
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    return StaticFetcher(client, min_interval=0.0)
+    return StaticFetcher(client, min_interval=0.0, block_private_hosts=False)
 
 
 # ── routing logic (offline, injected navigate) ───────────────────────────────
@@ -100,7 +100,7 @@ async def test_render_navigation_error_is_captured():
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_real_browser_executes_javascript():
-    static = StaticFetcher(httpx.AsyncClient(), respect_robots=False)
+    static = StaticFetcher(httpx.AsyncClient(), respect_robots=False, block_private_hosts=False)
     pf = PlaywrightFetcher(static, wait_until="load")
     try:
         url = ("data:text/html,<body><div id='x'></div>"

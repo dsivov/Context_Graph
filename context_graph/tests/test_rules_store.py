@@ -75,6 +75,47 @@ def test_validate_rejects_undefined_concept():
         validate_policy(DSL, {"NOPE": ["x"]})
 
 
+@pytest.mark.offline
+def test_validate_rejects_unknown_field():
+    """D3: a typo'd/unknown decision field is rejected at save time, so the gate
+    fails closed instead of silently skipping the rule at eval."""
+    typo_dsl = """
+rule "block large unapproved spend"  priority 10
+when
+    amont > 10000
+then
+    reject("too large")
+end
+"""
+    with pytest.raises(ValueError, match="unknown decision field"):
+        validate_policy(typo_dsl, CONCEPTS)
+
+
+@pytest.mark.offline
+def test_validate_accepts_known_fields():
+    """A rule over real projected fields (amount, approved_via) validates clean."""
+    ok_dsl = """
+rule "large slack approval"  priority 10
+when
+    amount > 10000
+    and approved_via == "slack"
+then
+    flag("review")
+end
+"""
+    validate_policy(ok_dsl, CONCEPTS)  # must not raise
+
+
+@pytest.mark.offline
+def test_referenced_fields_extraction():
+    from context_graph.rules.store import referenced_fields
+
+    fields = referenced_fields(
+        ['sim(relation_type, "APPROVAL") > 0.4 and percent > 0.15 and approved_via == "slack"']
+    )
+    assert fields == {"relation_type", "percent", "approved_via"}
+
+
 # ── save / load / version ────────────────────────────────────────────────────
 
 

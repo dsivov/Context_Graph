@@ -46,7 +46,15 @@ def gather_docs(repo, limit):
 
 
 _CODE_EXTS = (".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".rb", ".kt", ".swift")
-_CODE_SKIP = {"__pycache__", "node_modules", ".venv", "venv", "migrations", "dist", "build", ".git"}
+# Directories that never hold first-party source we want to ingest — dependency
+# trees, build output, vendored code, VCS metadata. Used by BOTH detect_modules
+# (so a venv/dist dir isn't registered as a module and mis-anchor the graph) and
+# gather_code (so we don't ingest site-packages / minified bundles).
+_CODE_SKIP = {
+    "__pycache__", "node_modules", ".venv", "venv", "env", "migrations",
+    "dist", "build", ".git", "vendor", "target", "site-packages", ".tox",
+    ".mypy_cache", ".pytest_cache", "egg-info", ".egg-info", "out", "bin", "obj",
+}
 
 
 def gather_code(repo, modules, limit, include_tests=False):
@@ -70,17 +78,27 @@ def gather_code(repo, modules, limit, include_tests=False):
 
 
 def detect_modules(repo):
-    """Top-level directories that contain source files."""
+    """Top-level directories that contain first-party source files.
+
+    Dependency/build/vendor dirs are excluded (see ``_CODE_SKIP``) so they are not
+    registered as modules — otherwise a large ``venv``/``dist`` tree can win the
+    "core module" heuristic and every real module gets anchored to it.
+    """
     exts = (".py", ".js", ".ts", ".tsx", ".go", ".rs", ".java", ".rb")
     mods = []
     for name in sorted(os.listdir(repo)):
         d = os.path.join(repo, name)
-        if not os.path.isdir(d) or name.startswith(".") or name in ("node_modules", "__pycache__"):
+        if (not os.path.isdir(d) or name.startswith(".")
+                or name in _CODE_SKIP):
             continue
-        for _root, _dirs, files in os.walk(d):
+        found = False
+        for _root, dirs, files in os.walk(d):
+            dirs[:] = [x for x in dirs if x not in _CODE_SKIP and not x.startswith(".")]
             if any(f.endswith(exts) for f in files):
-                mods.append(name)
+                found = True
                 break
+        if found:
+            mods.append(name)
     return mods
 
 
@@ -119,7 +137,10 @@ def main() -> int:
         try:
             with urllib.request.urlopen(req):
                 return True
-        except urllib.error.HTTPError:
+        except urllib.error.URLError as e:
+            # HTTPError (a URLError subclass) → server rejected; plain URLError →
+            # connection failure. Either way, don't crash the whole backfill.
+            print(f"  POST {path} failed: {e}", flush=True)
             return False
 
     def get(path):

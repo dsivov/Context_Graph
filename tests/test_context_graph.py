@@ -120,6 +120,27 @@ class TestRelationContext:
         merged = RelationContext.merge([])
         assert merged.is_empty()
 
+    def test_merge_preserves_explicit_zero_confidence(self):
+        # E4: a deliberately zero-confidence decision must NOT be promoted to 1.0.
+        rc1 = RelationContext(decision_trace="d", confidence_score=0.0)
+        rc2 = RelationContext(decision_trace="e", confidence_score=0.0)
+        assert RelationContext.merge([rc1, rc2]).confidence_score == 0.0
+        # max still wins across differing scores
+        rc3 = RelationContext(decision_trace="f", confidence_score=0.7)
+        assert RelationContext.merge([rc1, rc3]).confidence_score == 0.7
+        # empty merge still defaults to 1.0
+        assert RelationContext.merge([]).confidence_score == 1.0
+
+    def test_is_active_ignores_time_component(self):
+        # E5: as_of with a time part must still be active on the final valid day.
+        rc = RelationContext(
+            decision_trace="d", valid_from="2026-01-01", valid_until="2026-07-06"
+        )
+        assert rc.is_active("2026-07-06T10:00:00") is True   # last valid day, with time
+        assert rc.is_active("2026-07-06") is True
+        assert rc.is_active("2026-07-07T00:01") is False      # day after → expired
+        assert rc.is_active("2025-12-31T23:59") is False      # before valid_from
+
 
 class TestContextNode:
     def test_construction(self):
@@ -523,22 +544,30 @@ class TestContextGraphNewMethods:
 
     def _make_cg(self, graph_mock, vdb_mock):
         """Return a minimal ContextGraph-like object with mocked storage."""
-        from unittest.mock import MagicMock
+        from unittest.mock import AsyncMock, MagicMock
 
         cg = MagicMock()
         cg.chunk_entity_relation_graph = graph_mock
         cg.decisions_vdb = vdb_mock
+        # emit_decision_trace also projects into the retrieval fabric (_index_decision)
+        cg.relationships_vdb = AsyncMock()
         # Bind real method implementations to the mock
         from lightrag.context_graph import ContextGraph
 
         cg.emit_decision_trace = ContextGraph.emit_decision_trace.__get__(cg, type(cg))
+        cg._index_decision = ContextGraph._index_decision.__get__(cg, type(cg))
+        cg._persist_decision_indices = ContextGraph._persist_decision_indices.__get__(
+            cg, type(cg)
+        )
         cg.find_precedents = ContextGraph.find_precedents.__get__(cg, type(cg))
         cg.get_all_decisions = ContextGraph.get_all_decisions.__get__(cg, type(cg))
+        cg.reindex_decisions = ContextGraph.reindex_decisions.__get__(cg, type(cg))
         return cg
 
     async def test_emit_decision_trace_creates_edge(self):
         graph = AsyncMock()
         graph.has_edge = AsyncMock(return_value=False)
+        graph.get_node = AsyncMock(return_value=None)  # nodes absent → created
         graph.upsert_node = AsyncMock()
         graph.upsert_edge = AsyncMock()
 
@@ -604,6 +633,29 @@ class TestContextGraphNewMethods:
         # Merge should union supporting_sentences
         assert "Old evidence" in stored_rc.supporting_sentences
         assert "New evidence" in stored_rc.supporting_sentences
+        # B5: the NEW decision must win on scalar fields, not the stale one
+        assert stored_rc.decision_trace == "Updated approval"
+
+    async def test_emit_does_not_clobber_existing_node(self):
+        """B6: emit must not overwrite a richer, already-extracted entity node."""
+        graph = AsyncMock()
+        graph.has_edge = AsyncMock(return_value=False)
+        # Both endpoints already exist with rich extracted profiles
+        graph.get_node = AsyncMock(
+            return_value={"entity_id": "x", "entity_type": "Person",
+                          "description": "A detailed extracted profile"}
+        )
+        graph.upsert_node = AsyncMock()
+        graph.upsert_edge = AsyncMock()
+        cg = self._make_cg(graph, AsyncMock())
+
+        await cg.emit_decision_trace(
+            "Sarah", "MegaCorp", "APPROVES",
+            RelationContext(decision_trace="Approved"),
+        )
+        # Existing nodes are left untouched (no description/type clobber)
+        graph.upsert_node.assert_not_awaited()
+        graph.upsert_edge.assert_awaited_once()
 
     async def test_emit_decision_trace_indexes_in_vdb(self):
         graph = AsyncMock()
@@ -712,3 +764,250 @@ class TestContextGraphNewMethods:
         results = await cg.get_all_decisions(active_as_of="2024-06-15")
         assert len(results) == 1
         assert results[0]["src_id"] == "A"
+
+    # ── P1: decision-index integrity ────────────────────────────────────────
+
+    async def test_index_decision_uses_canonical_sorted_ids(self):
+        """Both orientations of the same edge write ONE canonical record and
+        delete the reverse-orientation id (B3)."""
+        from lightrag.utils import compute_mdhash_id
+
+        expected_rel = compute_mdhash_id("A" + "Z", prefix="rel-")
+        expected_dec = compute_mdhash_id("A>Z", prefix="dec-")
+
+        for src, tgt in [("A", "Z"), ("Z", "A")]:
+            graph = AsyncMock()
+            graph.has_edge = AsyncMock(return_value=False)
+            graph.upsert_node = AsyncMock()
+            graph.upsert_edge = AsyncMock()
+            rel_vdb = AsyncMock()
+            dec_vdb = AsyncMock()
+            cg = self._make_cg(graph, dec_vdb)
+            cg.relationships_vdb = rel_vdb
+
+            rc = RelationContext(decision_trace="Approved", confidence_score=0.8)
+            await cg.emit_decision_trace(src, tgt, "APPROVES", rc)
+
+            # canonical rel-id, sorted src/tgt stored, reverse deleted
+            rel_payload = rel_vdb.upsert.await_args.args[0]
+            assert set(rel_payload) == {expected_rel}
+            entry = rel_payload[expected_rel]
+            assert (entry["src_id"], entry["tgt_id"]) == ("A", "Z")
+            rel_vdb.delete.assert_awaited()  # reverse-id cleanup
+
+            # canonical dec-id, sorted src/tgt stored
+            dec_payload = dec_vdb.upsert.await_args.args[0]
+            assert set(dec_payload) == {expected_dec}
+            assert (dec_payload[expected_dec]["src_id"],
+                    dec_payload[expected_dec]["tgt_id"]) == ("A", "Z")
+
+    async def test_emit_persists_decision_indices(self):
+        """Runtime emit flushes both derived indices to disk (B2)."""
+        graph = AsyncMock()
+        graph.has_edge = AsyncMock(return_value=False)
+        graph.upsert_node = AsyncMock()
+        graph.upsert_edge = AsyncMock()
+        dec_vdb = AsyncMock()
+        rel_vdb = AsyncMock()
+        cg = self._make_cg(graph, dec_vdb)
+        cg.relationships_vdb = rel_vdb
+
+        await cg.emit_decision_trace(
+            "A", "B", "APPROVES", RelationContext(decision_trace="ok")
+        )
+        dec_vdb.index_done_callback.assert_awaited()
+        rel_vdb.index_done_callback.assert_awaited()
+        # B2: the graph (source of truth) must be flushed too, else a file-based
+        # backend loses the emitted edge on restart.
+        graph.index_done_callback.assert_awaited()
+
+    async def test_reindex_drops_then_repopulates(self):
+        """Authoritative rebuild: decisions_vdb is dropped (orphan removal) then
+        repopulated from the graph, and the result is persisted (B4)."""
+        rc1 = RelationContext(decision_trace="Approved discount", confidence_score=0.9)
+        edges = [
+            {"source": "A", "target": "B", "keywords": "APPROVES",
+             "relation_context": rc1.to_json()},
+            {"source": "C", "target": "D", "keywords": "REJECTS",
+             "relation_context": RelationContext(temporal_info="Q1").to_json()},  # no trace
+        ]
+        graph = AsyncMock()
+        graph.get_edges_with_relation_context = AsyncMock(return_value=edges)
+        dec_vdb = AsyncMock()
+        rel_vdb = AsyncMock()
+        cg = self._make_cg(graph, dec_vdb)
+        cg.relationships_vdb = rel_vdb
+
+        result = await cg.reindex_decisions()
+
+        dec_vdb.drop.assert_awaited()  # orphan removal
+        assert result == {"reindexed": 1}  # only the edge with a decision_trace
+        dec_vdb.upsert.assert_awaited()  # repopulated
+        dec_vdb.index_done_callback.assert_awaited()  # persisted
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# P3: query-time decision blend & by-name injection (aquery_llm)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestQueryBlend:
+    """Blend is injected via user_prompt (mode-agnostic, cache-keyed, non-clobbering)
+    and the empty-retrieval fallback keys strictly on the [no-context] marker."""
+
+    def _cg(self, precedents, named_nodes):
+        from unittest.mock import AsyncMock
+        from lightrag.context_graph import ContextGraph
+
+        cg = ContextGraph.__new__(ContextGraph)
+        cg.decisions_vdb = AsyncMock()
+        cg._collect_blend_context = AsyncMock(return_value=(precedents, named_nodes))
+        cg.llm_model_func = AsyncMock(return_value="fallback answer")
+        return cg
+
+    async def _run(self, cg, param, system_prompt=None, super_result=None):
+        """Invoke ContextGraph.aquery_llm with LightRAG.aquery_llm patched to capture
+        what the base receives and to return a controllable result."""
+        from unittest.mock import patch
+        from lightrag.context_graph import ContextGraph
+        from lightrag.lightrag import LightRAG
+
+        captured = {}
+
+        async def fake_super(self, query, param=None, system_prompt=None):
+            captured["user_prompt"] = getattr(param, "user_prompt", None)
+            captured["system_prompt"] = system_prompt
+            return super_result or {
+                "status": "success",
+                "llm_response": {"content": "base answer", "response_iterator": None},
+            }
+
+        with patch.object(LightRAG, "aquery_llm", fake_super):
+            result = await ContextGraph.aquery_llm(
+                cg, "explain adr_m2_concurrency latency", param, system_prompt=system_prompt
+            )
+        return result, captured
+
+    async def test_blend_injects_user_prompt_and_preserves_system_prompt(self):
+        from lightrag.base import QueryParam
+
+        precedents = [{
+            "src_id": "A", "tgt_id": "B",
+            "relation_context": RelationContext(decision_trace="Chose X for latency"),
+        }]
+        cg = self._cg(precedents, [])
+        _, captured = await self._run(
+            cg, QueryParam(mode="naive"), system_prompt="CUSTOM SYSTEM PROMPT"
+        )
+        # C2/C4: block lands in user_prompt (cache-keyed), system_prompt untouched
+        assert "Chose X for latency" in captured["user_prompt"]
+        assert captured["system_prompt"] == "CUSTOM SYSTEM PROMPT"
+
+    async def test_blend_appends_to_existing_user_prompt(self):
+        from lightrag.base import QueryParam
+
+        precedents = [{
+            "src_id": "A", "tgt_id": "B",
+            "relation_context": RelationContext(decision_trace="Decision text"),
+        }]
+        cg = self._cg(precedents, [])
+        _, captured = await self._run(cg, QueryParam(mode="mix", user_prompt="be terse"))
+        assert captured["user_prompt"].startswith("be terse")
+        assert "Decision text" in captured["user_prompt"]
+
+    async def test_bypass_mode_skips_blend(self):
+        from lightrag.base import QueryParam
+
+        precedents = [{
+            "src_id": "A", "tgt_id": "B",
+            "relation_context": RelationContext(decision_trace="d"),
+        }]
+        cg = self._cg(precedents, [])
+        _, captured = await self._run(cg, QueryParam(mode="bypass"))
+        assert captured["user_prompt"] is None  # nothing injected
+
+    async def test_fallback_fires_only_on_no_context_marker(self):
+        from lightrag.base import QueryParam
+
+        precedents = [{
+            "src_id": "A", "tgt_id": "B",
+            "relation_context": RelationContext(decision_trace="The recorded decision"),
+        }]
+        cg = self._cg(precedents, [])
+        # retrieval empty → fail_response marker → fallback answers from structural ctx
+        result, _ = await self._run(
+            cg, QueryParam(mode="mix"),
+            super_result={
+                "status": "failure",
+                "llm_response": {
+                    "content": "Sorry, I'm not able to provide an answer.[no-context]",
+                    "response_iterator": None,
+                },
+            },
+        )
+        assert result["llm_response"]["content"] == "fallback answer"
+        assert result["status"] == "success"
+
+    async def test_fallback_does_not_clobber_legit_answer(self):
+        from lightrag.base import QueryParam
+
+        precedents = [{
+            "src_id": "A", "tgt_id": "B",
+            "relation_context": RelationContext(decision_trace="d"),
+        }]
+        cg = self._cg(precedents, [])
+        # A real grounded answer mentioning "enough information" must NOT be replaced
+        legit = "The team lacked enough information about latency, so they chose X."
+        result, _ = await self._run(
+            cg, QueryParam(mode="mix"),
+            super_result={
+                "status": "success",
+                "llm_response": {"content": legit, "response_iterator": None},
+            },
+        )
+        assert result["llm_response"]["content"] == legit
+        cg.llm_model_func.assert_not_awaited()
+
+    async def test_fallback_skipped_for_only_need_prompt(self):
+        from lightrag.base import QueryParam
+
+        precedents = [{
+            "src_id": "A", "tgt_id": "B",
+            "relation_context": RelationContext(decision_trace="d"),
+        }]
+        cg = self._cg(precedents, [])
+        result, _ = await self._run(
+            cg, QueryParam(mode="mix", only_need_prompt=True),
+            super_result={
+                "status": "success",
+                "llm_response": {"content": "prompt...[no-context]", "response_iterator": None},
+            },
+        )
+        cg.llm_model_func.assert_not_awaited()  # no extra LLM call for prompt-only
+
+    def test_build_blend_block_respects_char_budget(self):
+        from lightrag.context_graph import ContextGraph
+
+        cg = ContextGraph.__new__(ContextGraph)
+        precedents = [{
+            "src_id": f"S{i}", "tgt_id": f"T{i}",
+            "relation_context": RelationContext(decision_trace="x" * 500),
+        } for i in range(50)]
+        block = cg._build_blend_block(precedents, [])
+        assert len(block) <= ContextGraph._BLEND_CHAR_BUDGET + 32  # + truncation marker
+        assert "truncated" in block
+
+    async def test_collect_blend_caps_graph_probes(self):
+        from unittest.mock import AsyncMock
+        from lightrag.context_graph import ContextGraph
+
+        cg = ContextGraph.__new__(ContextGraph)
+        cg.decisions_vdb = AsyncMock()
+        cg.find_precedents = AsyncMock(return_value=[])
+        graph = AsyncMock()
+        graph.has_node = AsyncMock(return_value=False)  # no matches, just count probes
+        cg.chunk_entity_relation_graph = graph
+        # A query with far more than the scan cap of candidate tokens
+        query = " ".join(f"token{i:03d}" for i in range(200))
+        await cg._collect_blend_context(query)
+        assert graph.has_node.await_count <= ContextGraph._BLEND_MAX_SCAN_TOKENS

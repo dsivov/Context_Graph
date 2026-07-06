@@ -62,10 +62,9 @@ Context Graph:  Sarah Chen --APPROVES--> MegaCorp
 | `is_active(as_of=None)` | True if currently valid per `valid_from`/`valid_until` |
 | `merge(others)` | Combine rc from multiple chunks for the same edge |
 
-> ⚠️ Known issues at the time of review (see [CODE_REVIEW.md](CODE_REVIEW.md)):
-> `is_empty()` and `to_text()` only consider 5 of the content fields (C2 / L4), and `from_dict`
-> does not coerce `confidence_score` (M2). Prefer treating these as the documented *intent* —
-> all 11 fields are content — and apply the fixes noted in the review.
+> Note: `is_empty()` now inspects **all** content fields (fixed in commit 058a26e3).
+> `to_text()` still renders only the 5 primary narrative fields for prompt brevity — this is
+> intentional, not a bug. All 11 fields remain content and are preserved through merge/rebuild.
 
 ## ContextNode / ContextEdge
 

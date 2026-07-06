@@ -100,6 +100,15 @@ rules = [
     "business_rule_engine>=1.0.0",
 ]
 
+# Context Graph web ingestion — crawl/clean/render pipeline.
+# lxml is imported eagerly by context_graph.webingest.clean, so it is required
+# whenever the /scrape routes are mounted; playwright powers the optional
+# JS-render fetcher (context_graph.webingest.render, imported lazily).
+webingest = [
+    "lxml>=5.0.0",
+    "playwright>=1.40.0",
+]
+
 # Advanced document processing engine (optional)
 docling = [
     # On macOS, pytorch and frameworks use Objective-C are not fork-safe,

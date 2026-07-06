@@ -14,6 +14,7 @@ offers what the router and server need:
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any, Dict, List, Optional
 
 from lightrag.context_graph_types import RelationContext
@@ -25,6 +26,27 @@ from context_graph.actions.store import ActionStore
 class ActionService:
     def __init__(self, store: ActionStore) -> None:
         self._store = store
+
+    @staticmethod
+    def _object_lock(workspace: str, object_ref: str):
+        """Serialize state transitions on one object.
+
+        Two concurrent ``invoke`` calls on the same object would otherwise both
+        read the same start state, both validate their (different) targets as
+        legal, and both write — an illegal combined transition plus a lost update.
+        This uses a dedicated ``Lifecycle`` lock namespace, distinct from the
+        ``GraphDB`` edge locks ``emit_decision_trace`` takes internally, so the two
+        never collide (a shared key would deadlock the per-key async lock).
+        Degrades to a no-op when shared storage isn't initialized (unit tests).
+        """
+        try:
+            from lightrag.kg.shared_storage import get_storage_keyed_lock
+
+            return get_storage_keyed_lock(
+                [object_ref], namespace=f"{workspace}:Lifecycle"
+            )
+        except RuntimeError:
+            return contextlib.nullcontext()
 
     @property
     def store(self) -> ActionStore:
@@ -113,36 +135,46 @@ class ActionService:
         rc = self._build_rc(action, coerced, actor=src)
         edge = {"src": src, "tgt": tgt, "relation_type": relation_type}
 
-        # 1) Lifecycle guard (for transition actions): is from → to a legal move
-        #    for this role? Runs before the write; illegal transitions never persist.
+        from context_graph.rules.gate import RuleViolation
+
         machine = None
         current = target = None
-        if action.transition is not None and lifecycle is not None:
-            machine = lifecycle.machine_for(workspace, action.object_type)
-            if machine is not None:
-                target = coerced.get(action.transition.to_param)
-                current = await lifecycle.current_state(rag, tgt, machine)
-                d = machine.can(current, target, principal_role)
-                if not d.allowed:
-                    return {"ok": False, "error": "illegal_transition", "reason": d.reason,
-                            "action": action.name, "from": current, "to": target, "edge": edge}
+        # Steps 1–3 (read current state → validate transition → emit → apply) run
+        # atomically per object for transition actions, so concurrent invokes can't
+        # race the state machine. The lock is a no-op for non-transition actions.
+        async with contextlib.AsyncExitStack() as stack:
+            if action.transition is not None:
+                await stack.enter_async_context(
+                    self._object_lock(workspace, object_ref)
+                )
 
-        # 2) Authorize + record via the pre-emit rules gate (writes the audit edge).
-        from context_graph.rules.gate import RuleViolation
-        try:
-            gate_decision = await rag.emit_decision_trace(src, tgt, relation_type, rc)
-        except RuleViolation as e:
-            return {"ok": False, "error": "rejected", "outcome": "REJECT",
-                    "action": action.name, "edge": edge, "audit": e.decision.audit}
+            # 1) Lifecycle guard (for transition actions): is from → to a legal move
+            #    for this role? Runs before the write; illegal transitions never persist.
+            if action.transition is not None and lifecycle is not None:
+                machine = lifecycle.machine_for(workspace, action.object_type)
+                if machine is not None:
+                    target = coerced.get(action.transition.to_param)
+                    current = await lifecycle.current_state(rag, tgt, machine)
+                    d = machine.can(current, target, principal_role)
+                    if not d.allowed:
+                        return {"ok": False, "error": "illegal_transition", "reason": d.reason,
+                                "action": action.name, "from": current, "to": target, "edge": edge}
 
-        outcome = gate_decision.outcome if gate_decision is not None else "RECORDED"
-        audit = gate_decision.audit if gate_decision is not None else None
+            # 2) Authorize + record via the pre-emit rules gate (writes the audit edge).
+            try:
+                gate_decision = await rag.emit_decision_trace(src, tgt, relation_type, rc)
+            except RuleViolation as e:
+                return {"ok": False, "error": "rejected", "outcome": "REJECT",
+                        "action": action.name, "edge": edge, "audit": e.decision.audit}
 
-        # 3) Apply the state transition on the object's node (after a PASS/FLAG emit).
-        if machine is not None and target is not None:
-            await lifecycle.apply(rag, tgt, machine, target)
+            outcome = gate_decision.outcome if gate_decision is not None else "RECORDED"
+            audit = gate_decision.audit if gate_decision is not None else None
 
-        # 4) Side effect only after authorization.
+            # 3) Apply the state transition on the object's node (after a PASS/FLAG emit).
+            if machine is not None and target is not None:
+                await lifecycle.apply(rag, tgt, machine, target)
+
+        # 4) Side effect only after authorization (outside the object lock).
         from context_graph.actions.handler import run_handler, HandlerError
         payload = {"action": action.name, "actor": src, "object": tgt,
                    "relation_type": relation_type, "args": coerced,

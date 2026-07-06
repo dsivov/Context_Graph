@@ -69,14 +69,46 @@ def referenced_concepts(dsl: str) -> set:
     return {m.group(1).strip().upper() for m in _CONCEPT_REF_RE.finditer(dsl or "")}
 
 
+# String literals (concept names, channel values) and identifiers, for extracting
+# the decision fields a rule's conditions reference.
+_STRING_LIT_RE = re.compile(r'"[^"]*"|\'[^\']*\'')
+_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# DSL keywords / bound functions / literals that are NOT decision fields.
+_DSL_NON_FIELDS = frozenset(
+    {"and", "or", "not", "in", "is", "true", "false", "none",
+     "sim", "similar", "reject", "flag", "notify"}
+)
+
+
+def referenced_fields(condition_texts: Sequence[str]) -> set:
+    """The decision-field identifiers a set of rule conditions reference.
+
+    String literals (concept names, channel values) are stripped first, then bare
+    identifiers that are not DSL keywords / bound functions are treated as fields.
+    """
+    fields: set = set()
+    for cond in condition_texts:
+        stripped = _STRING_LIT_RE.sub(" ", cond or "")
+        for ident in _IDENT_RE.findall(stripped):
+            if ident.lower() in _DSL_NON_FIELDS:
+                continue
+            fields.add(ident)
+    return fields
+
+
 def validate_policy(dsl: str, concepts: Mapping[str, Sequence[str]]) -> None:
     """Raise ``ValueError`` if the policy is not safe to persist.
 
     Checks: (1) the DSL parses with non-empty conditions (reuses the engine's
-    load-time lint), and (2) every concept referenced by a rule is defined.
-    Neither check loads the embedding model.
+    load-time lint), (2) every concept referenced by a rule is defined, and
+    (3) every decision **field** referenced is a real projected field. The field
+    check is what makes the gate fail *closed* on an authoring typo: without it a
+    rule like ``amont > 10000`` (typo) saves clean, then raises ``NameError`` at
+    eval and is silently skipped — a REJECT rule that never fires. Neither check
+    loads the embedding model.
     """
     from context_graph.rules.engine import RulesEngine
+    from context_graph.rules.projection import PARAM_FIELDS
     from context_graph.rules.similarity import ConceptCatalog
 
     defined = {k.strip().upper() for k in concepts}
@@ -84,13 +116,21 @@ def validate_policy(dsl: str, concepts: Mapping[str, Sequence[str]]) -> None:
     catalog = ConceptCatalog(backend=_NullBackend()).define_many(
         {k: ["x"] for k in concepts} or {"_": ["x"]}
     )
-    RulesEngine(catalog).load(dsl)  # raises on empty condition / parse error
+    engine = RulesEngine(catalog).load(dsl)  # raises on empty condition / parse error
 
     missing = referenced_concepts(dsl) - defined
     if missing:
         raise ValueError(
             f"DSL references undefined concept(s): {sorted(missing)}. "
             f"Defined: {sorted(defined)}"
+        )
+
+    condition_texts = [engine._conditions_text(r) for r in engine._rules]
+    unknown = referenced_fields(condition_texts) - set(PARAM_FIELDS)
+    if unknown:
+        raise ValueError(
+            f"DSL references unknown decision field(s): {sorted(unknown)}. "
+            f"A rule can only match projected fields: {sorted(PARAM_FIELDS)}"
         )
 
 
