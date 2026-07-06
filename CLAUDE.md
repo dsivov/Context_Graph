@@ -15,6 +15,11 @@ Upstream repo: https://github.com/dsivov/Context_Graph
 - **Package:** `lightrag-hku` v1.4.10 installed in editable mode **from this directory**
 - **Server binary:** `lightrag-server` (in PATH when conda env active)
 - **Server port:** 9621 (bind `--host 0.0.0.0` to reach it at `http://10.0.0.80:9621/webui/`)
+- **Required extras for the governance gate:** the rules gate needs the `[rules]` extra
+  (`model2vec` + `business_rule_engine`) and web ingest needs `[webingest]` (`lxml`,
+  `playwright`). If `model2vec` is missing the similarity gate degrades to "similarity check
+  unavailable" (rules using `sim()` are skipped) — install `pip install -e '.[rules]'`.
+  `model2vec` downloads a small static model from HuggingFace on first gate evaluation.
 
 ### ⚠️ Setup gotcha — the editable install MUST point at this checkout
 

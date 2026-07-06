@@ -80,6 +80,15 @@ def _l2_normalize(matrix: np.ndarray) -> np.ndarray:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class SimilarityUnavailable(RuntimeError):
+    """The similarity backend cannot run (model2vec missing, or weights can't load).
+
+    Typed so the engine can degrade *honestly* — report "similarity check
+    unavailable" once, rather than leaking a per-rule ImportError (with pip
+    instructions) that reads like reuse advice on an unrelated action.
+    """
+
+
 class SimilarityBackend(Protocol):
     """Encodes text to vectors. Injectable so the catalog is testable offline."""
 
@@ -116,14 +125,19 @@ class Model2VecBackend:
                     try:
                         from model2vec import StaticModel
                     except ImportError as e:  # pragma: no cover - import guard
-                        raise ImportError(
-                            "model2vec is required for similarity matching. "
-                            'Install it with: pip install -e ".[rules]"'
+                        raise SimilarityUnavailable(
+                            "model2vec is not installed — similarity matching is "
+                            'unavailable. Install it with: pip install -e ".[rules]"'
                         ) from e
                     logger.info(
                         f"Loading similarity model '{self._model_id}' (model2vec, static)"
                     )
-                    self._model = StaticModel.from_pretrained(self._model_id)
+                    try:
+                        self._model = StaticModel.from_pretrained(self._model_id)
+                    except Exception as e:  # weights unreachable / offline
+                        raise SimilarityUnavailable(
+                            f"could not load similarity model '{self._model_id}': {e}"
+                        ) from e
         return self._model
 
     def encode(self, texts: Sequence[str]) -> np.ndarray:

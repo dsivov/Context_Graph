@@ -187,6 +187,37 @@ end
 
 
 @pytest.mark.offline
+def test_similarity_unavailable_degrades_honestly():
+    """When the similarity backend can't run (model2vec missing), the gate reports
+    ONE honest 'unavailable' warning instead of leaking the pip-install ImportError
+    per-rule as if it were reuse advice, and it does not block (PASS)."""
+    from context_graph.rules.similarity import SimilarityUnavailable
+
+    class DownBackend:
+        model_id = "down"
+
+        def encode(self, texts):
+            raise SimilarityUnavailable("model2vec not installed")
+
+    dsl = """
+rule "new module - confirm reuse"  priority 10
+when
+    sim(relation_type, "MODULE_CREATION") > 0.4
+then
+    flag("confirm reuse")
+end
+"""
+    cat = ConceptCatalog(backend=DownBackend()).define("MODULE_CREATION", ["x"])
+    res = RulesEngine(cat).load(dsl).evaluate(
+        project_decision("a", "b", "create module", RelationContext())
+    )
+    assert res.outcome == "PASS"  # infra failure must not block
+    assert any("similarity check unavailable" in w for w in res.warnings)
+    assert not any("pip install" in w for w in res.warnings)  # no leaked advice
+    assert not any("confirm reuse" in w for w in res.warnings)  # not misdirected
+
+
+@pytest.mark.offline
 def test_empty_condition_rule_is_rejected_at_load(catalog):
     # `when <cond>` on one line → business_rule_engine parses an empty condition;
     # load() must catch this loudly rather than fail at eval.

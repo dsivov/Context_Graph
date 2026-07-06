@@ -264,8 +264,11 @@ class RulesEngine:
         (missing numeric, unknown concept, …) is skipped with a warning so one
         bad rule cannot break the gate.
         """
+        from context_graph.rules.similarity import SimilarityUnavailable
+
         triggered: List[RuleMatch] = []
         warnings: List[str] = []
+        similarity_down = False  # collapse the infra failure into ONE honest signal
 
         for rule in self._rules:
             if not getattr(rule, "enabled", True):
@@ -273,6 +276,12 @@ class RulesEngine:
             token = _RECORDER.set([])
             try:
                 fired, action_results = rule.execute(params)
+            except SimilarityUnavailable:
+                # Infrastructure failure, not a reuse signal: don't leak the raw
+                # ImportError (with pip advice) as a per-rule warning that reads
+                # like "new module — confirm reuse". Report it once, plainly.
+                similarity_down = True
+                fired, action_results = False, []
             except Exception as e:  # fail-open: skip this rule, keep the gate alive
                 warnings.append(f"{getattr(rule, 'rulename', '?')}: {e}")
                 fired, action_results = False, []
@@ -281,6 +290,12 @@ class RulesEngine:
                 _RECORDER.reset(token)
             if fired:
                 triggered.append(self._build_match(rule, action_results, calls))
+
+        if similarity_down:
+            warnings.append(
+                "similarity check unavailable — sim()/similar() rules were skipped "
+                "(model2vec not installed or model weights unreachable)"
+            )
 
         return self._result(triggered, warnings)
 
