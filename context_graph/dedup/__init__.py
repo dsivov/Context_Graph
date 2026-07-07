@@ -32,6 +32,7 @@ from context_graph.dedup.resolver import (
     MERGE,
     REVIEW,
 )
+from context_graph.dedup.sweep import DedupSweep
 
 __all__ = [
     "canonicalize",
@@ -50,4 +51,5 @@ __all__ = [
     "NEW",
     "MERGE",
     "REVIEW",
+    "DedupSweep",
 ]
