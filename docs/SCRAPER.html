@@ -335,8 +335,11 @@ b.hl{color:#8fd9c9}
       LLM, which returns keep/drop decisions <i>and</i> any document URLs it found <i>inside</i> those payloads —
       e.g. a PDF link buried in an API response.</li>
   </ul>
-  <p>The policy is default-drop for ambiguous resources: only what the LLM explicitly keeps is ingested. But if the
-  LLM errors, it fails <b>open</b> — keeping candidates rather than silently discarding them.</p>
+  <p>The policy is <b>default-drop</b>, consistently: a resource is ingested only if it is a binary document
+  (auto-kept, never LLM-judged) or the LLM explicitly keeps it. If the LLM call fails or returns unparseable
+  output, the unjudged text candidates are dropped too — the same as an unmentioned candidate on the success
+  path — so a transient LLM hiccup can't leak noise into the graph. The run is flagged <code>ok:false</code>
+  so it can be re-run; binary documents are still kept.</p>
 </section>
 
 <!-- 7 -->

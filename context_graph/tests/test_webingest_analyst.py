@@ -78,12 +78,30 @@ def test_looks_like_noise_prefilter():
 
 @pytest.mark.offline
 @pytest.mark.asyncio
-async def test_analyst_non_json_keeps_candidates_only():
-    # BEACON is tiny → pre-filtered as noise; CATALOG is a candidate kept on parse failure
-    r = await SiteAnalyst(_llm("no json here")).analyze([CATALOG, BEACON])
+async def test_analyst_unparseable_json_drops_candidates_keeps_binaries():
+    # Default-drop is consistent: on unparseable LLM output an UNJUDGED text
+    # candidate (CATALOG) is dropped just like an unmentioned one on the success
+    # path; only binary documents (auto-kept, never LLM-judged) survive.
+    pdf = _data("https://x.org/GetFile?key=x", "application/pdf", b"%PDF-1.7" + b"x" * 80)
+    r = await SiteAnalyst(_llm("no json here")).analyze([CATALOG, BEACON, pdf])
     assert not r.ok
-    assert r.keep == [CATALOG.url]        # noise dropped, candidate kept
-    assert r.dropped_noise == 1
+    assert r.keep == [pdf.url]             # candidate dropped, binary kept
+    assert CATALOG.url not in r.keep
+    assert r.dropped_noise == 1            # BEACON pre-filtered as noise
+
+
+@pytest.mark.offline
+@pytest.mark.asyncio
+async def test_analyst_llm_error_drops_candidates_keeps_binaries():
+    # Same default-drop behavior when the LLM call itself raises (no fail-open).
+    async def boom(prompt, system_prompt=None, **kwargs):
+        raise RuntimeError("llm down")
+
+    pdf = _data("https://x.org/GetFile?key=y", "application/pdf", b"%PDF-1.7" + b"y" * 80)
+    r = await SiteAnalyst(boom).analyze([CATALOG, pdf])
+    assert not r.ok
+    assert r.keep == [pdf.url]             # binary kept
+    assert CATALOG.url not in r.keep       # unjudged candidate dropped (not fail-open)
 
 
 @pytest.mark.offline

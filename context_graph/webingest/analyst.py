@@ -139,20 +139,35 @@ class SiteAnalyst:
              "sample": _sample(r, self._sample_chars)}
             for r in subset
         ]
+        # Default-drop is the analyst's contract: a resource is ingested only if it
+        # is a binary document (auto-kept above) or the LLM explicitly keeps it. When
+        # the LLM can't be consulted (call failed or unparseable output) the text
+        # candidates are UNJUDGED — not approved — so they are dropped just as an
+        # unmentioned candidate is on the success path. Keeping them would let noise
+        # into the graph on a transient LLM hiccup (the inconsistency this avoids).
+        # ok=False surfaces the degradation so the caller can re-run.
+        def _degraded() -> AnalysisResult:
+            return AnalysisResult(
+                keep=list(dict.fromkeys(auto_keep)), dropped_noise=dropped, ok=False
+            )
+
         try:
             raw = await self._llm(self._user_prompt(manifest),
                                   system_prompt=self._system_prompt())
         except Exception as e:
-            logger.warning(f"SiteAnalyst LLM call failed: {e}")
-            # Fail-open on ERROR only (not on coverage): keep docs + candidates.
-            return AnalysisResult(keep=list(dict.fromkeys(auto_keep + [r.url for r in candidates])),
-                                  dropped_noise=dropped, ok=False)
+            logger.warning(
+                f"SiteAnalyst LLM call failed: {e}; default-drop "
+                f"({len(candidates)} unjudged candidate(s) skipped, {len(auto_keep)} document(s) kept)"
+            )
+            return _degraded()
 
         payload = _extract_json_object(raw)
         if payload is None:
-            logger.warning("SiteAnalyst: could not parse LLM JSON; keeping candidates")
-            return AnalysisResult(keep=list(dict.fromkeys(auto_keep + [r.url for r in candidates])),
-                                  dropped_noise=dropped, ok=False)
+            logger.warning(
+                "SiteAnalyst: could not parse LLM JSON; default-drop "
+                f"({len(candidates)} unjudged candidate(s) skipped)"
+            )
+            return _degraded()
 
         decisions = payload.get("decisions") or []
         # (2) Default-drop: only resources the LLM explicitly keeps are ingested
