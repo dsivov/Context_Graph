@@ -845,6 +845,46 @@ class TestContextGraphNewMethods:
         dec_vdb.upsert.assert_awaited()  # repopulated
         dec_vdb.index_done_callback.assert_awaited()  # persisted
 
+    # ── Graph-quality v-next · Phase 0: connectivity report ─────────────────
+
+    async def test_connectivity_report(self):
+        from lightrag.context_graph import ContextGraph
+
+        # A→B→C is one component (3 nodes, 2 edges); D and E are isolates.
+        labels = ["A", "B", "C", "D", "E"]
+        edges = [
+            {"source": "A", "target": "B"},
+            {"source": "B", "target": "C"},
+            {"source": "X", "target": "A"},  # dangling endpoint → ignored
+            {"source": "D", "target": "D"},  # self-loop → ignored
+        ]
+        graph = AsyncMock()
+        graph.get_all_labels = AsyncMock(return_value=labels)
+        graph.get_all_edges = AsyncMock(return_value=edges)
+        cg = self._make_cg(graph, AsyncMock())
+        cg.connectivity_report = ContextGraph.connectivity_report.__get__(cg, type(cg))
+
+        r = await cg.connectivity_report()
+        assert r["total_nodes"] == 5
+        assert r["total_edges"] == 2          # dangling + self-loop excluded
+        assert r["isolated_nodes"] == 2       # D and E
+        assert r["isolated_pct"] == 40.0
+        assert r["connected_components"] == 3  # {A,B,C}, {D}, {E}
+        assert r["largest_component_size"] == 3
+        assert r["degree"]["max"] == 2        # B
+        assert set(r["isolate_sample"]) == {"D", "E"}
+
+    async def test_connectivity_report_empty(self):
+        from lightrag.context_graph import ContextGraph
+
+        graph = AsyncMock()
+        graph.get_all_labels = AsyncMock(return_value=[])
+        graph.get_all_edges = AsyncMock(return_value=[])
+        cg = self._make_cg(graph, AsyncMock())
+        cg.connectivity_report = ContextGraph.connectivity_report.__get__(cg, type(cg))
+        r = await cg.connectivity_report()
+        assert r["total_nodes"] == 0 and r["connected_components"] == 0
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # P3: query-time decision blend & by-name injection (aquery_llm)

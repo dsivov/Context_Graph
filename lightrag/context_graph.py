@@ -832,6 +832,88 @@ class ContextGraph(LightRAG):
         except RuntimeError:
             return contextlib.nullcontext()
 
+    # ------------------------------------------------------------------
+    # Connectivity report (Graph-Quality v-next, Phase 0)
+    # ------------------------------------------------------------------
+
+    async def connectivity_report(self, *, sample_isolates: int = 20) -> dict:
+        """Measure how connected the knowledge graph is (backend-agnostic).
+
+        The baseline metric for the graph-quality work: a fragmented or isolate-heavy
+        graph is what deduplication, garbage filtering and the connectivity pass are
+        meant to move. Computed from ``get_all_labels`` + ``get_all_edges`` (which
+        every backend implements) via union-find, so it needs no backend changes.
+
+        Returns node/edge counts, isolate count and %, connected-component count,
+        the largest component's share, a degree summary, and a small isolate sample.
+        """
+        graph = self.chunk_entity_relation_graph
+        labels: list[str] = list(await graph.get_all_labels() or [])
+        edges: list[dict] = list(await graph.get_all_edges() or [])
+        n = len(labels)
+        if n == 0:
+            return {
+                "total_nodes": 0, "total_edges": 0, "isolated_nodes": 0,
+                "isolated_pct": 0.0, "connected_components": 0,
+                "largest_component_size": 0, "largest_component_pct": 0.0,
+                "degree": {"mean": 0.0, "median": 0.0, "max": 0, "degree0": 0, "degree1": 0},
+                "isolate_sample": [],
+            }
+
+        # Union-find over the node set; self-loops / dangling endpoints ignored.
+        parent = {name: name for name in labels}
+
+        def find(x):
+            root = x
+            while parent[root] != root:
+                root = parent[root]
+            while parent[x] != root:  # path compression
+                parent[x], x = root, parent[x]
+            return root
+
+        degree: dict[str, int] = {name: 0 for name in labels}
+        edge_count = 0
+        for e in edges:
+            a, b = e.get("source"), e.get("target")
+            if a not in parent or b not in parent or a == b:
+                continue
+            edge_count += 1
+            degree[a] += 1
+            degree[b] += 1
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[ra] = rb
+
+        # Component sizes.
+        comp_size: dict[str, int] = {}
+        for name in labels:
+            r = find(name)
+            comp_size[r] = comp_size.get(r, 0) + 1
+        num_components = len(comp_size)
+        largest = max(comp_size.values()) if comp_size else 0
+
+        degs = sorted(degree.values())
+        deg0 = sum(1 for d in degs if d == 0)
+        deg1 = sum(1 for d in degs if d == 1)
+        mean_deg = sum(degs) / n
+        median_deg = float(degs[n // 2] if n % 2 else (degs[n // 2 - 1] + degs[n // 2]) / 2)
+        isolate_sample = [name for name in labels if degree[name] == 0][:sample_isolates]
+
+        return {
+            "total_nodes": n,
+            "total_edges": edge_count,
+            "isolated_nodes": deg0,
+            "isolated_pct": round(100.0 * deg0 / n, 2),
+            "connected_components": num_components,
+            "largest_component_size": largest,
+            "largest_component_pct": round(100.0 * largest / n, 2),
+            "degree": {
+                "mean": round(mean_deg, 3), "median": median_deg,
+                "max": degs[-1], "degree0": deg0, "degree1": deg1,
+            },
+            "isolate_sample": isolate_sample,
+        }
+
     async def _index_decision(
         self, src: str, tgt: str, relation_type: str, rc: RelationContext
     ) -> None:

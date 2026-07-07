@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graph Quality (v-next) — Dedup · Constraint · Connectivity</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(169,116,240,.10), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.08), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(169,116,240,.07),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(32px,5.5vw,54px);line-height:1.04;margin:.3em 0 .25em;
+  background:linear-gradient(92deg,#d9c8ff,#8fd9c9 55%,#cfe0ff);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}
+.tag b{color:var(--ink)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:230px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(169,116,240,.18),transparent);color:#fff;border-left:2px solid var(--ctrl)}
+
+main{min-width:0;max-width:760px}
+article section{margin:0 0 52px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ctrl);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}
+h4{font-size:15px;margin:16px 0 4px;color:var(--ink-soft)}
+p{margin:.7em 0}
+.lead-p{font-size:19px;color:var(--ink)}
+.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--ctrl);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)} .callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)} .callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(169,116,240,.55);background:rgba(169,116,240,.10)} .callout.key .clabel{color:#cdb1f7}
+.callout.q{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.09)} .callout.q .clabel{color:#9cc0ff}
+
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:540px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+.pill.mut{color:var(--ink-faint)}
+
+.opt{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0;position:relative}
+.opt::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;border-radius:12px 0 0 12px;background:var(--line)}
+.opt.rec::before{background:var(--ok)}
+.opt h4{margin:0 0 4px;color:var(--ink);font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.opt .meta{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 0;font-size:12.5px;color:var(--ink-faint)}
+.opt .meta b{color:var(--ink-soft);font-weight:600}
+
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}
+.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);
+  border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#cdb1f7}
+.status-row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 0}
+.st{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--ink-soft)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--ink-faint)}
+.dot.live{background:var(--ctrl);box-shadow:0 0 0 3px rgba(169,116,240,.18)}
+.dot.done{background:var(--ok)}
+.qn{font-family:var(--mono);color:#9cc0ff;font-weight:700;margin-right:6px}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Context Graph · v-next · design discussion</div>
+    <h1>Graph Quality: Dedup, Constraint &amp; Connectivity</h1>
+    <p class="lede">A working log for the next release. Three enhancements that all pull on the same
+    thread — the graph should have <b>fewer, cleaner, better-connected</b> nodes. We work one topic
+    at a time; every decision lands in the log at the bottom.</p>
+    <div class="byline">Started 2026-07-07 · maintained as we discuss · grounded in the current code (file:line cited)</div>
+    <div class="status-row">
+      <span class="st"><span class="dot done"></span> 1 · Deduplication — <b>&nbsp;specced</b></span>
+      <span class="st"><span class="dot done"></span> 2 · Garbage filtering — <b>&nbsp;specced</b></span>
+      <span class="st"><span class="dot done"></span> 3 · Connectivity — <b>&nbsp;specced</b></span>
+      <span class="st"><span class="dot live"></span> Building — <b>&nbsp;Phase 0 (measure)</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">Contents</div>
+  <ol>
+    <li><a href="#scope">Scope &amp; method</a></li>
+    <li><a href="#interlock">Why the three interlock</a></li>
+    <li><a href="#baseline">Baseline: the graph today</a></li>
+    <li><a href="#dedup">Topic 1 — Deduplication</a></li>
+    <li><a href="#garbage">Topic 2 — Garbage filtering</a></li>
+    <li><a href="#connectivity">Topic 3 — Connectivity</a></li>
+    <li><a href="#roadmap">Build roadmap</a></li>
+    <li><a href="#log">Decision log</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="scope">
+  <div class="kicker">The plan</div>
+  <h2>Scope &amp; method</h2>
+  <p class="lead-p">Three asks for the next release, in the user's words:</p>
+  <div class="grid g3">
+    <div class="stat a"><div class="v">1</div><div class="l">Better, faster, smarter <b>deduplication</b></div></div>
+    <div class="stat b"><div class="v">2</div><div class="l">Garbage-node <b>filtering</b> — a more constrained graph</div></div>
+    <div class="stat c"><div class="v">3</div><div class="l">Better graph <b>connectivity</b></div></div>
+  </div>
+  <p><b>How we'll work:</b> one topic at a time. For each I lay out (a) what the code does <i>today</i>,
+  (b) the concrete problem, (c) design options with honest trade-offs and a recommendation, and
+  (d) the decisions that are yours to make. Nothing gets built until a row lands in the
+  <a href="#log">decision log</a>. This file is the single source of truth for the discussion.</p>
+  <div class="callout key">
+    <div class="clabel">Where we are right now</div>
+    Round 1 is open on <b>Topic 1 (deduplication)</b>. Topics 2 and 3 have their current-state mapped
+    below so you can see the whole board, but we'll go deep on them only after dedup direction is set —
+    because, as the next section argues, <b>dedup is partly a prerequisite for the other two</b>.
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="interlock">
+  <div class="kicker">The core insight</div>
+  <h2>Why the three interlock</h2>
+  <p>These aren't three unrelated features. They're three symptoms of one thing — an <b>under-constrained,
+  duplicate-prone graph</b> — and they reinforce each other:</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Because…</th><th>…this happens</th></tr></thead>
+    <tbody>
+      <tr><td>Dedup is <b>exact-string only</b> — <code>Apple</code>, <code>apple</code>, <code>Apple Inc.</code> are three nodes</td>
+          <td>Edges that belong to one entity <b>split across variants</b> → every variant is low-degree → the graph <b>fragments</b>. Poor dedup <i>causes</i> poor connectivity.</td></tr>
+      <tr><td>Extraction is <b>open-ended</b> — no schema enforced, <code>Other</code>/<code>UNKNOWN</code> allowed</td>
+          <td>Generic &amp; junk nodes ("the system", "it", "our approach") pile up → they rarely get real relations → more <b>isolates</b>, and more <b>near-duplicates</b> to resolve.</td></tr>
+      <tr><td>Edges come <b>only</b> from explicit LLM triples</td>
+          <td>Anything the LLM didn't connect is a degree-0 island. Cleaner + merged nodes give the connectivity pass fewer, better anchors to work with.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="pull">Fewer nodes (dedup) + only real nodes (constraint) + more real edges (connectivity).
+  Do them in that order and each makes the next easier.</p>
+</section>
+
+<!-- 3 -->
+<section id="baseline">
+  <div class="kicker">Ground truth</div>
+  <h2>Baseline: the graph today</h2>
+  <p>What the pipeline actually does now, verified in code. This is the shared starting point for all three topics.</p>
+
+  <h3>Deduplication</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Aspect</th><th>Today</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td>Merge key</td><td><b>Exact</b> normalized entity-name string; edges = sorted normalized name pair</td><td><code>operate.py:1030-1037, 2563-2574</code></td></tr>
+      <tr><td>Case</td><td>Names are <b>not</b> lowercased → <code>Apple</code> ≠ <code>apple</code> (only <i>type</i> is lowercased)</td><td><code>operate.py:419</code></td></tr>
+      <tr><td>Fuzzy / embedding / alias</td><td><span class="pill danger">none</span> automatic anywhere in ingest</td><td>—</td></tr>
+      <tr><td>Normalization</td><td>Unicode / full-width / quote / whitespace cleanup only</td><td><code>utils.py:2153-2283</code></td></tr>
+      <tr><td>Manual resolution</td><td><code>amerge_entities</code> — caller names the entities to merge</td><td><code>utils_graph.py:1548</code></td></tr>
+      <tr><td>Cost</td><td>O(1) hash-dict lookup; LLM only when a merge crosses <code>force_llm_summary_on_merge</code></td><td><code>operate.py:203-235</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Node quality / constraint</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Control</th><th>Today</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td>Entity-type schema</td><td>Soft <b>hint</b> in the prompt; <code>Other</code> is an explicit escape hatch → open vocabulary</td><td><code>prompt.py:19, 517</code></td></tr>
+      <tr><td>Ontology validation at ingest</td><td><span class="pill danger">not wired</span> — <code>ExtractionValidator</code> exists but is reachable only via <code>POST /ontology/validate</code> &amp; the drafting agent</td><td><code>validate.py:160</code>; absent from <code>operate.py</code></td></tr>
+      <tr><td>Ingest-time gates</td><td>Structural only: 4 fields, non-empty name/desc, name truncated to 256</td><td><code>operate.py:379-448</code></td></tr>
+      <tr><td>Min description length / stop-words / confidence / low-degree pruning</td><td><span class="pill danger">none</span></td><td>—</td></tr>
+      <tr><td>Missing type</td><td>Silently becomes <code>UNKNOWN</code> (kept, not dropped)</td><td><code>operate.py:1243, 1516…</code></td></tr>
+      <tr><td>Gleaning pass</td><td>Adds new names unconditionally (longer description wins)</td><td><code>context_graph.py:444-453</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Connectivity</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Mechanism</th><th>Today</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td>Edge sources</td><td><b>Only</b> explicit <code>(head, relation, tail)</code> triples — LLM extraction, <code>insert_custom_kg</code>, <code>emit_decision_trace</code></td><td><code>operate.py:451-559, 2459</code></td></tr>
+      <tr><td>Co-occurrence / entity-chunk / sequential edges</td><td><span class="pill danger">none</span> — entity↔chunk is a KV map, not a graph edge</td><td><code>operate.py:1174, 4740</code></td></tr>
+      <tr><td>Cross-document bridge</td><td>Only same-name entity merge; unrelated entities never linked</td><td><code>operate.py:1622, 2613</code></td></tr>
+      <tr><td>Post-ingest repair</td><td><span class="pill danger">none</span> — no community detection, link prediction, isolate-linking (Louvain exists only for GUI coloring)</td><td>visualizer only</td></tr>
+      <tr><td>Connectivity metrics</td><td>Backends expose <b>degree only</b>; no components / is_connected</td><td><code>networkx_impl.py, neo4j_impl.py</code></td></tr>
+      <tr><td>Why it still "works"</td><td>Retrieval is <b>vector-anchored + one-hop</b>; "global" is not GraphRAG-community global → disconnection degrades richness but never blocks answers (it hides the problem)</td><td><code>operate.py:3617-3667, 4611, 4883</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 4 -->
+<section id="dedup">
+  <div class="kicker">Topic 1 · <span class="pill win">specced (D1–D7)</span> · builds after Topic 2</div>
+  <h2>Deduplication</h2>
+
+  <p class="lead-p">"Better, faster, smarter." Today dedup is <b>fast but blind</b> — an O(1) exact-name match that
+  misses every real-world variant.</p>
+
+  <div class="callout ok">
+    <div class="clabel">Decided — 2026-07-07</div>
+    <b>Conservative</b> auto-merge (near-certain only; ambiguous → review queue) ·
+    <b>Hybrid</b> execution (cheap layers inline, expensive layers async) ·
+    <b>Reversible &amp; audited</b> merges (alias/canonical store + undo) ·
+    <b>Type-aware</b> (never merge two <i>known, different</i> types).
+    → We ship <b>A + B inline</b>, <b>D</b> as the reversible backbone, <b>C + E</b> as the async sweep.
+  </div>
+
+  <h3>The problem, concretely</h3>
+  <p>These all become <b>separate nodes</b> today, each carrying a slice of the edges that should belong to one entity:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Variant class</th><th>Example (all distinct nodes now)</th></tr></thead>
+    <tbody>
+      <tr><td>Case</td><td><code>PostgreSQL</code> · <code>postgresql</code> · <code>Postgresql</code></td></tr>
+      <tr><td>Legal / suffix</td><td><code>Acme</code> · <code>Acme Inc.</code> · <code>Acme Corporation</code></td></tr>
+      <tr><td>Acronym / expansion</td><td><code>IBM</code> · <code>I.B.M.</code> · <code>International Business Machines</code></td></tr>
+      <tr><td>Punctuation / spacing</td><td><code>state-of-the-art</code> · <code>state of the art</code></td></tr>
+      <tr><td>Alias / nickname</td><td><code>Sarah Chen</code> · <code>S. Chen</code> · <code>Chen</code></td></tr>
+      <tr><td>Near-synonym concept</td><td><code>SQLite persistence</code> · <code>durable session state</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout caveat">
+    <div class="clabel">The tension in "faster + smarter"</div>
+    Exact match is already the fast option. Every "smarter" technique (fuzzy keys, embeddings, LLM
+    adjudication) costs <i>more</i> per entity. So the design question isn't "smart vs fast" — it's
+    <b>which layers run inline (must stay cheap) vs. as a background sweep (can be expensive)</b>, and
+    <b>how much auto-merge risk we accept</b>. Over-merging two genuinely different entities is the
+    dangerous failure — it silently corrupts the graph and is hard to undo.
+  </div>
+
+  <h3>The design space — five layers, mix and match</h3>
+  <p>Not mutually exclusive; the real decision is <i>which</i> to ship and <i>where each runs</i>.</p>
+
+  <div class="opt rec">
+    <h4>A · Smarter normalization key <span class="pill win">recommend: yes</span> <span class="pill a">inline · cheap</span></h4>
+    Deterministic canonicalization of the dedup key: case-fold, collapse punctuation/whitespace, strip
+    legal suffixes (Inc/Ltd/LLC/Corp), normalize acronyms (<code>I.B.M.</code>→<code>IBM</code>),
+    optional singular/plural. Still an O(1) hash lookup — just a better key.
+    <div class="meta"><span><b>Catches:</b> case, suffix, punctuation, acronym-dotting</span><span><b>Misses:</b> acronym↔expansion, aliases, synonyms</span><span><b>Risk:</b> low (rules are auditable; keep the raw name as a property)</span><span><b>Cost:</b> ~0</span></div>
+  </div>
+
+  <div class="opt rec">
+    <h4>B · Embedding blocking + verify <span class="pill win">recommend: yes (inline, high-threshold only)</span> <span class="pill a">inline</span></h4>
+    On a new entity, ANN-query the existing <code>entities_vdb</code> (embeddings we already compute).
+    Cosine ≥ <b>hard</b> threshold <i>and</i> name-compatible → auto-merge; a <b>gray zone</b> below that →
+    queue for Layer C rather than merging inline.
+    <div class="meta"><span><b>Catches:</b> paraphrases, near-synonyms, description-level dupes</span><span><b>Misses:</b> acronyms (embeddings are weak on <code>IBM</code>↔expansion)</span><span><b>Risk:</b> medium — threshold choice is everything</span><span><b>Cost:</b> 1 ANN query / new entity</span></div>
+  </div>
+
+  <div class="opt rec">
+    <h4>C · LLM adjudication + canonical naming <span class="pill win">core (per D5)</span> <span class="pill b">async sweep</span></h4>
+    For candidate pairs in the gray zone, ask the LLM two things, batched: <b>(1) same entity? y/n</b>, and
+    <b>(2) the canonical name for the cluster</b> — the proper surface form (<code>International Business
+    Machines</code>, not <code>i.b.m</code>). This is the piece rules and embeddings can't do: it resolves
+    acronym↔expansion and, crucially, <b>chooses the name the merged node should present</b>. Runs off the
+    ingest path so it never adds write latency; every result is an audited, reversible alias record.
+    <div class="meta"><span><b>Catches:</b> acronym↔expansion, aliases, ambiguity</span><span><b>Produces:</b> the cluster's canonical display name</span><span><b>Risk:</b> low-medium (LLM can err → undo via D)</span><span><b>Cost:</b> batched, amortized</span></div>
+  </div>
+
+  <div class="opt">
+    <h4>D · Alias / canonical table <span class="pill c">optional</span> <span class="pill ctrl">structural</span></h4>
+    Persist confirmed equivalences (<code>IBM → International Business Machines</code>) so future ingests
+    resolve instantly and merges are reversible/auditable. Could seed from the ontology. This is the
+    "memory" that makes B/C cheap over time and fits CG's provenance ethos.
+    <div class="meta"><span><b>Adds:</b> reversibility, an audit trail for merges, warm-start for new docs</span><span><b>Cost:</b> a small KV store + lookup</span></div>
+  </div>
+
+  <div class="opt">
+    <h4>E · Periodic global dedup sweep <span class="pill c">optional</span> <span class="pill b">async</span></h4>
+    A background job that clusters the whole entity set (B+C) and merges — catches dupes that arrive in
+    <i>different documents over time</i>, which inline dedup can't see at write time. Also the natural
+    home for a "merge report" the user can review.
+    <div class="meta"><span><b>Catches:</b> cross-time / cross-document dupes; drift</span><span><b>Cost:</b> periodic; tunable</span></div>
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">Direction for Topic 1</div>
+    <b>A + B</b> run inline (cheap, high-precision blocking); <b>D</b> is the reversible alias/canonical
+    backbone every layer writes to; <b>C</b> is a <b>core</b> async step that both confirms gray-zone
+    merges and <b>assigns each cluster's canonical name</b>; <b>E</b> periodically re-clusters for cross-time
+    dupes. Ingest stays fast — the smart, expensive work never blocks a write, and nothing ambiguous is
+    silently merged (it queues for C).
+  </div>
+
+  <h3>Answers (Round 1)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Q</th><th>Question</th><th>Decision</th></tr></thead>
+    <tbody>
+      <tr><td>Q1</td><td>Auto-merge appetite</td><td><span class="pill win">Conservative</span> — near-certain only; ambiguous → review queue</td></tr>
+      <tr><td>Q2</td><td>Inline vs async</td><td><span class="pill win">Hybrid</span> — cheap inline, expensive async</td></tr>
+      <tr><td>Q3</td><td>Reversibility</td><td><span class="pill win">Yes</span> — audited + undoable</td></tr>
+      <tr><td>Q4</td><td>Ontology-aware</td><td><span class="pill win">Yes</span> — never merge across <i>known</i> types</td></tr>
+      <tr><td>Q5</td><td>Scope (entities only, or relations/decisions too?)</td><td><span class="pill ctrl">open</span> — proposing <b>entities-first</b> below</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Implementation plan (proposed)</h3>
+  <p>The four decisions converge on one architecture: an <b>Entity Resolver</b> that sits in front of the
+  existing exact-match merge, backed by a reversible <b>alias/canonical store</b> (Layer D) that A, B and C
+  all write into. The graph keeps raw display names; resolution maps a name to a canonical node id.</p>
+
+  <figure><div class="fig">
+<pre><code><span class="cm"># inline, per extracted entity — cheap path only</span>
+resolve(name, type, embedding):
+    key = <span class="fn">canonicalize</span>(name)              <span class="cm"># A: casefold, strip Inc/Ltd, de-dot acronyms</span>
+    <span class="kw">if</span> alias_store.<span class="fn">has</span>(key):             <span class="cm"># D: warm-start — instant, reversible</span>
+        <span class="kw">return</span> alias_store.canonical(key)
+    hit = entities_vdb.<span class="fn">nearest</span>(embedding)   <span class="cm"># B: one ANN query</span>
+    <span class="kw">if</span> hit.cos &gt;= HARD <span class="kw">and</span> <span class="fn">type_ok</span>(type, hit.type) <span class="kw">and</span> <span class="fn">name_ok</span>(name, hit.name):
+        alias_store.<span class="fn">record_merge</span>(name → hit.id, method=<span class="str">"embedding"</span>, score=hit.cos)  <span class="cm"># audited</span>
+        <span class="kw">return</span> hit.id                     <span class="cm"># conservative: HARD threshold only</span>
+    <span class="kw">if</span> hit.cos &gt;= GRAY:
+        review_queue.<span class="fn">add</span>((name, hit.id, hit.cos))  <span class="cm"># → async sweep (C), not merged now</span>
+    <span class="kw">return</span> new_node(name)              <span class="cm"># distinct
+
+# async sweep (background task, like reindex_decisions)</span>
+sweep():                                <span class="cm"># C (core) + E</span>
+    <span class="kw">for</span> batch <span class="kw">in</span> review_queue:
+        same, canonical_name = llm_adjudicate(batch)  <span class="cm"># (1) same entity?  (2) the cluster's proper name</span>
+        <span class="kw">if</span> same: alias_store.<span class="fn">merge</span>(batch, canonical_name, method=<span class="str">"llm"</span>)  <span class="cm"># audited; sets display name</span>
+    periodic full re-cluster over the entity set                  <span class="cm"># cross-doc / cross-time dupes</span></code></pre>
+  </div><figcaption><b>Conservative + hybrid + reversible + type-aware</b> in one flow. <code>type_ok</code>
+  allows both-UNKNOWN or one-UNKNOWN (types are noisy today — see Topic 2); it only <i>blocks</i> two
+  known, different types.</figcaption></figure>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Piece</th><th>Where</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><b>A</b> canonicalize()</td><td>new <code>context_graph/dedup/canonical.py</code></td><td>Pure, deterministic, unit-tested rules. Raw name kept as a node property.</td></tr>
+      <tr><td><b>D</b> alias/audit store</td><td>new <code>context_graph/dedup/resolver.py</code> + per-workspace KV</td><td>alias→canonical map + <code>MergeRecord</code>(from, into, method, score, ts). This is the undo log.</td></tr>
+      <tr><td><b>B</b> inline blocking</td><td>wire into the CG merge path (<code>context_graph.py</code>, not upstream <code>operate.py</code>)</td><td>Reuse <code>entities_vdb</code> we already build. One ANN query; HARD threshold to auto-merge.</td></tr>
+      <tr><td><b>C/E</b> sweep</td><td>new <code>context_graph/dedup/sweep.py</code> + a background route</td><td>Mirrors the <code>reindex_decisions</code> task pattern (referenced, guarded).</td></tr>
+      <tr><td>API</td><td><code>/graph/entities/merges</code> (audit) · <code>POST /graph/entities/unmerge</code> · <code>/graph/dedup/review</code> · <code>/graph/dedup/sweep</code></td><td>Surfaces the review queue and the undo.</td></tr>
+      <tr><td>Config</td><td><code>DEDUP_ENABLED</code>, <code>DEDUP_HARD</code>, <code>DEDUP_GRAY</code></td><td>Thresholds tuned for <code>text-embedding-3-large</code>; conservative defaults.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout ok">
+    <div class="clabel">Confirmed — Topic 1 is fully specced</div>
+    <b>A ✓</b> canonical-name model (cluster node shows the canonical name, raw variants are reversible
+    aliases) · <b>B ✓</b> entities-first scope · <b>C ✓</b> walk Topic 2 first, then build. D1–D7 are the
+    build spec; implementation waits on the type policy from Topic 2 (it feeds <code>type_ok</code>).
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="garbage">
+  <div class="kicker">Topic 2 · <span class="pill win">specced (D9–D13)</span></div>
+  <h2>Garbage filtering &amp; constrained creation</h2>
+
+  <p class="lead-p">The graph should contain <b>things that matter</b>, correctly typed. Today extraction is
+  open-ended and nothing is enforced — so junk nodes and open-vocabulary types flow straight in.</p>
+
+  <div class="callout key">
+    <div class="clabel">The pivotal fact</div>
+    The <code>ExtractionValidator</code> — type/property checks, open- vs closed-world policy, coercion —
+    <b>already exists</b> (<code>context_graph/ontology/validate.py</code>) but is only reachable via the
+    manual <code>POST /ontology/validate</code> endpoint. It is <b>never called during ingestion</b>. So much
+    of this topic is "wire up and tune what we already built," not "build new."
+  </div>
+
+  <h3>The problem, concretely</h3>
+  <p>Real nodes the current pipeline happily creates, each diluting retrieval and (being relationless)
+  becoming an isolate:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Garbage class</th><th>Example nodes today</th><th>Why it slips in</th></tr></thead>
+    <tbody>
+      <tr><td>Pronouns / deixis</td><td><code>it</code>, <code>this</code>, <code>the system</code>, <code>our approach</code></td><td>Only gate is "non-empty name" (<code>operate.py:399</code>)</td></tr>
+      <tr><td>Vague concepts</td><td><code>performance</code>, <code>the process</code>, <code>best practices</code></td><td>Prompt says "meaningful" — entirely LLM-judged (<code>prompt.py:16</code>)</td></tr>
+      <tr><td>Open-vocabulary types</td><td>type = <code>other</code>, <code>UNKNOWN</code>, or any free string the LLM invents</td><td><code>Other</code> escape hatch (<code>prompt.py:517</code>); missing→<code>UNKNOWN</code></td></tr>
+      <tr><td>Doc-statement "decisions"</td><td>"Start with README.md", "Renamed from OSINTGraph" (356 in a customer's KB)</td><td>No provenance/quality gate on extracted facts</td></tr>
+      <tr><td>Gleaning noise</td><td>second-pass names added unconditionally</td><td><code>context_graph.py:452-453</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout caveat">
+    <div class="clabel">Why this is the linchpin for the whole release</div>
+    Dedup's <code>type_ok</code> (D4) is only as good as the types. Connectivity suffers because garbage nodes
+    are relationless isolates. <b>Fix node quality &amp; typing here and both other topics get easier.</b> The
+    core tension: constrain too hard and you drop real, un-modeled signal; too loose and the garbage stays.
+  </div>
+
+  <h3>The design space</h3>
+  <p>Two philosophies — <b>shape at extraction</b> (cheaper, prevents garbage) vs <b>filter after</b>
+  (safety net). Best layered; the decision is the mix and how strict each is.</p>
+
+  <div class="opt rec">
+    <h4>1 · Constrain the extraction prompt <span class="pill win">recommend: yes</span> <span class="pill a">shape · cheap</span></h4>
+    Feed the LLM the workspace's <b>actual ontology types</b> (not a generic hint), and explicitly forbid
+    pronouns, deictic phrases, and bare generic nouns as entities; require a specific, nameable referent.
+    Prevention beats post-filtering — fewer bad nodes ever get made, no extra pass.
+    <div class="meta"><span><b>Kills:</b> most pronoun/vague nodes at the source</span><span><b>Risk:</b> low</span><span><b>Cost:</b> ~0 (prompt change)</span></div>
+  </div>
+
+  <div class="opt rec">
+    <h4>2 · Wire the ExtractionValidator into ingest <span class="pill win">recommend: yes</span> <span class="pill b">filter</span></h4>
+    Call the existing validator in the CG merge path. Policy per workspace:
+    <b>open-world</b> (unknown type → warn, keep &amp; coerce) or <b>closed-world</b> (unknown type → reject).
+    It also coerces properties and backfills endpoint types — directly making types reliable for dedup.
+    <div class="meta"><span><b>Kills:</b> off-schema types/props</span><span><b>Needs:</b> a policy + a no-ontology fallback</span><span><b>Cost:</b> low (code exists)</span></div>
+  </div>
+
+  <div class="opt rec">
+    <h4>3 · Deterministic quality gate <span class="pill win">recommend: yes</span> <span class="pill b">filter · cheap</span></h4>
+    A cheap pre-merge filter independent of any ontology: reject a stop-word/pronoun name, require a
+    minimum description (e.g. ≥ N chars of real content), reject names that are a single generic common noun.
+    Catches garbage even in workspaces with no ontology authored.
+    <div class="meta"><span><b>Kills:</b> pronouns, empties, one-word generics</span><span><b>Risk:</b> low (tunable, auditable)</span><span><b>Cost:</b> ~0</span></div>
+  </div>
+
+  <div class="opt">
+    <h4>4 · UNKNOWN / Other policy <span class="pill c">decide</span> <span class="pill ctrl">structural</span></h4>
+    What happens to an untyped node? <b>Drop</b> (strict), <b>keep &amp; flag</b> (lenient), or <b>quarantine</b>
+    into a review/needs-typing queue — mirroring dedup's gray-zone queue, so the async sweep can type it
+    (and the LLM canonical-naming pass can help). Quarantine keeps signal without polluting the live graph.
+    <div class="meta"><span><b>Ties into:</b> dedup's review queue &amp; type_ok</span></div>
+  </div>
+
+  <div class="opt">
+    <h4>5 · Low-degree pruning (post-pass) <span class="pill c">optional · careful</span> <span class="pill b">async</span></h4>
+    After ingest, review degree-0/1 nodes that never earned a relation. <b>Risky</b> — a legitimate leaf fact
+    is also degree-1 — so this should <i>propose</i> removals for review, never auto-delete, and should run
+    <i>after</i> the connectivity work (Topic 3) which may give isolates real edges.
+    <div class="meta"><span><b>Risk:</b> medium (can drop real leaves) → propose-only</span></div>
+  </div>
+
+  <div class="opt rec">
+    <h4>6 · Hold gleaning to the same bar <span class="pill win">recommend: yes</span> <span class="pill a">cheap</span></h4>
+    Run the same gate (1–3) on second-pass gleaning nodes, which today are added unconditionally.
+    <div class="meta"><span><b>Cost:</b> ~0 (reuse the gate)</span></div>
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">Direction for Topic 2</div>
+    Layer <b>1 + 2 + 3 + 6</b>: shape at the prompt, enforce the (already-built) validator, add a cheap
+    deterministic gate for the no-ontology case, and hold gleaning to the same bar. Untyped nodes get
+    <b>quarantined</b> (option 4) into the same review queue dedup uses, not dropped. Low-degree pruning (5)
+    is deferred to after Topic 3, propose-only.
+  </div>
+
+  <div class="callout ok">
+    <div class="clabel">Decided — 2026-07-07</div>
+    <b>Open-world</b> default (unknown types warned &amp; coerced, closed-world is a per-workspace opt-in) ·
+    no-ontology fallback = built-in <b><code>DEFAULT_ENTITY_TYPES</code></b> as the implicit schema ·
+    failing/untyped nodes are <b>quarantined</b> to the shared review queue (not dropped, not kept live) ·
+    <b>conservative</b> deterministic gate (pronouns/stop-words/empty descriptions only) ·
+    low-degree pruning is <b>propose-only, deferred to after Topic 3</b>. → D9–D13.
+  </div>
+</section>
+
+<!-- 6 -->
+<section id="connectivity">
+  <div class="kicker">Topic 3 · <span class="pill win">specced (D14–D16)</span></div>
+  <h2>Connectivity</h2>
+
+  <p class="lead-p">A knowledge graph that isn't connected is a pile of facts, not a graph. Today edges come
+  <b>only</b> from explicit LLM triples, and <b>nothing</b> detects or repairs disconnection.</p>
+
+  <div class="callout key">
+    <div class="clabel">Measure before you build</div>
+    We genuinely don't know today's numbers — the backends expose <b>degree only</b>, with no
+    components / isolates / clustering metric anywhere. <b>Step one is instrumentation</b>: a connectivity
+    report (component count, % isolates, degree distribution, largest-component share). You can't manage what
+    you can't see, and it tells us how much of the problem <b>Topics 1–2 already solved for free</b> before we
+    add heavier machinery.
+  </div>
+
+  <div class="callout caveat">
+    <div class="clabel">1 &amp; 2 already bought a lot of connectivity</div>
+    <b>Dedup</b> re-joins edges that were split across <code>Apple</code>/<code>Apple Inc.</code> variants;
+    <b>garbage filtering</b> removes the relationless pronoun/vague nodes that were most of the isolates. So we
+    re-measure <i>after</i> 1–2 land and only build what's still needed — avoiding over-engineering.
+  </div>
+
+  <h3>Why it's disconnected</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Cause</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>Edges only from explicit <code>(h, r, t)</code> triples the LLM emits</td><td>Anything the LLM mentioned but didn't <i>relate</i> is a degree-0 island</td></tr>
+      <tr><td>Extraction prompt is entity-first; relations are secondary</td><td>The LLM under-emits edges — the richest lever is asking for more of them</td></tr>
+      <tr><td>Cross-doc bridging is <b>only</b> same-name entity merge</td><td>Two documents sharing a concept but no exact entity name stay separate components</td></tr>
+      <tr><td>Entity↔chunk is a KV map, not a graph edge</td><td>No structural backbone linking entities that share a source passage</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The design space</h3>
+
+  <div class="opt rec">
+    <h4>0 · Connectivity report first <span class="pill win">recommend: yes, ship first</span> <span class="pill a">measure</span></h4>
+    Add <code>connected_components</code> / isolate-% / degree-histogram to the backends + a
+    <code>GET /graph/connectivity</code> route. Cheap, and it's the baseline + the acceptance metric for
+    everything below.
+    <div class="meta"><span><b>Gives:</b> the number we're trying to move; regression guard</span><span><b>Cost:</b> low</span></div>
+  </div>
+
+  <div class="opt rec">
+    <h4>1 · Extraction prompt asks harder for relations <span class="pill win">recommend: yes</span> <span class="pill a">shape · cheap</span></h4>
+    The highest-leverage, lowest-risk lever: instruct the LLM to connect every entity it emits to at least one
+    other (and prefer relating to prevent isolates), and reward explicit relations. Real, asserted edges — not
+    synthetic ones.
+    <div class="meta"><span><b>Adds:</b> genuine edges at the source</span><span><b>Risk:</b> low</span><span><b>Cost:</b> ~0 (prompt)</span></div>
+  </div>
+
+  <div class="opt">
+    <h4>2 · Typed "soft" edges — co-occurrence / embedding-neighbor <span class="pill c">decide</span> <span class="pill b">structural</span></h4>
+    For still-isolated nodes, add edges that are <b>explicitly typed as weak</b> (e.g.
+    <code>CO_OCCURS_WITH</code> within a chunk, or <code>SIMILAR_TO</code> for embedding neighbors above a
+    threshold). Crucial guardrail: they must be a <b>distinct, labeled edge kind</b> so they never masquerade
+    as an LLM-asserted fact, and retrieval can weight them lower. This is where "connectivity" risks becoming
+    "noise" if done carelessly.
+    <div class="meta"><span><b>Adds:</b> a backbone for isolates</span><span><b>Risk:</b> medium — must stay clearly labeled &amp; down-weighted</span></div>
+  </div>
+
+  <div class="opt">
+    <h4>3 · Link-prediction / isolate-rescue pass <span class="pill c">optional</span> <span class="pill b">async</span></h4>
+    A background pass that, for each isolate, asks "does a real relation to an existing node exist?" (LLM or
+    embedding-guided) and adds it if so. Precise, off the write path, reuses the sweep infra from Topics 1–2.
+    <div class="meta"><span><b>Adds:</b> real edges for stubborn isolates</span><span><b>Cost:</b> async LLM/embedding</span></div>
+  </div>
+
+  <div class="opt">
+    <h4>4 · Community detection → a real "global" mode <span class="pill c">optional · bigger</span> <span class="pill ctrl">retrieval</span></h4>
+    Today's "global" is vector-search-over-edges, <i>not</i> GraphRAG community-summary global. Real community
+    detection (Leiden/Louvain — already a dependency, used only for GUI coloring) + per-community summaries
+    would make connectivity <i>pay off</i> at query time. Larger effort; only worth it if the graph is
+    actually well-connected first.
+    <div class="meta"><span><b>Adds:</b> genuine thematic global retrieval</span><span><b>Cost:</b> higher; depends on 0–3 landing</span></div>
+  </div>
+
+  <div class="callout key">
+    <div class="clabel">Direction for Topic 3</div>
+    <b>0 then 1</b> for sure (measure, then extract more real edges). Re-measure after Topics 1–2 + layer 1.
+    Add <b>2</b> only if isolates remain — and only as clearly-labeled, down-weighted soft edges. <b>3</b> as an
+    async rescue if needed. <b>4</b> (community global) is a separate, larger bet for a later release unless you
+    want it now.
+  </div>
+
+  <div class="callout ok">
+    <div class="clabel">Decided — 2026-07-07</div>
+    <b>Asserted edges only</b> — layer 2 (mechanical soft edges) is <b>out</b>; isolate repair is an
+    <b>async LLM rescue</b> (layer 3) that adds only real relations. <b>Community "global" mode (layer 4) is
+    in</b> for this release. Sequence: <b>report → dedup → garbage → re-measure → decide rescue scope</b>;
+    acceptance target set from the baseline the report produces. → D14–D16.
+  </div>
+</section>
+
+<!-- 8 -->
+<section id="roadmap">
+  <div class="kicker">The build</div>
+  <h2>Build roadmap</h2>
+  <p>All three topics are specced (D1–D16). Execution order, data-driven per D16:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Phase</th><th>Ships</th><th>From</th></tr></thead>
+    <tbody>
+      <tr><td><b>0 · Measure</b></td><td>Connectivity report — <code>connected_components</code>/isolates/degree on the backends + <code>GET /graph/connectivity</code>. Capture a baseline on a real workspace.</td><td>T3 · layer 0</td></tr>
+      <tr><td><b>1 · Dedup</b></td><td><code>canonical.py</code> (A) → alias/audit resolver (D) → inline embedding blocking (B) → async LLM adjudication + canonical naming (C/E) → merge audit &amp; unmerge API. Conservative, reversible, type-aware.</td><td>D1–D7</td></tr>
+      <tr><td><b>2 · Garbage</b></td><td>Constrain the prompt (1) → wire <code>ExtractionValidator</code> at ingest, open-world default, <code>DEFAULT_ENTITY_TYPES</code> fallback (2) → deterministic gate (3) → gleaning held to the bar (6) → quarantine queue.</td><td>D9–D13</td></tr>
+      <tr><td><b>· Re-measure</b></td><td>Run the report again. Set the connectivity acceptance target; see what isolates remain after 1+2.</td><td>D16</td></tr>
+      <tr><td><b>3 · Connectivity</b></td><td>Harder-for-relations extraction prompt (1). Then, if isolates remain: async LLM isolate-rescue (3). Community-detection global mode + summaries (4).</td><td>D14–D15</td></tr>
+      <tr><td><b>· Cleanup</b></td><td>Low-degree pruning, propose-only.</td><td>D13</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout ok">
+    <div class="clabel">Phase 0 shipped — baseline captured (2026-07-07)</div>
+    <code>connectivity_report()</code> + <code>GET /graph/connectivity</code> are live and tested.
+    First real numbers — they validate the whole premise:
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Workspace</th><th>Nodes</th><th>Edges</th><th>Isolates</th><th>Components</th><th>Largest comp.</th><th>Degree-1</th></tr></thead>
+    <tbody>
+      <tr><td><code>investigator</code></td><td>806</td><td>561</td><td><b>221 (27.4%)</b></td><td><b>313</b></td><td>36.9%</td><td>368</td></tr>
+      <tr><td><code>wp_ccorg</code></td><td>39</td><td>24</td><td><b>13 (33.3%)</b></td><td>15</td><td>59.0%</td><td>22</td></tr>
+    </tbody>
+  </table></div>
+  <p>Roughly <b>a third of nodes are isolates</b>, the graph shatters into <b>hundreds of components</b>
+  (313 for a 806-node graph), and the largest component holds barely a third. The isolate sample is exactly
+  the garbage Topic 2 targets — a git hash <code>37b04c1</code>, <code>8894291</code>, the env var
+  <code>ANALYTIC_ENGINE_ENABLED</code>. <b>The problem is real and measurable; this is the number to move.</b></p>
+</section>
+
+<!-- 7 -->
+<section id="log">
+  <div class="kicker">The record</div>
+  <h2>Decision log</h2>
+  <p>Every settled decision lands here with its date and rationale, so the build phase has an unambiguous spec.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>Date</th><th>Topic</th><th>Decision</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>—</td><td>2026-07-07</td><td>Process</td><td>Tackle in order dedup → garbage → connectivity; log every decision here before building</td><td><span class="pill win">agreed</span></td></tr>
+      <tr><td>D1</td><td>2026-07-07</td><td>Dedup</td><td>Auto-merge is <b>conservative</b> — near-certain inline only; ambiguous → review queue</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D2</td><td>2026-07-07</td><td>Dedup</td><td><b>Hybrid</b> execution — cheap layers inline, expensive (LLM/global) async</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D3</td><td>2026-07-07</td><td>Dedup</td><td>Merges are <b>reversible &amp; audited</b> — alias/canonical store + undo</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D4</td><td>2026-07-07</td><td>Dedup</td><td><b>Type-aware</b> — never merge two known, different types (UNKNOWN is permissive)</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D5</td><td>2026-07-07</td><td>Dedup</td><td><b>LLM adjudication (C) is core, not optional</b> — it confirms gray-zone merges <i>and</i> assigns each cluster's <b>canonical name</b></td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D6</td><td>2026-07-07</td><td>Dedup</td><td><b>Canonical-name model</b> — cluster node displays the canonical name (rule-provisional → LLM-refined); raw variants kept as reversible aliases</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D7</td><td>2026-07-07</td><td>Dedup</td><td><b>Scope: entities-first</b> this release; relation/decision dedup deferred</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D8</td><td>2026-07-07</td><td>Process</td><td><b>Walk Topic 2 before building Topic 1</b> — types must be reliable first (feeds <code>type_ok</code>). Topic 1 is fully specced (D1–D7), builds after T2.</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D9</td><td>2026-07-07</td><td>Garbage</td><td>Ship layers <b>1+2+3+6</b> — constrain the prompt, wire the existing <code>ExtractionValidator</code>, cheap deterministic gate, hold gleaning to the same bar</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D10</td><td>2026-07-07</td><td>Garbage</td><td><b>Open-world</b> default type policy (unknown types warned + coerced, not dropped); closed-world is a per-workspace opt-in</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D11</td><td>2026-07-07</td><td>Garbage</td><td>No-ontology fallback → use built-in <code>DEFAULT_ENTITY_TYPES</code> as the implicit schema + the deterministic gate</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D12</td><td>2026-07-07</td><td>Garbage</td><td><b>Quarantine</b> failing/untyped nodes into the shared review queue (not dropped, not kept live); <b>conservative</b> gate strictness</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D13</td><td>2026-07-07</td><td>Garbage</td><td>Low-degree pruning is <b>propose-only</b> and <b>deferred to after Topic 3</b></td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D14</td><td>2026-07-07</td><td>Connectivity</td><td><b>Asserted edges only</b> — no mechanical co-occurrence/embedding "soft" edges. Connectivity repair for isolates is an <b>async LLM rescue</b> that only adds <i>real</i> relations (layer 2 out, layer 3 in)</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D15</td><td>2026-07-07</td><td>Connectivity</td><td><b>Community-detection "global" mode</b> (Leiden/Louvain + per-community summaries) <b>is in scope this release</b></td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D16</td><td>2026-07-07</td><td>Process</td><td>Ship connectivity <b>report first</b> (baseline) → build <b>dedup (1)</b> → <b>garbage (2)</b> → <b>re-measure</b> → decide isolate-rescue scope; community global built for the release</td><td><span class="pill win">decided</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+</article>
+</main>
+</div>
+
+<a href="#" class="backtotop" id="backtotop">↑ top</a>
+<footer class="footer">
+  Context Graph — Graph Quality (v-next) working log · living document, updated as we discuss ·
+  companion to <a href="ONTOLOGY.html">ONTOLOGY.html</a>, <a href="ARCHITECTURE.html">ARCHITECTURE.html</a>.
+</footer>
+
+<script>
+const links=[...document.querySelectorAll('nav.toc a')];
+const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+const spy=()=>{let i=secs.length;while(--i>0&&window.scrollY+120<secs[i].offsetTop);links.forEach(l=>l.classList.remove('active'));links[i]&&links[i].classList.add('active')};
+document.addEventListener('scroll',spy,{passive:true});spy();
+const b=document.getElementById('backtotop');
+document.addEventListener('scroll',()=>b.classList.toggle('show',window.scrollY>500),{passive:true});
+</script>
+</body>
+</html>

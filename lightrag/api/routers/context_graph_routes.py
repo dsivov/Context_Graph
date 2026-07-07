@@ -1043,4 +1043,30 @@ def create_context_graph_routes(
         task.add_done_callback(_reindex_tasks.discard)
         return {"status": "started", "workspace": ws}
 
+    @router.get(
+        "/graph/connectivity",
+        dependencies=[Depends(combined_auth)],
+        summary="Graph connectivity report (components, isolates, degree)",
+        responses={
+            200: {"description": "Connectivity metrics for the workspace graph."},
+            503: {"description": "Context Graph mode is not enabled."},
+        },
+    )
+    async def graph_connectivity(
+        sample_isolates: int = Query(
+            default=20, ge=0, le=200,
+            description="How many isolated node names to include as a sample.",
+        ),
+    ):
+        """Measure how connected the knowledge graph is — the baseline metric for the
+        graph-quality work (dedup / garbage filtering / connectivity). Returns node &
+        edge counts, isolate count and %, connected-component count, largest-component
+        share, a degree summary, and a small sample of isolated nodes."""
+        _require_context_graph(rag)
+        try:
+            return await rag.connectivity_report(sample_isolates=sample_isolates)
+        except Exception as e:
+            logger.error(f"graph_connectivity error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
     return router
