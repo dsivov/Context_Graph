@@ -125,7 +125,7 @@ b.hl{color:#cdb1f7}
       <span class="st"><span class="dot done"></span> Phase 0 · measure — <b>&nbsp;shipped</b></span>
       <span class="st"><span class="dot done"></span> Phase 1 · dedup — <b>&nbsp;shipped</b></span>
       <span class="st"><span class="dot done"></span> Phase 2 · garbage — <b>&nbsp;shipped</b></span>
-      <span class="st"><span class="dot live"></span> Phase 3 · connectivity — <b>&nbsp;building</b></span>
+      <span class="st"><span class="dot done"></span> Phase 3 · connectivity — <b>&nbsp;shipped</b></span>
     </div>
   </div>
 </header>
@@ -610,7 +610,7 @@ sweep():                                <span class="cm"># C (core) + E</span>
       <tr><td><b>1 · Dedup</b> <span class="pill win">built</span></td><td><code>context_graph/dedup/</code>: <code>canonical.py</code> (A), reversible alias/audit store (D), type-aware resolver (B), async LLM adjudication + canonical naming (C/E). Wired to <code>ContextGraph.deduplicate_entities</code>/<code>run_dedup_sweep</code>/<code>unmerge_entity</code> + <code>/graph/dedup/*</code> &amp; <code>/graph/entities/merges|unmerge</code> routes. 74 tests. <b>Live-verified</b>: case variant <code>Kubernetes→kubernetes</code> auto-merged (cos 0.969), <code>Terraform</code> untouched, unmerge reverses it.</td><td>D1–D7</td></tr>
       <tr><td><b>2 · Garbage</b> <span class="pill win">built</span></td><td><code>context_graph/quality/</code>: deterministic gate (3), NodeFilter = gate + ontology validator with open-world default &amp; <code>DEFAULT_ENTITY_TYPES</code> fallback (2), extraction-prompt constraint (1), gleaning covered for free (6), per-workspace quarantine store + <code>/graph/quarantine</code> restore/discard. <code>GARBAGE_FILTER_ENABLED</code> / <code>GARBAGE_CLOSED_WORLD</code>. ~44 tests. Live: ingestion unaffected; conservative gate fires rarely on clean gpt-4o output — the prompt constraint is the real lever.</td><td>D9–D13</td></tr>
       <tr><td><b>· Re-measure</b> <span class="pill win">done</span></td><td>On <code>investigator</code>: garbage cleanup 806→728 nodes; remaining isolates are <i>real</i> entities → connectivity work, not garbage. See <a href="#results">Results</a>.</td><td>D16</td></tr>
-      <tr><td><b>3 · Connectivity</b> <span class="pill ctrl">building</span></td><td>Relation-seeking prompt (1) <span class="pill win">done</span> · LLM isolate-rescue (3) <span class="pill win">done</span> — live 18/20 reconnected · community-detection global mode + summaries (4) <span class="pill c">next</span>.</td><td>D14–D15</td></tr>
+      <tr><td><b>3 · Connectivity</b> <span class="pill win">built</span></td><td>Relation-seeking prompt (1) · LLM isolate-rescue (3) — live 18/20 reconnected · community-detection "global" mode + summaries (4) — 40 themes on investigator, thematic query synthesises across them. All shipped.</td><td>D14–D15</td></tr>
       <tr><td><b>· Cleanup</b></td><td>Low-degree pruning, propose-only.</td><td>D13</td></tr>
     </tbody>
   </table></div>
@@ -932,7 +932,7 @@ INFO: [dedup-sweep] workspace 'acme': {<span class="str">'adjudicated'</span>: 3
 
 <!-- 6d -->
 <section id="phase3">
-  <div class="kicker">Building · illustrated</div>
+  <div class="kicker">Shipped · illustrated</div>
   <h2>Phase 3 — how connectivity repair works</h2>
   <p class="lead-p">Asserted edges only (D14): no mechanical similarity links. For each isolated node,
   embedding proposes candidates and the <b>LLM adds only relationships the descriptions support</b> —
@@ -979,9 +979,46 @@ INFO: [dedup-sweep] workspace 'acme': {<span class="str">'adjudicated'</span>: 3
       <tr><td>1 · relation-seeking extraction prompt</td><td><span class="pill win">shipped</span></td></tr>
       <tr><td>2 · mechanical soft edges</td><td><span class="pill danger">rejected</span> (D14)</td></tr>
       <tr><td>3 · async LLM isolate rescue</td><td><span class="pill win">shipped</span></td></tr>
-      <tr><td>4 · community-detection "global" mode</td><td><span class="pill c">next</span> (D15)</td></tr>
+      <tr><td>4 · community-detection "global" mode</td><td><span class="pill win">shipped</span> (D15)</td></tr>
     </tbody>
   </table></div>
+
+  <h3>Layer 4 — the community "global" mode</h3>
+  <p>Today's "global" mode is just vector-search over edge embeddings. Layer 4 adds a real
+  GraphRAG-style global: <b>Louvain</b> partitions the graph into themes (via networkx — no new
+  dependency), the LLM <b>summarises</b> each, and a query retrieves the relevant community summaries and
+  <b>synthesises a holistic, cross-theme answer</b>.</p>
+  <figure><div class="fig">
+  <svg viewBox="0 0 820 210" role="img" aria-label="Community global mode">
+    <defs><marker id="ah4" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#7b8499"/></marker></defs>
+    <style>
+      .b4{fill:#1b1f2a;stroke:#2c3346;rx:9}.t4{fill:#e7ebf3;font:600 12.5px "Segoe UI",system-ui}
+      .s4{fill:#aab3c5;font:11px "Segoe UI",system-ui}.ln4{stroke:#3a4256;stroke-width:1.6;fill:none;marker-end:url(#ah4)}
+      .l4{fill:#7b8499;font:italic 11px "Segoe UI",system-ui}
+    </style>
+    <text class="l4" x="16" y="20">BUILD (rebuildable)</text>
+    <rect class="b4" x="16" y="34" width="150" height="52" stroke="#5b8def"/>
+    <text class="t4" x="28" y="56">Louvain detect</text><text class="s4" x="28" y="73">themes over the graph</text>
+    <line class="ln4" x1="166" y1="60" x2="198" y2="60"/>
+    <rect class="b4" x="200" y="34" width="160" height="52" stroke="#a974f0"/>
+    <text class="t4" x="212" y="56">LLM summarise</text><text class="s4" x="212" y="73">title + theme per community</text>
+    <line class="ln4" x1="360" y1="60" x2="392" y2="60"/>
+    <rect class="b4" x="394" y="34" width="170" height="52" stroke="#19b89a"/>
+    <text class="t4" x="406" y="56">communities_vdb</text><text class="s4" x="406" y="73">+ enumerable store</text>
+
+    <text class="l4" x="16" y="128">QUERY (thematic global)</text>
+    <rect class="b4" x="16" y="142" width="150" height="50"/>
+    <text class="t4" x="28" y="164">question</text><text class="s4" x="28" y="181">"main themes?"</text>
+    <line class="ln4" x1="166" y1="167" x2="198" y2="167"/>
+    <rect class="b4" x="200" y="142" width="200" height="50" stroke="#19b89a"/>
+    <text class="t4" x="212" y="164">retrieve top summaries</text><text class="s4" x="212" y="181">semantic over communities_vdb</text>
+    <line class="ln4" x1="400" y1="167" x2="432" y2="167"/>
+    <rect class="b4" x="434" y="142" width="200" height="50" stroke="#3ecf8e"/>
+    <text class="t4" x="446" y="164">synthesise answer</text><text class="s4" x="446" y="181">holistic · names the themes</text>
+  </svg>
+  </div><figcaption>Endpoints: <code>POST /graph/community/build</code>, <code>POST /graph/community/query</code>,
+  <code>GET /graph/communities</code>. Detection is deterministic and the build is an authoritative rebuild.</figcaption></figure>
 </section>
 
 <!-- 6e -->
@@ -1032,6 +1069,30 @@ INFO: [dedup-sweep] workspace 'acme': {<span class="str">'adjudicated'</span>: 3
     Garbage cleanup barely moved isolates (27.4 → 25.8%) because the real isolates aren't garbage — they're
     genuine entities that were never related. That's precisely what Layer 3 (rescue) and Layer 4 (community
     global) exist for, and the rescue's 22.8% (from just 20 nodes) shows the lever works.
+  </div>
+
+  <h3>Community "global" mode on <code>investigator</code></h3>
+  <p><code>build_communities</code> found <b>40 coherent themes over 461 members</b> — real, legible topics,
+  not clusters of noise:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Size</th><th>Community title (LLM-generated)</th></tr></thead>
+    <tbody>
+      <tr><td>39</td><td>Advanced Investigation and Clustering Pipeline</td></tr>
+      <tr><td>32</td><td>LightRAG and Knowledge Graph Ecosystem</td></tr>
+      <tr><td>32</td><td>Investigation State Management in Graph Systems</td></tr>
+      <tr><td>28</td><td>International Sanctions Evasion and Proxy Network Activities</td></tr>
+      <tr><td>26</td><td>Network Analysis in Legal Investigations</td></tr>
+    </tbody>
+  </table></div>
+  <p>A thematic query — <i>"What are the main themes and how do they relate?"</i> — retrieved the four most
+  relevant communities and synthesised a genuine cross-theme answer ("a multifaceted ecosystem… four
+  distinct but interconnected communities…"), which the old vector-over-edges "global" could never produce.</p>
+
+  <div class="callout ok">
+    <div class="clabel">Release complete</div>
+    All three topics shipped: <b>deduplication</b> (conservative, reversible, frequency-named),
+    <b>garbage filtering</b> (gate + validator + retroactive scan), and <b>connectivity</b> (isolate rescue +
+    community global). Proven end-to-end on a real 806-node workspace.
   </div>
 </section>
 
