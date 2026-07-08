@@ -967,6 +967,50 @@ class TestDedupWiring:
         assert cg._dedup_sweep_batch() == 10            # graceful fallback
 
 
+class TestGarbageFilterWiring:
+    """ContextGraph._filter_extracted quarantines garbage nodes + drops their edges."""
+
+    def _cg(self):
+        from lightrag.context_graph import ContextGraph
+        from context_graph.quality import NodeFilter, InMemoryQuarantineStore
+        cg = ContextGraph.__new__(ContextGraph)
+        cg.workspace = "ws"
+        cg._quarantine_store = InMemoryQuarantineStore()
+        cg._node_filter_cache = NodeFilter()             # DEFAULT_ENTITY_TYPES fallback
+        for m in ("_filter_extracted", "_garbage_filter_enabled", "_node_filter"):
+            setattr(cg, m, getattr(ContextGraph, m).__get__(cg, type(cg)))
+        return cg
+
+    def test_quarantines_garbage_and_drops_edges(self, monkeypatch):
+        monkeypatch.delenv("GARBAGE_FILTER_ENABLED", raising=False)
+        cg = self._cg()
+        nodes = {
+            "PostgreSQL": [{"entity_name": "PostgreSQL", "entity_type": "Data",
+                            "description": "a relational database"}],
+            "it": [{"entity_name": "it", "entity_type": "Concept", "description": "x"}],
+            "the system": [{"entity_name": "the system", "entity_type": "Concept",
+                            "description": "y"}],
+        }
+        edges = {
+            ("PostgreSQL", "it"): [{}],           # touches garbage → dropped
+            ("PostgreSQL", "Redis"): [{}],        # clean → kept
+        }
+        out = cg._filter_extracted([(nodes, edges)])
+        (kn, ke) = out[0]
+        assert set(kn) == {"PostgreSQL"}                   # garbage removed
+        assert set(ke) == {("PostgreSQL", "Redis")}        # edge to garbage dropped
+        q = {i["name"] for i in cg._quarantine_store.list("ws")}
+        assert q == {"it", "the system"}
+
+    def test_disabled_is_noop(self, monkeypatch):
+        monkeypatch.setenv("GARBAGE_FILTER_ENABLED", "false")
+        cg = self._cg()
+        nodes = {"it": [{"entity_name": "it", "entity_type": "Concept", "description": "x"}]}
+        out = cg._filter_extracted([(nodes, {})])
+        assert set(out[0][0]) == {"it"}                    # untouched
+        assert cg._quarantine_store.list("ws") == []
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # P3: query-time decision blend & by-name injection (aquery_llm)
 # ─────────────────────────────────────────────────────────────────────────────

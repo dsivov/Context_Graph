@@ -1160,4 +1160,62 @@ def create_context_graph_routes(
             logger.error(f"entity_unmerge error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
+    # ── Garbage filtering — quarantine review (Graph-Quality v-next, Topic 2) ──
+
+    @router.get(
+        "/graph/quarantine",
+        dependencies=[Depends(combined_auth)],
+        summary="Nodes rejected by the quality filter (restorable)",
+    )
+    async def quarantine_list():
+        _require_context_graph(rag)
+        try:
+            return {
+                "items": rag.quarantine_store.list(rag.workspace),
+                "summary": rag.quarantine_store.summary(rag.workspace),
+            }
+        except Exception as e:
+            logger.error(f"quarantine_list error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.post(
+        "/graph/quarantine/restore",
+        dependencies=[Depends(combined_auth)],
+        summary="Restore a quarantined node into the graph",
+    )
+    async def quarantine_restore(name: str = Query(..., min_length=1)):
+        _require_context_graph(rag)
+        try:
+            item = rag.quarantine_store.pop(rag.workspace, name)
+            if item is None:
+                raise HTTPException(status_code=404, detail=f"No quarantined node '{name}'.")
+            await rag.acreate_entity(name, {
+                "entity_type": item.get("entity_type") or "UNKNOWN",
+                "description": item.get("description") or name,
+            })
+            return {"status": "restored", "name": name}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"quarantine_restore error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.post(
+        "/graph/quarantine/discard",
+        dependencies=[Depends(combined_auth)],
+        summary="Permanently drop a quarantined node",
+    )
+    async def quarantine_discard(name: str = Query(..., min_length=1)):
+        _require_context_graph(rag)
+        try:
+            ok = rag.quarantine_store.pop(rag.workspace, name) is not None
+            if not ok:
+                raise HTTPException(status_code=404, detail=f"No quarantined node '{name}'.")
+            return {"status": "discarded", "name": name}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"quarantine_discard error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
     return router

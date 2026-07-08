@@ -11,5 +11,25 @@ from context_graph.quality.gate import (
     quality_check,
     is_garbage_name,
 )
+from context_graph.quality.filter import (
+    NodeFilter,
+    FilterResult,
+    ontology_from_types,
+)
+from context_graph.quality.store import (
+    QuarantineStore,
+    InMemoryQuarantineStore,
+    JsonQuarantineStore,
+)
 
-__all__ = ["QualityVerdict", "quality_check", "is_garbage_name"]
+__all__ = [
+    "QualityVerdict",
+    "quality_check",
+    "is_garbage_name",
+    "NodeFilter",
+    "FilterResult",
+    "ontology_from_types",
+    "QuarantineStore",
+    "InMemoryQuarantineStore",
+    "JsonQuarantineStore",
+]

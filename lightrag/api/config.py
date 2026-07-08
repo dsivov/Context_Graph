@@ -470,6 +470,10 @@ def parse_args() -> argparse.Namespace:
     args.dedup_sweep_interval = get_env_value("DEDUP_SWEEP_INTERVAL", 0, int)  # sec; 0 = off
     args.dedup_sweep_batch = get_env_value("DEDUP_SWEEP_BATCH", 10, int)
 
+    # Garbage filtering / constrained node creation (Graph-Quality v-next, Topic 2)
+    args.garbage_filter_enabled = get_env_value("GARBAGE_FILTER_ENABLED", True, bool)
+    args.garbage_closed_world = get_env_value("GARBAGE_CLOSED_WORLD", False, bool)
+
     ollama_server_infos.LIGHTRAG_NAME = args.simulated_model_name
     ollama_server_infos.LIGHTRAG_TAG = args.simulated_model_tag
 

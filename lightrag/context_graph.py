@@ -589,6 +589,9 @@ class ContextGraph(LightRAG):
         # Entity deduplication (Graph-Quality v-next). The store is cheap and
         # inert until a scan/sweep is invoked, so this touches no ingest path.
         self._dedup_store = None  # lazily created (needs working_dir)
+        # Garbage filtering (Topic 2): quarantine store + cached node filter.
+        self._quarantine_store = None
+        self._node_filter_cache = None
 
     async def initialize_storages(self) -> None:
         await super().initialize_storages()
@@ -655,7 +658,10 @@ class ContextGraph(LightRAG):
                 llm_response_cache=self.llm_response_cache,
                 text_chunks_storage=self.text_chunks,
             )
-            return chunk_results
+            # Garbage filter (Topic 2): quarantine low-quality / off-schema nodes
+            # before they reach the merge. Covers the gleaning pass for free, since
+            # its nodes are already folded into chunk_results here.
+            return self._filter_extracted(chunk_results)
         except Exception as e:
             error_msg = f"CG extraction failed: {e}"
             logger.error(error_msg)
@@ -664,6 +670,80 @@ class ContextGraph(LightRAG):
                     pipeline_status["latest_message"] = error_msg
                     pipeline_status["history_messages"].append(error_msg)
             raise
+
+    # ------------------------------------------------------------------
+    # Garbage filtering (Graph-Quality v-next, Topic 2)
+    # ------------------------------------------------------------------
+
+    @property
+    def quarantine_store(self):
+        """Lazily-created per-workspace store of rejected nodes (restorable, D12)."""
+        if self._quarantine_store is None:
+            import os
+            from context_graph.quality import JsonQuarantineStore
+            self._quarantine_store = JsonQuarantineStore(
+                os.path.join(self.working_dir, "quarantine")
+            )
+        return self._quarantine_store
+
+    def _garbage_filter_enabled(self) -> bool:
+        import os
+        return os.getenv("GARBAGE_FILTER_ENABLED", "true").strip().lower() not in (
+            "false", "0", "no", "off", "")
+
+    def _node_filter(self):
+        """Build (and cache) the workspace NodeFilter: its saved ontology if any,
+        else DEFAULT_ENTITY_TYPES (D11); open-world unless GARBAGE_CLOSED_WORLD=true (D10)."""
+        if self._node_filter_cache is not None:
+            return self._node_filter_cache
+        import os
+        from context_graph.quality import NodeFilter
+        try:
+            from context_graph.ontology.store import JsonOntologyStore
+            onto = JsonOntologyStore(
+                os.path.join(self.working_dir, "ontology")
+            ).load(self.workspace)
+        except Exception:
+            onto = None
+        closed = os.getenv("GARBAGE_CLOSED_WORLD", "false").strip().lower() in (
+            "true", "1", "yes", "on")
+        self._node_filter_cache = NodeFilter(onto, closed_world=closed)
+        return self._node_filter_cache
+
+    def _filter_extracted(self, chunk_results: list) -> list:
+        """Quarantine low-quality / off-schema nodes across chunk results, dropping
+        them and any edges that touch them. Rejects go to the quarantine store
+        (restorable). No-op when GARBAGE_FILTER_ENABLED=false."""
+        if not self._garbage_filter_enabled():
+            return chunk_results
+        nf = self._node_filter()
+        rejected: list[dict] = []
+        for maybe_nodes, maybe_edges in chunk_results:
+            for name in list(maybe_nodes.keys()):
+                recs = maybe_nodes.get(name) or []
+                rep = recs[0] if recs else {}
+                reason = nf.check(
+                    name, rep.get("description", ""), rep.get("entity_type", "")
+                )
+                if not reason:
+                    continue
+                rejected.append({
+                    "entity_name": name,
+                    "entity_type": rep.get("entity_type", ""),
+                    "description": (rep.get("description") or "")[:300],
+                    "reason": reason,
+                })
+                del maybe_nodes[name]
+                for ek in list(maybe_edges.keys()):
+                    if isinstance(ek, (tuple, list)) and name in (ek[0], ek[1]):
+                        del maybe_edges[ek]
+        if rejected:
+            try:
+                self.quarantine_store.add(self.workspace, rejected)
+            except Exception as e:  # pragma: no cover - never break ingest
+                logger.warning(f"quarantine store add failed: {e}")
+            logger.info(f"CG garbage filter: quarantined {len(rejected)} node(s)")
+        return chunk_results
 
     # ------------------------------------------------------------------
     # Context Graph helpers
