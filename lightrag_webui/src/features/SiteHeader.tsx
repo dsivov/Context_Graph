@@ -53,6 +53,9 @@ function TabsNavigation() {
         <NavigationTab value="ontology" currentTab={currentTab}>
           {t('header.ontology', 'Ontology')}
         </NavigationTab>
+        <NavigationTab value="graph-quality" currentTab={currentTab}>
+          {t('header.graphQuality', 'Graph Quality')}
+        </NavigationTab>
         <NavigationTab value="get-started" currentTab={currentTab}>
           {t('header.getStarted', 'Get Started')}
         </NavigationTab>

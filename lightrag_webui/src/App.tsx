@@ -16,6 +16,7 @@ import DocumentManager from '@/features/DocumentManager'
 import RetrievalTesting from '@/features/RetrievalTesting'
 import RulesManager from '@/features/RulesManager'
 import OntologyManager from '@/features/OntologyManager'
+import GraphQuality from '@/features/GraphQuality'
 import GetStarted from '@/features/GetStarted'
 import ApiSite from '@/features/ApiSite'
 
@@ -221,6 +222,9 @@ function App() {
                 </TabsContent>
                 <TabsContent value="ontology" className="absolute top-0 right-0 bottom-0 left-0 overflow-auto">
                   <OntologyManager />
+                </TabsContent>
+                <TabsContent value="graph-quality" className="absolute top-0 right-0 bottom-0 left-0 overflow-auto">
+                  <GraphQuality />
                 </TabsContent>
                 <TabsContent value="get-started" className="absolute top-0 right-0 bottom-0 left-0 overflow-auto">
                   <GetStarted />

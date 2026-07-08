@@ -1298,3 +1298,56 @@ export const onboardChat = async (
 
 export const onboardApply = async (proposal: OnboardProposal): Promise<OnboardApplyResponse> =>
   (await axiosInstance.post('/onboard/apply', { proposal })).data
+
+// ── Graph Quality (v-next): dedup · garbage · connectivity · communities ──────
+
+export interface ConnectivityReport {
+  total_nodes: number
+  total_edges: number
+  isolated_nodes: number
+  isolated_pct: number
+  connected_components: number
+  largest_component_size: number
+  largest_component_pct: number
+  degree: { mean: number; median: number; max: number; degree0: number; degree1: number }
+  isolate_sample: string[]
+}
+
+export const graphConnectivity = async (): Promise<ConnectivityReport> =>
+  (await axiosInstance.get('/graph/connectivity?sample_isolates=8')).data
+
+// Deduplication
+export const dedupScan = async (apply: boolean): Promise<any> =>
+  (await axiosInstance.post(`/graph/dedup/scan?apply=${apply}`)).data
+export const dedupSweep = async (): Promise<any> =>
+  (await axiosInstance.post('/graph/dedup/sweep')).data
+export const dedupReview = async (): Promise<any> =>
+  (await axiosInstance.get('/graph/dedup/review')).data
+export const entityMerges = async (): Promise<{ merges: any[] }> =>
+  (await axiosInstance.get('/graph/entities/merges')).data
+export const entityUnmerge = async (mergeId: string): Promise<any> =>
+  (await axiosInstance.post(`/graph/entities/unmerge?merge_id=${encodeURIComponent(mergeId)}`)).data
+
+// Garbage + quarantine
+export const garbageScan = async (apply: boolean): Promise<any> =>
+  (await axiosInstance.post(`/graph/garbage/scan?apply=${apply}`)).data
+export const quarantineList = async (): Promise<{ items: any[]; summary: any }> =>
+  (await axiosInstance.get('/graph/quarantine')).data
+export const quarantineRestore = async (name: string): Promise<any> =>
+  (await axiosInstance.post(`/graph/quarantine/restore?name=${encodeURIComponent(name)}`)).data
+export const quarantineDiscard = async (name: string): Promise<any> =>
+  (await axiosInstance.post(`/graph/quarantine/discard?name=${encodeURIComponent(name)}`)).data
+
+// Isolate rescue + prune
+export const connectivityRescue = async (apply: boolean, limit = 20): Promise<any> =>
+  (await axiosInstance.post(`/graph/connectivity/rescue?apply=${apply}&limit=${limit}`)).data
+export const pruneIsolates = async (apply: boolean): Promise<any> =>
+  (await axiosInstance.post(`/graph/prune/isolates?apply=${apply}`)).data
+
+// Communities
+export const communityBuild = async (): Promise<any> =>
+  (await axiosInstance.post('/graph/community/build?min_size=3')).data
+export const communityList = async (): Promise<{ communities: any[]; summary: any }> =>
+  (await axiosInstance.get('/graph/communities')).data
+export const communityQuery = async (query: string): Promise<{ response: string; communities: any[] }> =>
+  (await axiosInstance.post('/graph/community/query', { query, top_k: 5 })).data
