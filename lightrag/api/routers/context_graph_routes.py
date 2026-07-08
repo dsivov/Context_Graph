@@ -1069,6 +1069,26 @@ def create_context_graph_routes(
             logger.error(f"graph_connectivity error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
+    @router.post(
+        "/graph/connectivity/rescue",
+        dependencies=[Depends(combined_auth)],
+        summary="Reconnect isolated nodes with LLM-verified real edges",
+    )
+    async def connectivity_rescue(
+        apply: bool = Query(default=True, description="Add edges (false = preview isolates)."),
+        limit: int = Query(default=50, ge=1, le=2000),
+        max_candidates: int = Query(default=8, ge=1, le=20),
+    ):
+        """Layer 3: for each degree-0 node, embedding proposes candidates and the LLM
+        adds only relationships the descriptions support (asserted edges only)."""
+        _require_context_graph(rag)
+        try:
+            return await rag.rescue_isolates(
+                apply=apply, limit=limit, max_candidates=max_candidates)
+        except Exception as e:
+            logger.error(f"connectivity_rescue error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
     # ── Entity deduplication (Graph-Quality v-next, Topic 1) ──────────────────
 
     def _require_dedup(rag) -> None:

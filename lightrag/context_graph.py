@@ -811,6 +811,88 @@ class ContextGraph(LightRAG):
         return summary
 
     # ------------------------------------------------------------------
+    # Connectivity — isolate rescue (Graph-Quality v-next, Topic 3)
+    # ------------------------------------------------------------------
+
+    async def _isolated_nodes(self, limit: int) -> list[dict]:
+        """Return up to *limit* degree-0 nodes as ``{name, description}``."""
+        graph = self.chunk_entity_relation_graph
+        labels = list(await graph.get_all_labels() or [])
+        degree = {n: 0 for n in labels}
+        for e in await graph.get_all_edges() or []:
+            a, b = e.get("source"), e.get("target")
+            if a in degree:
+                degree[a] += 1
+            if b in degree:
+                degree[b] += 1
+        out = []
+        for name in labels:
+            if degree.get(name, 0) != 0:
+                continue
+            node = await graph.get_node(name) or {}
+            out.append({
+                "name": name,
+                "description": (node.get("description") or "").split(GRAPH_FIELD_SEP)[0].strip(),
+            })
+            if len(out) >= limit:
+                break
+        return out
+
+    async def rescue_isolates(self, *, apply: bool = True, limit: int = 50,
+                              max_candidates: int = 8) -> dict:
+        """Layer 3 — reconnect isolated nodes with LLM-verified real edges (D14).
+
+        For each degree-0 node, embedding proposes near existing nodes and the LLM
+        adds only relationships their descriptions support. ``apply=false`` previews
+        the isolates without calling the LLM or adding edges. Off the ingest path.
+        """
+        from context_graph.connectivity import IsolateRescue
+
+        isolates = await self._isolated_nodes(limit)
+        if not apply:
+            return {"isolates": len(isolates), "preview": True,
+                    "sample": [i["name"] for i in isolates[:15]]}
+
+        graph = self.chunk_entity_relation_graph
+
+        async def find_candidates(name: str, desc: str):
+            q = f"{name}\n{desc}" if desc else name
+            try:
+                hits = await self.entities_vdb.query(q, top_k=max_candidates + 4) or []
+            except Exception:
+                hits = []
+            cands = []
+            for h in hits:
+                cn = h.get("entity_name") or h.get("id")
+                if not cn or cn == name:
+                    continue
+                cnode = await graph.get_node(cn) or {}
+                cands.append({
+                    "name": cn,
+                    "description": (cnode.get("description") or "").split(GRAPH_FIELD_SEP)[0].strip(),
+                })
+            return cands
+
+        async def add_edge(src: str, tgt: str, keywords: str, description: str):
+            await self.acreate_relation(src, tgt, {
+                "keywords": keywords, "weight": 1.0,
+                "description": description or keywords, "source_id": "isolate_rescue",
+            })
+
+        rescue = IsolateRescue(
+            self.llm_model_func, find_candidates=find_candidates,
+            add_edge=add_edge, max_candidates=max_candidates,
+        )
+        result = await rescue.rescue(isolates)
+        result["isolates_scanned"] = len(isolates)
+        try:
+            await graph.index_done_callback()
+            await self.relationships_vdb.index_done_callback()
+        except Exception as e:  # pragma: no cover
+            logger.warning(f"isolate rescue persist failed: {e}")
+        return result
+
+    # ------------------------------------------------------------------
     # Context Graph helpers
     # ------------------------------------------------------------------
 

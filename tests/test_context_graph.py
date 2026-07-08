@@ -1035,6 +1035,39 @@ class TestGarbageFilterWiring:
         assert len(cg._quarantine_store.list("ws")) == 2
 
 
+class TestConnectivityRescueWiring:
+    """ContextGraph isolate-finding + rescue preview (Topic 3, Layer 3)."""
+
+    def _cg(self, labels, edges):
+        from unittest.mock import AsyncMock
+        from lightrag.context_graph import ContextGraph
+        cg = ContextGraph.__new__(ContextGraph)
+        cg.workspace = "ws"
+        graph = AsyncMock()
+        graph.get_all_labels = AsyncMock(return_value=labels)
+        graph.get_all_edges = AsyncMock(return_value=edges)
+        graph.get_node = AsyncMock(return_value={"description": "d"})
+        cg.chunk_entity_relation_graph = graph
+        cg.llm_model_func = AsyncMock()
+        cg.entities_vdb = AsyncMock()
+        for m in ("_isolated_nodes", "rescue_isolates"):
+            setattr(cg, m, getattr(ContextGraph, m).__get__(cg, type(cg)))
+        return cg
+
+    async def test_finds_degree_zero_nodes(self):
+        cg = self._cg(["A", "B", "C", "D"],
+                      [{"source": "A", "target": "B"}, {"source": "X", "target": "A"}])
+        iso = await cg._isolated_nodes(limit=50)
+        assert {i["name"] for i in iso} == {"C", "D"}      # A,B connected; X dangling ignored
+
+    async def test_preview_does_not_call_llm_or_add_edges(self):
+        cg = self._cg(["A", "B", "C"], [{"source": "A", "target": "B"}])
+        r = await cg.rescue_isolates(apply=False)
+        assert r["preview"] is True and r["isolates"] == 1 and r["sample"] == ["C"]
+        cg.llm_model_func.assert_not_awaited()             # preview is cheap
+        cg.entities_vdb.query.assert_not_awaited()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # P3: query-time decision blend & by-name injection (aquery_llm)
 # ─────────────────────────────────────────────────────────────────────────────
