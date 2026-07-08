@@ -141,7 +141,10 @@ b.hl{color:#cdb1f7}
     <li><a href="#garbage">Topic 2 — Garbage filtering</a></li>
     <li><a href="#connectivity">Topic 3 — Connectivity</a></li>
     <li><a href="#roadmap">Build roadmap</a></li>
-    <li><a href="#phase1">Phase 1 — how it works</a></li>
+    <li><a href="#phase1">Phase 1 — dedup, illustrated</a></li>
+    <li><a href="#phase2">Phase 2 — garbage, illustrated</a></li>
+    <li><a href="#phase3">Phase 3 — connectivity, illustrated</a></li>
+    <li><a href="#results">Results — investigator</a></li>
     <li><a href="#log">Decision log</a></li>
   </ol>
 </nav>
@@ -606,8 +609,8 @@ sweep():                                <span class="cm"># C (core) + E</span>
       <tr><td><b>0 · Measure</b></td><td>Connectivity report — <code>connected_components</code>/isolates/degree on the backends + <code>GET /graph/connectivity</code>. Capture a baseline on a real workspace.</td><td>T3 · layer 0</td></tr>
       <tr><td><b>1 · Dedup</b> <span class="pill win">built</span></td><td><code>context_graph/dedup/</code>: <code>canonical.py</code> (A), reversible alias/audit store (D), type-aware resolver (B), async LLM adjudication + canonical naming (C/E). Wired to <code>ContextGraph.deduplicate_entities</code>/<code>run_dedup_sweep</code>/<code>unmerge_entity</code> + <code>/graph/dedup/*</code> &amp; <code>/graph/entities/merges|unmerge</code> routes. 74 tests. <b>Live-verified</b>: case variant <code>Kubernetes→kubernetes</code> auto-merged (cos 0.969), <code>Terraform</code> untouched, unmerge reverses it.</td><td>D1–D7</td></tr>
       <tr><td><b>2 · Garbage</b> <span class="pill win">built</span></td><td><code>context_graph/quality/</code>: deterministic gate (3), NodeFilter = gate + ontology validator with open-world default &amp; <code>DEFAULT_ENTITY_TYPES</code> fallback (2), extraction-prompt constraint (1), gleaning covered for free (6), per-workspace quarantine store + <code>/graph/quarantine</code> restore/discard. <code>GARBAGE_FILTER_ENABLED</code> / <code>GARBAGE_CLOSED_WORLD</code>. ~44 tests. Live: ingestion unaffected; conservative gate fires rarely on clean gpt-4o output — the prompt constraint is the real lever.</td><td>D9–D13</td></tr>
-      <tr><td><b>· Re-measure</b></td><td>Run the report again. Set the connectivity acceptance target; see what isolates remain after 1+2.</td><td>D16</td></tr>
-      <tr><td><b>3 · Connectivity</b></td><td>Harder-for-relations extraction prompt (1). Then, if isolates remain: async LLM isolate-rescue (3). Community-detection global mode + summaries (4).</td><td>D14–D15</td></tr>
+      <tr><td><b>· Re-measure</b> <span class="pill win">done</span></td><td>On <code>investigator</code>: garbage cleanup 806→728 nodes; remaining isolates are <i>real</i> entities → connectivity work, not garbage. See <a href="#results">Results</a>.</td><td>D16</td></tr>
+      <tr><td><b>3 · Connectivity</b> <span class="pill ctrl">building</span></td><td>Relation-seeking prompt (1) <span class="pill win">done</span> · LLM isolate-rescue (3) <span class="pill win">done</span> — live 18/20 reconnected · community-detection global mode + summaries (4) <span class="pill c">next</span>.</td><td>D14–D15</td></tr>
       <tr><td><b>· Cleanup</b></td><td>Low-degree pruning, propose-only.</td><td>D13</td></tr>
     </tbody>
   </table></div>
@@ -858,6 +861,177 @@ INFO: [dedup-sweep] workspace 'acme': {<span class="str">'adjudicated'</span>: 3
     the audit shows <code>Kubernetes → kubernetes · embedding · 0.969</code>; <code>Terraform</code> untouched;
     <code>/graph/entities/unmerge</code> flips the record to <code>undone</code> and restores the alias — the
     graph edges re-split is the one manual follow-up.
+  </div>
+</section>
+
+<!-- 6c -->
+<section id="phase2">
+  <div class="kicker">Shipped · illustrated</div>
+  <h2>Phase 2 — how garbage filtering works</h2>
+  <p class="lead-p">Two layers keep junk out: a cheap deterministic gate and the ontology validator.
+  Rejects are <b>quarantined, not dropped</b> — reviewable and restorable. It runs at ingest, and a
+  retroactive scan cleans graphs built before it existed.</p>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 820 250" role="img" aria-label="Garbage filtering pipeline">
+    <defs><marker id="ah2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#7b8499"/></marker></defs>
+    <style>
+      .b2{fill:#1b1f2a;stroke:#2c3346;rx:9}
+      .t2{fill:#e7ebf3;font:600 12.5px "Segoe UI",system-ui}
+      .s2{fill:#aab3c5;font:11px "Segoe UI",system-ui}
+      .l2{fill:#7b8499;font:italic 11px "Segoe UI",system-ui}
+      .ln2{stroke:#3a4256;stroke-width:1.6;fill:none;marker-end:url(#ah2)}
+    </style>
+    <rect class="b2" x="16" y="96" width="128" height="56"/>
+    <text class="t2" x="28" y="120">Extracted node</text><text class="s2" x="28" y="137">name·type·desc</text>
+    <line class="ln2" x1="144" y1="124" x2="176" y2="124"/>
+
+    <rect class="b2" x="178" y="90" width="150" height="68" stroke="#5b8def"/>
+    <text class="t2" x="190" y="112">Layer 3 · gate</text><text class="s2" x="190" y="129">pronoun · junk · hash</text>
+    <text class="s2" x="190" y="145">env-var · path · empty desc</text>
+    <line class="ln2" x1="328" y1="124" x2="360" y2="124"/>
+
+    <rect class="b2" x="362" y="90" width="150" height="68" stroke="#a974f0"/>
+    <text class="t2" x="374" y="112">Layer 2 · validator</text><text class="s2" x="374" y="129">open-world: warn+keep</text>
+    <text class="s2" x="374" y="145">closed-world: reject</text>
+    <line class="ln2" x1="512" y1="112" x2="556" y2="70"/><text class="l2" x="520" y="86">pass</text>
+    <line class="ln2" x1="512" y1="140" x2="556" y2="178"/><text class="l2" x="516" y="168">fail</text>
+
+    <rect class="b2" x="558" y="44" width="240" height="52" stroke="#3ecf8e"/>
+    <text class="t2" x="570" y="66">KEEP → graph</text><text class="s2" x="570" y="83">clean, correctly typed nodes</text>
+
+    <rect class="b2" x="558" y="156" width="240" height="52" stroke="#f0a73c"/>
+    <text class="t2" x="570" y="178">QUARANTINE</text><text class="s2" x="570" y="195">restorable · /graph/quarantine</text>
+  </svg>
+  </div><figcaption>Open-world by default (D10): an unknown <i>type</i> is a warning, not a rejection.
+  The <b>DEFAULT_ENTITY_TYPES</b> act as the schema when a workspace has none (D11). Nothing is lost —
+  rejects go to a per-workspace quarantine you can restore from.</figcaption></figure>
+
+  <h3>What the deterministic gate catches</h3>
+  <p>Conservative (D12) — obvious junk only, plus high-precision <b>structural</b> patterns that flag the
+  code-artifact garbage a source backfill leaves behind (tuned NOT to hit real entities):</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Pattern</th><th>Rejects</th><th>Keeps (not matched)</th></tr></thead>
+    <tbody>
+      <tr><td>Pronoun / deictic</td><td><code>it</code> · <code>the system</code> · <code>our approach</code></td><td>—</td></tr>
+      <tr><td>Commit hash</td><td><code>37b04c1</code> · <code>ac9ccd2</code></td><td>hex-looking words &lt; 7 chars</td></tr>
+      <tr><td>Env / config name</td><td><code>ANALYTIC_ENGINE_ENABLED</code> · <code>CHUNK_TOP_K</code></td><td><code>IBM</code>, <code>NASA</code> (no underscore)</td></tr>
+      <tr><td>Path / URL · bare number</td><td><code>/api/v1</code> · <code>8894291</code></td><td><code>cr-m2-concurrency</code>, <code>DISCOUNT-POLICY-2024</code></td></tr>
+      <tr><td>Empty description</td><td>node with no description</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout ok">
+    <div class="clabel">Retroactive cleanup — <code>POST /graph/garbage/scan</code></div>
+    Runs the name-gate over an <i>existing</i> graph and removes the garbage (quarantined, restorable);
+    <code>apply=false</code> previews. Deliberately uses the gate only — never deletes a real node for a
+    missing ontology property. See <a href="#results">Results</a> for the live <code>investigator</code> run.
+  </div>
+</section>
+
+<!-- 6d -->
+<section id="phase3">
+  <div class="kicker">Building · illustrated</div>
+  <h2>Phase 3 — how connectivity repair works</h2>
+  <p class="lead-p">Asserted edges only (D14): no mechanical similarity links. For each isolated node,
+  embedding proposes candidates and the <b>LLM adds only relationships the descriptions support</b> —
+  the same blocking-then-adjudicate shape as dedup.</p>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 820 250" role="img" aria-label="Isolate rescue pipeline">
+    <defs><marker id="ah3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#7b8499"/></marker></defs>
+    <style>
+      .b3{fill:#1b1f2a;stroke:#2c3346;rx:9}
+      .t3{fill:#e7ebf3;font:600 12.5px "Segoe UI",system-ui}
+      .s3{fill:#aab3c5;font:11px "Segoe UI",system-ui}
+      .l3{fill:#7b8499;font:italic 11px "Segoe UI",system-ui}
+      .ln3{stroke:#3a4256;stroke-width:1.6;fill:none;marker-end:url(#ah3)}
+    </style>
+    <rect class="b3" x="16" y="96" width="140" height="58" stroke="#f0a73c"/>
+    <text class="t3" x="28" y="120">Isolated node</text><text class="s3" x="28" y="138">degree 0</text>
+    <line class="ln3" x1="156" y1="125" x2="188" y2="125"/>
+
+    <rect class="b3" x="190" y="96" width="152" height="58" stroke="#5b8def"/>
+    <text class="t3" x="202" y="120">embedding</text><text class="s3" x="202" y="138">find candidate nodes</text>
+    <line class="ln3" x1="342" y1="125" x2="374" y2="125"/>
+
+    <rect class="b3" x="376" y="96" width="170" height="58" stroke="#a974f0"/>
+    <text class="t3" x="388" y="120">LLM · real relation?</text><text class="s3" x="388" y="138">which · what · from desc</text>
+    <line class="ln3" x1="546" y1="112" x2="596" y2="72"/><text class="l3" x="554" y="88">yes</text>
+    <line class="ln3" x1="546" y1="140" x2="596" y2="180"/><text class="l3" x="550" y="170">no</text>
+
+    <rect class="b3" x="598" y="46" width="206" height="52" stroke="#3ecf8e"/>
+    <text class="t3" x="610" y="68">add ASSERTED edge</text><text class="s3" x="610" y="85">acreate_relation · graph+vdb</text>
+
+    <rect class="b3" x="598" y="158" width="206" height="52"/>
+    <text class="t3" x="610" y="180">stays isolated</text><text class="s3" x="610" y="197">conservative — never invented</text>
+  </svg>
+  </div><figcaption>Hallucinated targets (not in the candidate set) are dropped; an empty verdict leaves
+  the node isolated. Off the ingest path — an on-demand endpoint today
+  (<code>POST /graph/connectivity/rescue</code>, <code>apply=false</code> previews).</figcaption></figure>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Layer</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>0 · connectivity report</td><td><span class="pill win">shipped</span> (Phase 0)</td></tr>
+      <tr><td>1 · relation-seeking extraction prompt</td><td><span class="pill win">shipped</span></td></tr>
+      <tr><td>2 · mechanical soft edges</td><td><span class="pill danger">rejected</span> (D14)</td></tr>
+      <tr><td>3 · async LLM isolate rescue</td><td><span class="pill win">shipped</span></td></tr>
+      <tr><td>4 · community-detection "global" mode</td><td><span class="pill c">next</span> (D15)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 6e -->
+<section id="results">
+  <div class="kicker">Proof · real data</div>
+  <h2>Results — the <code>investigator</code> workspace, end to end</h2>
+  <p class="lead-p">The whole pipeline ran on a real 806-node graph. Garbage cleaning got the unambiguous
+  wins; isolate rescue then reconnected real entities with real edges.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Stage</th><th>Nodes</th><th>Edges</th><th>Isolates</th><th>Components</th><th>Largest comp.</th></tr></thead>
+    <tbody>
+      <tr><td>Original</td><td>806</td><td>561</td><td>221 (27.4%)</td><td>313</td><td>36.9%</td></tr>
+      <tr><td>After garbage cleanup (−78)</td><td>728</td><td>513</td><td>188 (25.8%)</td><td>269</td><td>40.3%</td></tr>
+      <tr><td>After rescuing 20 isolates</td><td>728</td><td><b>549</b></td><td><b>166 (22.8%)</b></td><td><b>244</b></td><td><b>42.3%</b></td></tr>
+    </tbody>
+  </table></div>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 820 150" role="img" aria-label="Isolate percentage trend">
+    <style>.bar{fill:#a974f0}.cap{fill:#e7ebf3;font:700 13px "Segoe UI",system-ui}.lab{fill:#aab3c5;font:11.5px "Segoe UI",system-ui}.ax{fill:#7b8499;font:11px "Segoe UI",system-ui}</style>
+    <text class="ax" x="16" y="20">Isolated nodes — the number we set out to move</text>
+    <!-- max 27.4 → scale height ~90 -->
+    <g>
+      <rect class="bar" x="60"  y="26"  width="150" height="90" opacity=".55"/>
+      <rect class="bar" x="330" y="31"  width="150" height="85" opacity=".78"/>
+      <rect class="bar" x="600" y="41"  width="150" height="75"/>
+      <text class="cap" x="105" y="46" fill="#0f1117">27.4%</text>
+      <text class="cap" x="378" y="51" fill="#0f1117">25.8%</text>
+      <text class="cap" x="648" y="61" fill="#0f1117">22.8%</text>
+      <text class="lab" x="70"  y="134">original</text>
+      <text class="lab" x="335" y="134">after cleanup</text>
+      <text class="lab" x="608" y="134">after rescue (20)</text>
+    </g>
+  </svg>
+  </div><figcaption>~166 isolates remain; the rescue was capped at 20 for the demo and can run the rest
+  (one LLM call each).</figcaption></figure>
+
+  <div class="callout ok">
+    <div class="clabel">The edges are real, not noise</div>
+    Rescuing the isolated <code>Al-Qassam Brigades</code> correctly linked it to <b>Hamas</b> (its parent
+    organisation) and <b>Izz al-Din al-Haddad</b> (a named commander) — relationships the LLM justified
+    from the node descriptions, exactly what "asserted edges only" is meant to produce. 18 of 20 isolates
+    reconnected, +36 edges, 0 errors.
+  </div>
+  <div class="callout key">
+    <div class="clabel">What the numbers say for the roadmap</div>
+    Garbage cleanup barely moved isolates (27.4 → 25.8%) because the real isolates aren't garbage — they're
+    genuine entities that were never related. That's precisely what Layer 3 (rescue) and Layer 4 (community
+    global) exist for, and the rescue's 22.8% (from just 20 nodes) shows the lever works.
   </div>
 </section>
 
