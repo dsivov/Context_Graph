@@ -1388,7 +1388,7 @@ def create_app(args):
         # subdirectories of working_dir (rules/ontology/actions/rbac/lifecycle); those
         # are NOT tenants, so exclude them from the workspace list.
         reserved = {"rules", "ontology", "actions", "rbac", "lifecycle", "dedup",
-                    "quarantine"}
+                    "quarantine", "community"}
         storage_dir = str(args.working_dir)
         on_disk = set()
         if os.path.isdir(storage_dir):

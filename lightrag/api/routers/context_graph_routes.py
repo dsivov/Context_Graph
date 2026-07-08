@@ -240,6 +240,13 @@ class DecisionsListResponse(BaseModel):
     )
 
 
+class CommunityQueryRequest(BaseModel):
+    """Request body for a thematic 'global' query over community summaries."""
+
+    query: str = Field(min_length=1, description="The thematic question.")
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
 class IngestDecisionSummaryRequest(BaseModel):
     """Request body for ingesting an aggregated decision summary as a document."""
 
@@ -1087,6 +1094,54 @@ def create_context_graph_routes(
                 apply=apply, limit=limit, max_candidates=max_candidates)
         except Exception as e:
             logger.error(f"connectivity_rescue error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.post(
+        "/graph/community/build",
+        dependencies=[Depends(combined_auth)],
+        summary="Detect communities + summarise them for the thematic global mode",
+    )
+    async def community_build(
+        min_size: int = Query(default=3, ge=2, le=100),
+        max_communities: int = Query(default=300, ge=1, le=5000),
+    ):
+        """Layer 4: Louvain community detection + per-community LLM summaries, indexed
+        for the community-summary "global" retrieval mode."""
+        _require_context_graph(rag)
+        try:
+            return await rag.build_communities(
+                min_size=min_size, max_communities=max_communities)
+        except Exception as e:
+            logger.error(f"community_build error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.post(
+        "/graph/community/query",
+        dependencies=[Depends(combined_auth)],
+        summary="Thematic 'global' answer over community summaries",
+    )
+    async def community_query(request: CommunityQueryRequest):
+        _require_context_graph(rag)
+        try:
+            return await rag.community_query(request.query, top_k=request.top_k)
+        except Exception as e:
+            logger.error(f"community_query error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.get(
+        "/graph/communities",
+        dependencies=[Depends(combined_auth)],
+        summary="List detected communities (title, size, members)",
+    )
+    async def community_list():
+        _require_context_graph(rag)
+        try:
+            return {
+                "communities": rag.community_store.list(rag.workspace),
+                "summary": rag.community_store.summary(rag.workspace),
+            }
+        except Exception as e:
+            logger.error(f"community_list error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
     # ── Entity deduplication (Graph-Quality v-next, Topic 1) ──────────────────

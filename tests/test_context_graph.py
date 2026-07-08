@@ -1068,6 +1068,61 @@ class TestConnectivityRescueWiring:
         cg.entities_vdb.query.assert_not_awaited()
 
 
+class TestCommunityWiring:
+    """ContextGraph community build + thematic query (Topic 3, Layer 4)."""
+
+    def _cg(self, labels, edges):
+        from unittest.mock import AsyncMock
+        from lightrag.context_graph import ContextGraph
+        from context_graph.community import InMemoryCommunityStore
+        cg = ContextGraph.__new__(ContextGraph)
+        cg.workspace = "ws"
+        cg._community_store = InMemoryCommunityStore()
+        graph = AsyncMock()
+        graph.get_all_labels = AsyncMock(return_value=labels)
+        graph.get_all_edges = AsyncMock(return_value=edges)
+        graph.get_node = AsyncMock(return_value={"entity_type": "Concept", "description": "d"})
+        cg.chunk_entity_relation_graph = graph
+        cg.communities_vdb = AsyncMock()
+        cg.llm_model_func = AsyncMock(return_value="a holistic answer")
+        for m in ("build_communities", "community_query"):
+            setattr(cg, m, getattr(ContextGraph, m).__get__(cg, type(cg)))
+        return cg
+
+    async def test_build_detects_summarizes_indexes(self):
+        import json
+        from unittest.mock import AsyncMock
+        labels = ["A", "B", "C", "X", "Y", "Z"]
+        edges = [{"source": a, "target": b} for a, b in
+                 [("A", "B"), ("B", "C"), ("A", "C"), ("X", "Y"), ("Y", "Z"), ("X", "Z")]]
+        cg = self._cg(labels, edges)
+        cg.llm_model_func = AsyncMock(return_value=json.dumps(
+            {"title": "T", "summary": "S"}))
+        r = await cg.build_communities(min_size=2)
+        assert r["communities"] == 2 and r["members_covered"] == 6
+        cg.communities_vdb.drop.assert_awaited()            # authoritative rebuild
+        cg.communities_vdb.upsert.assert_awaited()
+        assert len(cg._community_store.list("ws")) == 2
+
+    async def test_query_synthesizes_over_retrieved_summaries(self):
+        from unittest.mock import AsyncMock
+        cg = self._cg([], [])
+        cg._community_store.replace("ws", [
+            {"id": "comm-0", "title": "Hamas & affiliates", "summary": "org + armed wing",
+             "members": ["Hamas"], "size": 1}])
+        cg.communities_vdb.query = AsyncMock(return_value=[{"community_id": "comm-0"}])
+        r = await cg.community_query("who is connected to Hamas?")
+        assert r["response"] == "a holistic answer"
+        assert r["communities"] == [{"community_id": "comm-0", "title": "Hamas & affiliates"}]
+
+    async def test_query_with_no_communities(self):
+        from unittest.mock import AsyncMock
+        cg = self._cg([], [])
+        cg.communities_vdb.query = AsyncMock(return_value=[])
+        r = await cg.community_query("anything")
+        assert r["communities"] == [] and "build" in r["response"].lower()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # P3: query-time decision blend & by-name injection (aquery_llm)
 # ─────────────────────────────────────────────────────────────────────────────

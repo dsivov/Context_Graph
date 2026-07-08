@@ -583,6 +583,16 @@ class ContextGraph(LightRAG):
             embedding_func=self.embedding_func,
             meta_fields={"src_id", "tgt_id"},
         )
+        # communities_vdb: vectors over community summaries for the thematic
+        # "global" mode (Topic 3, Layer 4). Retrieval index; the full listing lives
+        # in the JSON community store.
+        self.communities_vdb: BaseVectorStorage = self.vector_db_storage_cls(
+            namespace=NameSpace.VECTOR_STORE_COMMUNITIES,
+            workspace=self.workspace,
+            embedding_func=self.embedding_func,
+            meta_fields={"community_id", "title", "size"},
+        )
+        self._community_store = None  # lazily created
         # Optional pre-emit rules gate (context_graph.rules.RulesGate). When set,
         # emit_decision_trace evaluates it before persisting. None → no-op.
         self.rules_gate = None
@@ -596,13 +606,16 @@ class ContextGraph(LightRAG):
     async def initialize_storages(self) -> None:
         await super().initialize_storages()
         await self.decisions_vdb.initialize()
+        await self.communities_vdb.initialize()
 
     async def finalize_storages(self) -> None:
         await super().finalize_storages()
-        try:
-            await self.decisions_vdb.finalize()
-        except Exception as e:
-            logger.error(f"Failed to finalize decisions_vdb: {e}")
+        for name, store in (("decisions_vdb", self.decisions_vdb),
+                            ("communities_vdb", self.communities_vdb)):
+            try:
+                await store.finalize()
+            except Exception as e:
+                logger.error(f"Failed to finalize {name}: {e}")
 
     async def _insert_done(
         self, pipeline_status=None, pipeline_status_lock=None
@@ -891,6 +904,92 @@ class ContextGraph(LightRAG):
         except Exception as e:  # pragma: no cover
             logger.warning(f"isolate rescue persist failed: {e}")
         return result
+
+    # ------------------------------------------------------------------
+    # Community "global" mode (Graph-Quality v-next, Topic 3, Layer 4)
+    # ------------------------------------------------------------------
+
+    @property
+    def community_store(self):
+        """Lazily-created per-workspace store of community records (enumerable)."""
+        if self._community_store is None:
+            import os
+            from context_graph.community import JsonCommunityStore
+            self._community_store = JsonCommunityStore(
+                os.path.join(self.working_dir, "community")
+            )
+        return self._community_store
+
+    async def build_communities(self, *, min_size: int = 3,
+                                max_communities: int = 300) -> dict:
+        """Detect communities (Louvain), summarise each with the LLM, and index the
+        summaries for the thematic "global" mode. Authoritative rebuild."""
+        from context_graph.community import detect_communities, CommunitySummarizer
+
+        graph = self.chunk_entity_relation_graph
+        labels = list(await graph.get_all_labels() or [])
+        edges = list(await graph.get_all_edges() or [])
+        comms = detect_communities(labels, edges, min_size=min_size)[:max_communities]
+        summarizer = CommunitySummarizer(self.llm_model_func)
+        try:
+            await self.communities_vdb.drop()
+        except Exception:
+            pass
+        records: list[dict] = []
+        vdb_payload: dict = {}
+        for i, members in enumerate(comms):
+            cid = f"comm-{i}"
+            member_dicts = []
+            for name in members:
+                node = await graph.get_node(name) or {}
+                member_dicts.append({
+                    "name": name, "type": node.get("entity_type"),
+                    "description": (node.get("description") or "").split(GRAPH_FIELD_SEP)[0].strip(),
+                })
+            s = await summarizer.summarize(member_dicts)
+            records.append({"id": cid, "title": s["title"], "summary": s["summary"],
+                            "members": members, "size": len(members)})
+            vdb_payload[cid] = {
+                "content": f"{s['title']}\n{s['summary']}",
+                "community_id": cid, "title": s["title"], "size": len(members),
+            }
+        if vdb_payload:
+            await self.communities_vdb.upsert(vdb_payload)
+            try:
+                await self.communities_vdb.index_done_callback()
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"communities_vdb persist failed: {e}")
+        self.community_store.replace(self.workspace, records)
+        summary = {"communities": len(records),
+                   "members_covered": sum(r["size"] for r in records)}
+        logger.info(f"build_communities: {summary}")
+        return summary
+
+    async def community_query(self, query: str, *, top_k: int = 5) -> dict:
+        """Thematic "global" answer: retrieve the most relevant community summaries and
+        synthesise a holistic answer over them (a real community-summary global mode)."""
+        hits = await self.communities_vdb.query(query, top_k=top_k) or []
+        used, blocks = [], []
+        for h in hits:
+            cid = h.get("community_id")
+            rec = self.community_store.get(self.workspace, cid) if cid else None
+            title = (rec or {}).get("title") or h.get("title") or cid
+            summary = (rec or {}).get("summary") or ""
+            used.append({"community_id": cid, "title": title})
+            blocks.append(f"## {title}\n{summary}")
+        if not blocks:
+            return {"response": "No communities built yet — run build_communities first.",
+                    "communities": []}
+        prompt = (
+            "Answer the question using these knowledge-graph community summaries as "
+            "context. Be holistic — draw on the relevant themes and name them.\n\n"
+            f"COMMUNITIES:\n{chr(10).join(blocks)}\n\n---\nQuestion: {query}"
+        )
+        try:
+            answer = await self.llm_model_func(prompt)
+        except Exception as e:  # pragma: no cover
+            answer = f"(LLM error: {e})"
+        return {"response": answer, "communities": used}
 
     # ------------------------------------------------------------------
     # Context Graph helpers
