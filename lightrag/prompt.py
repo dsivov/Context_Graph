@@ -511,7 +511,9 @@ You are a Context Graph Specialist responsible for extracting entities and conte
 
 ---Instructions---
 1.  **Entity Extraction & Output:**
-    *   Identify clearly defined and meaningful entities in the input text.
+    *   Identify clearly defined and meaningful entities in the input text. Extract only **specific, named, referenceable** entities — a person, organization, system, product, technology, policy, event, or a concept that has a proper name.
+    *   **Do NOT extract** (these pollute the graph): pronouns or deictic references (`it`, `this`, `they`, `the system`, `our approach`); bare generic nouns with no specific referent (`the process`, `performance`, `best practices`); or opaque identifiers that are not meaningful entities on their own (raw commit hashes, log lines, environment-variable names, file paths) — unless the text gives them a clear, specific meaning.
+    *   Prefer the entity's **canonical, fullest name** and use it consistently throughout.
     *   For each entity, extract:
         *   `entity_name`: Name of the entity (title-case if case-insensitive; consistent naming throughout).
         *   `entity_type`: One of `{entity_types}`, or `Other` if none apply.
