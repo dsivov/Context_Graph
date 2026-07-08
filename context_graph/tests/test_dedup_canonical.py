@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from context_graph.dedup import canonicalize, prefer_canonical_name, is_acronym_of
+from context_graph.dedup import (
+    canonicalize, prefer_canonical_name, representativeness, is_acronym_of,
+)
 
 
 @pytest.mark.offline
@@ -39,11 +41,40 @@ def test_case_and_suffix_variants_share_a_key():
 
 
 @pytest.mark.offline
-def test_prefer_canonical_name_picks_fuller_form():
+def test_prefer_canonical_name_without_counts_expands_acronym():
+    # No frequency data → completeness + anti-acronym expand the acronym.
     assert prefer_canonical_name(["IBM", "International Business Machines"]) == \
         "International Business Machines"
-    assert prefer_canonical_name(["apple", "Apple"]) == "Apple"   # capitalised wins tie
+    assert prefer_canonical_name(["apple", "Apple"]) == "Apple"   # proper-noun tiebreak
     assert prefer_canonical_name([]) == ""
+
+
+@pytest.mark.offline
+def test_frequency_dominates_when_a_form_is_much_more_common():
+    # People overwhelmingly say "Postgres" → it wins despite being shorter.
+    counts = {"Postgres": 47, "PostgreSQL Database Management System": 2}
+    assert prefer_canonical_name(list(counts), counts=counts) == "Postgres"
+
+
+@pytest.mark.offline
+def test_acronym_penalty_breaks_a_frequency_tie():
+    # Comparable frequency → expand the acronym rather than keep the bare form.
+    counts = {"IBM": 10, "International Business Machines": 10}
+    assert prefer_canonical_name(list(counts), counts=counts) == \
+        "International Business Machines"
+
+
+@pytest.mark.offline
+def test_strong_acronym_frequency_still_wins():
+    # If the acronym is vastly more common, frequency dominates the penalty.
+    counts = {"IBM": 500, "International Business Machines": 3}
+    assert prefer_canonical_name(list(counts), counts=counts) == "IBM"
+
+
+@pytest.mark.offline
+def test_representativeness_is_a_float():
+    s = representativeness("Postgres", count=47, max_count=47, max_words=4)
+    assert isinstance(s, float) and s > 0
 
 
 @pytest.mark.offline

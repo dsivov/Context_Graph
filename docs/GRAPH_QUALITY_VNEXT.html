@@ -787,12 +787,20 @@ sweep():                                <span class="cm"># C (core) + E</span>
   version-bumped — mirrors the rules/ontology stores. Writes happen only on a <b>merge</b> (rare, by design),
   not per node.</figcaption></figure>
 
-  <h3>Canonical naming (D5 / D6)</h3>
+  <h3>Canonical naming — which name is "better"?</h3>
   <p>LightRAG uses the entity <i>name</i> as the node id, so we keep raw names and resolve them to a canonical
-  node. The display name is chosen in two steps: a <b>rule-provisional</b> pick at merge time
-  (<code>prefer_canonical_name</code> — the fuller form), then <b>LLM-refined</b> in the sweep, where the model
-  returns the proper surface form alongside its same-entity verdict. Raw variants survive as reversible
-  aliases pointing at the canonical node.</p>
+  node. The display name is the most <b>representative</b> variant, chosen by a fast, deterministic
+  <b>frequency-weighted score</b> (not the LLM, and not just "longest wins"):</p>
+  <figure><div class="fig">
+<pre><code>score(variant) = <span class="num">1.0</span>·frequency        <span class="cm"># mentions across the corpus (source chunks) — dominant</span>
+               + <span class="num">0.25</span>·proper_noun      <span class="cm"># fraction of words that are capitalised</span>
+               + <span class="num">0.25</span>·completeness     <span class="cm"># word count, normalised</span>
+               − <span class="num">0.25</span>·bare_acronym     <span class="cm"># penalise a lone all-caps token</span></code></pre>
+  </div><figcaption>Frequency dominates, so the form people actually use wins — <code>Postgres</code> over
+  <code>PostgreSQL Database Management System</code>, <code>Google</code> over <code>Alphabet Inc.</code> The
+  acronym penalty only breaks a near-tie, expanding <code>IBM</code> → <code>International Business Machines</code>
+  when neither is clearly more common. The <b>LLM does only the hard part — the same-or-not verdict</b>; the name
+  is scored, which is faster and good enough. Raw variants survive as reversible aliases.</figcaption></figure>
 
   <h3>Technical facts</h3>
   <div class="tablewrap"><table>
@@ -853,6 +861,7 @@ sweep():                                <span class="cm"># C (core) + E</span>
       <tr><td>D14</td><td>2026-07-07</td><td>Connectivity</td><td><b>Asserted edges only</b> — no mechanical co-occurrence/embedding "soft" edges. Connectivity repair for isolates is an <b>async LLM rescue</b> that only adds <i>real</i> relations (layer 2 out, layer 3 in)</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D15</td><td>2026-07-07</td><td>Connectivity</td><td><b>Community-detection "global" mode</b> (Leiden/Louvain + per-community summaries) <b>is in scope this release</b></td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D16</td><td>2026-07-07</td><td>Process</td><td>Ship connectivity <b>report first</b> (baseline) → build <b>dedup (1)</b> → <b>garbage (2)</b> → <b>re-measure</b> → decide isolate-rescue scope; community global built for the release</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D17</td><td>2026-07-08</td><td>Dedup</td><td>Canonical <b>name</b> chosen by a <b>frequency-weighted score</b> (refines D5) — <code>1·freq + .25·proper_noun + .25·completeness − .25·acronym</code> — not the LLM. The LLM does only the same-or-not verdict. Faster, deterministic, favours the form people actually use.</td><td><span class="pill win">decided</span></td></tr>
     </tbody>
   </table></div>
 </section>

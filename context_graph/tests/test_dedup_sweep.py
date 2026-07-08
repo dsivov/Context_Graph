@@ -94,6 +94,23 @@ async def test_missing_canonical_falls_back_to_rule():
 
 @pytest.mark.offline
 @pytest.mark.asyncio
+async def test_canonical_name_driven_by_frequency_not_llm():
+    # The LLM only says same/not; the name comes from the frequency score. Here the
+    # acronym is far more common, so it wins over the fuller form.
+    store = InMemoryDedupStore()
+    _seed(store, [("IBM", "International Business Machines", 0.88)])
+    freq = {"IBM": 500, "International Business Machines": 3}
+
+    async def get_count(name):
+        return freq.get(name, 1)
+
+    payload = {"verdicts": [{"id": 0, "same": True}]}   # no 'canonical' from the LLM
+    await DedupSweep(store, "ws", _llm(payload), get_count=get_count).run()
+    assert store.canonical_name("ws", "International Business Machines") == "IBM"
+
+
+@pytest.mark.offline
+@pytest.mark.asyncio
 async def test_batching_covers_all_pairs():
     store = InMemoryDedupStore()
     _seed(store, [(f"n{i}", f"c{i}", 0.87) for i in range(5)])

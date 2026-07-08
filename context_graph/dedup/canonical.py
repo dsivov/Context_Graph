@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Iterable
+from typing import Iterable, Optional
 
 # Trailing organisation / legal suffix tokens dropped from the key. Only stripped
 # when they are the LAST token(s) and never when they are the whole name.
@@ -55,20 +55,73 @@ def canonicalize(name: str) -> str:
     return " ".join(tokens)
 
 
-def prefer_canonical_name(names: Iterable[str]) -> str:
-    """Rule-provisional canonical **display** name chosen from raw variants.
+# Representativeness weights (D5/D6): frequency dominates — the form people actually
+# use is usually the canonical one — with completeness and proper-noun-ness as
+# tie-breakers and a penalty that expands bare acronyms only when frequency is close.
+_W_FREQ = 1.0
+_W_PROPER = 0.25
+_W_COMPLETE = 0.25
+_W_ACRONYM = 0.25
 
-    Heuristic (the LLM refines this later, per D5): prefer the fuller form — more
-    words, then more characters, then more capitalised letters (proper nouns), with
-    the original surface preserved. ``{"IBM", "International Business Machines"}`` →
-    ``"International Business Machines"``.
+
+def _proper_noun_fraction(name: str) -> float:
+    """Fraction of alphabetic words that start with a capital (proper-noun-ness)."""
+    words = _ALPHA_WORD_RE.findall(name)
+    if not words:
+        return 0.0
+    return sum(1 for w in words if w[:1].isupper()) / len(words)
+
+
+def _is_bare_acronym(name: str) -> bool:
+    """True for a single all-uppercase token like ``IBM`` / ``NASA`` (2–6 letters)."""
+    s = name.strip()
+    if " " in s:
+        return False
+    letters = re.sub(r"[^A-Za-z]", "", s)
+    return 2 <= len(letters) <= 6 and letters.isupper()
+
+
+def representativeness(
+    name: str, *, count: int = 0, max_count: int = 1, max_words: int = 1,
+) -> float:
+    """Score how representative a surface form is as the canonical display name.
+
+    ``w1·frequency + w2·proper_noun + w3·completeness − w4·bare_acronym``, each term
+    normalised to [0,1] within the candidate set. Frequency (mentions across the
+    corpus) dominates, so the commonly-used form wins; the acronym penalty only
+    breaks near-ties, expanding e.g. ``IBM`` → ``International Business Machines``
+    when neither is clearly more frequent.
+    """
+    freq = (count / max_count) if max_count > 0 else 0.0
+    completeness = (len(name.split()) / max_words) if max_words > 0 else 0.0
+    acronym = 1.0 if _is_bare_acronym(name) else 0.0
+    return (_W_FREQ * freq + _W_PROPER * _proper_noun_fraction(name)
+            + _W_COMPLETE * completeness - _W_ACRONYM * acronym)
+
+
+def prefer_canonical_name(
+    names: Iterable[str], *, counts: Optional[dict] = None,
+) -> str:
+    """Canonical **display** name — the most *representative* variant.
+
+    Chooses by :func:`representativeness` (frequency-weighted), not "longest wins".
+    Pass ``counts`` (variant name → mention count, e.g. number of source chunks) to
+    let frequency drive the choice; without counts it falls back to completeness /
+    proper-noun-ness / anti-acronym. The raw surface form is preserved.
     """
     cands = [n.strip() for n in names if n and n.strip()]
     if not cands:
         return ""
+    counts = counts or {}
+    max_count = max((int(counts.get(n, 0)) for n in cands), default=0)
+    max_words = max((len(n.split()) for n in cands), default=1)
     return max(
         cands,
-        key=lambda n: (len(n.split()), len(n), sum(c.isupper() for c in n)),
+        key=lambda n: (
+            representativeness(n, count=int(counts.get(n, 0)),
+                               max_count=max_count, max_words=max_words),
+            len(n),  # stable tiebreak
+        ),
     )
 
 

@@ -24,30 +24,38 @@ from context_graph.dedup.store import DedupStore
 
 # alias → into graph merge: (alias_id, into_id, canonical_name) -> None
 ApplyMerge = Callable[[str, str, str], Awaitable[None]]
+# name -> mention count (frequency proxy) for representative-name scoring
+CountGetter = Callable[[str], Awaitable[int]]
 
 
 class DedupSweep:
-    """Adjudicate the gray-zone queue with the LLM; record + optionally apply merges."""
+    """Adjudicate the gray-zone queue with the LLM; record + optionally apply merges.
+
+    The LLM decides only *same or not* (the hard part). The canonical **name** is
+    chosen deterministically by frequency-weighted score (``prefer_canonical_name``),
+    which is faster and good enough — pass ``get_count`` to feed real mention counts.
+    """
 
     def __init__(
         self, store: DedupStore, workspace: str, llm: Callable[..., Awaitable[str]], *,
-        apply_merge: Optional[ApplyMerge] = None, batch_size: int = 10,
+        apply_merge: Optional[ApplyMerge] = None,
+        get_count: Optional[CountGetter] = None, batch_size: int = 10,
     ) -> None:
         self._store = store
         self._ws = workspace
         self._llm = llm
         self._apply = apply_merge
+        self._get_count = get_count
         self._batch = max(1, batch_size)
 
     def _system_prompt(self) -> str:
         return (
             "You resolve entity duplicates for a knowledge graph. For each candidate "
-            "pair of entity names, decide whether they refer to the SAME real-world "
-            "entity (e.g. an acronym and its expansion, a company and its legal name, "
-            "the same person named two ways). If they are the same, give the CANONICAL "
-            "name — the proper, fullest surface form to display.\n\n"
+            "pair of entity names, decide only whether they refer to the SAME "
+            "real-world entity (e.g. an acronym and its expansion, a company and its "
+            "legal name, the same person named two ways).\n\n"
             "Be conservative: if unsure, say not the same. Return STRICT JSON only:\n"
-            '{ "verdicts": [ {"id": 0, "same": true, "canonical": "...", "reason": "..."} ] }'
+            '{ "verdicts": [ {"id": 0, "same": true, "reason": "..."} ] }'
         )
 
     def _user_prompt(self, pairs: List[dict]) -> str:
@@ -71,14 +79,24 @@ class DedupSweep:
                 v = by_id.get(i) or {}
                 name, cand = pair["name"], pair["candidate"]
                 if v.get("same"):
-                    canonical = (v.get("canonical") or "").strip() or \
-                        prefer_canonical_name([name, cand])
+                    canonical = await self._canonical_name(name, cand)
                     await self._merge(name, cand, canonical)
                     summary["merged"] += 1
                 else:
                     summary["rejected"] += 1
                 self._store.clear_pending(self._ws, name=name, candidate=cand)
         return summary
+
+    async def _canonical_name(self, name: str, cand: str) -> str:
+        """Representative display name by frequency-weighted score (not the LLM)."""
+        counts = {}
+        if self._get_count is not None:
+            try:
+                counts = {name: await self._get_count(name),
+                          cand: await self._get_count(cand)}
+            except Exception:  # pragma: no cover - fall back to non-freq scoring
+                counts = {}
+        return prefer_canonical_name([name, cand], counts=counts)
 
     async def _adjudicate(self, batch: List[dict]) -> Optional[List[dict]]:
         try:

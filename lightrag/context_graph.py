@@ -974,6 +974,12 @@ class ContextGraph(LightRAG):
             node = await graph.get_node(name)
             return (node or {}).get("entity_type")
 
+        async def mention_count(name: str, node: dict = None) -> int:
+            # Frequency proxy: how many source chunks the entity appears in.
+            node = node if node is not None else (await graph.get_node(name) or {})
+            sid = node.get("source_id") or ""
+            return len([c for c in sid.split(GRAPH_FIELD_SEP) if c]) or 1
+
         for name in labels:
             summary["scanned"] += 1
             if name in merged_away:
@@ -1006,8 +1012,13 @@ class ContextGraph(LightRAG):
             if score >= hard and type_ok(my_type, ctype) and name_ok(name, cand):
                 # apply=False is a pure preview: count, but touch neither graph nor store.
                 if apply:
+                    # Representative canonical name — frequency-weighted (the form used
+                    # most often usually wins); expands bare acronyms only near a tie.
+                    counts = {name: await mention_count(name, my_node),
+                              cand: await mention_count(cand)}
+                    canonical = prefer_canonical_name([name, cand], counts=counts)
                     try:
-                        await self._apply_entity_merge(name, cand, canonical := prefer_canonical_name([name, cand]))
+                        await self._apply_entity_merge(name, cand, canonical)
                     except Exception as e:  # pragma: no cover
                         logger.warning(f"dedup merge {name}->{cand} failed: {e}")
                         continue
@@ -1026,15 +1037,24 @@ class ContextGraph(LightRAG):
         return summary
 
     async def run_dedup_sweep(self) -> dict:
-        """Layer C — LLM-adjudicate the gray-zone queue (+ canonical naming, D5) and
-        apply confirmed merges to the graph. Off the ingest path."""
+        """Layer C — LLM adjudicates *same-or-not* for the gray-zone queue; the
+        canonical name is chosen by frequency-weighted score. Confirmed merges are
+        applied to the graph. Off the ingest path."""
         from context_graph.dedup import DedupSweep
+
+        graph = self.chunk_entity_relation_graph
 
         async def apply(alias: str, into: str, canonical: str):
             await self._apply_entity_merge(alias, into, canonical)
 
+        async def get_count(name: str) -> int:
+            node = await graph.get_node(name) or {}
+            sid = node.get("source_id") or ""
+            return len([c for c in sid.split(GRAPH_FIELD_SEP) if c]) or 1
+
         sweep = DedupSweep(
-            self.dedup_store, self.workspace, self.llm_model_func, apply_merge=apply,
+            self.dedup_store, self.workspace, self.llm_model_func,
+            apply_merge=apply, get_count=get_count,
         )
         return await sweep.run()
 
