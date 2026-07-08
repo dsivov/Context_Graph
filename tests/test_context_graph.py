@@ -1010,6 +1010,30 @@ class TestGarbageFilterWiring:
         assert set(out[0][0]) == {"it"}                    # untouched
         assert cg._quarantine_store.list("ws") == []
 
+    async def test_scan_garbage_preview_does_not_mutate(self, monkeypatch):
+        from unittest.mock import AsyncMock
+        from lightrag.context_graph import ContextGraph
+        monkeypatch.delenv("GARBAGE_FILTER_ENABLED", raising=False)
+        cg = self._cg()
+        graph = AsyncMock()
+        graph.get_all_labels = AsyncMock(return_value=["PostgreSQL", "37b04c1", "ALERT_THRESHOLD"])
+        graph.get_node = AsyncMock(return_value={"entity_type": "Data", "description": "d"})
+        graph.delete_node = AsyncMock()
+        cg.chunk_entity_relation_graph = graph
+        cg.entities_vdb = AsyncMock()
+        for m in ("scan_garbage", "_remove_entity"):
+            setattr(cg, m, getattr(ContextGraph, m).__get__(cg, type(cg)))
+        # preview
+        r = await cg.scan_garbage(apply=False)
+        assert r["quarantined"] == 2 and r["removed"] == 0     # hash + env-var
+        graph.delete_node.assert_not_awaited()
+        assert cg._quarantine_store.list("ws") == []           # preview mutates nothing
+        # apply
+        r = await cg.scan_garbage(apply=True)
+        assert r["removed"] == 2
+        assert graph.delete_node.await_count == 2
+        assert len(cg._quarantine_store.list("ws")) == 2
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # P3: query-time decision blend & by-name injection (aquery_llm)

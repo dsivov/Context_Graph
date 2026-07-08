@@ -745,6 +745,71 @@ class ContextGraph(LightRAG):
             logger.info(f"CG garbage filter: quarantined {len(rejected)} node(s)")
         return chunk_results
 
+    async def _remove_entity(self, name: str) -> None:
+        """Delete a node and its incident edges from the graph + entity vector index."""
+        await self.chunk_entity_relation_graph.delete_node(name)
+        try:
+            await self.entities_vdb.delete([compute_mdhash_id(name, prefix="ent-")])
+        except Exception:  # pragma: no cover - best-effort vdb cleanup
+            pass
+
+    async def scan_garbage(self, *, apply: bool = True, limit: int = 100000) -> dict:
+        """Retroactively clean an existing graph of garbage nodes (Topic 2).
+
+        Runs the same node-quality filter over every existing entity and, for each
+        reject, quarantines it (restorable) and removes it from the graph. ``apply``
+        false is a preview (reports what would go, changes nothing). Returns a summary
+        with counts by reason and a small sample.
+        """
+        if not self._garbage_filter_enabled():
+            return {"disabled": True}
+        # Retroactive DELETION uses only the deterministic gate (name-based garbage +
+        # empty description) — NOT the ontology validator. A node that merely misses a
+        # required property is real-but-incomplete; deleting it would lose signal.
+        from context_graph.quality import quality_check
+        graph = self.chunk_entity_relation_graph
+        labels = list(await graph.get_all_labels() or [])[:limit]
+        summary = {"scanned": 0, "quarantined": 0, "removed": 0,
+                   "by_reason": {}, "sample": []}
+        rejected: list[dict] = []
+        for name in labels:
+            summary["scanned"] += 1
+            node = await graph.get_node(name) or {}
+            verdict = quality_check(name, node.get("description", ""),
+                                    node.get("entity_type", ""))
+            reason = None if verdict.ok else verdict.reason
+            if not reason:
+                continue
+            summary["quarantined"] += 1
+            summary["by_reason"][reason] = summary["by_reason"].get(reason, 0) + 1
+            if len(summary["sample"]) < 15:
+                summary["sample"].append({"name": name, "reason": reason})
+            rejected.append({
+                "entity_name": name, "entity_type": node.get("entity_type", ""),
+                "description": (node.get("description") or "")[:300], "reason": reason,
+            })
+            if apply:
+                try:
+                    await self._remove_entity(name)
+                    summary["removed"] += 1
+                except Exception as e:  # pragma: no cover
+                    logger.warning(f"garbage remove {name} failed: {e}")
+        # Preview (apply=false) must not mutate: only quarantine what we actually removed.
+        if apply and rejected:
+            try:
+                self.quarantine_store.add(self.workspace, rejected)
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"quarantine add failed: {e}")
+        if apply and summary["removed"]:
+            try:
+                await self.chunk_entity_relation_graph.index_done_callback()
+                await self.entities_vdb.index_done_callback()
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"garbage scan persist failed: {e}")
+        logger.info(f"scan_garbage: {{'scanned': {summary['scanned']}, "
+                    f"'quarantined': {summary['quarantined']}, 'removed': {summary['removed']}}}")
+        return summary
+
     # ------------------------------------------------------------------
     # Context Graph helpers
     # ------------------------------------------------------------------

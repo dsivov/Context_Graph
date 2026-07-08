@@ -51,6 +51,31 @@ def test_is_garbage_name_helper():
 
 
 @pytest.mark.offline
+@pytest.mark.parametrize("name,kind", [
+    ("37b04c1", "commit hash"),
+    ("056b876", "commit hash"),
+    ("8894291", "bare number"),
+    ("ANALYTIC_ENGINE_ENABLED", "environment-variable / config name"),
+    ("CHUNK_TOP_K", "environment-variable / config name"),
+    ("/api/v1", "path / URL"),
+    ("/api/v1/get_nodes", "path / URL"),
+    ("http://x.org/a", "path / URL"),
+])
+def test_structural_garbage_from_code_backfill(name, kind):
+    assert is_garbage_name(name) == kind
+
+
+@pytest.mark.offline
+@pytest.mark.parametrize("name", [
+    "PostgreSQL", "IBM", "NASA", "Sarah Chen", "DISCOUNT-POLICY-2024",
+    "cr-m2-concurrency", "GPT-4", "Section 8",
+])
+def test_structural_patterns_do_not_hit_real_entities(name):
+    # acronyms (no underscore), hyphenated ids, mixed alnum names are kept
+    assert is_garbage_name(name) is None
+
+
+@pytest.mark.offline
 def test_verdict_is_truthy():
     assert bool(quality_check("Kubernetes", "container orchestration"))
     assert not bool(quality_check("it", "x"))

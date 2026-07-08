@@ -11,8 +11,17 @@ descriptions are *not* rejected here — that was the rejected "aggressive" opti
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Optional
+
+# High-precision structural garbage — code artifacts that are almost never real
+# knowledge-graph entities (common after a source-code backfill). Kept tight to stay
+# conservative; false positives are recoverable (quarantined, not deleted).
+_GIT_HASH_RE = re.compile(r"^[0-9a-f]{7,40}$")            # commit sha
+_PURE_NUMBER_RE = re.compile(r"^[0-9]+$")                 # bare number
+_ENV_VAR_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")  # ALL_CAPS_WITH_UNDERSCORES
+_PATH_RE = re.compile(r"^(?:/|[a-z]+://)")               # /api/v1 , http://…
 
 # Pronouns / deictic tokens that are never real entities on their own.
 _PRONOUNS = frozenset({
@@ -59,6 +68,16 @@ def is_garbage_name(name: Optional[str]) -> Optional[str]:
         return "generic filler phrase"
     if low in _JUNK_NAMES:
         return "non-specific junk name"
+    # Structural code artifacts (high precision). Pure-number first, since digits are
+    # also valid hex (a 7-digit string would otherwise read as a commit hash).
+    if _PURE_NUMBER_RE.match(n):
+        return "bare number"
+    if _GIT_HASH_RE.match(n):
+        return "commit hash"
+    if _ENV_VAR_RE.match(n):
+        return "environment-variable / config name"
+    if _PATH_RE.match(n):
+        return "path / URL"
     return None
 
 

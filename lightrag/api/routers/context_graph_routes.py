@@ -1162,6 +1162,24 @@ def create_context_graph_routes(
 
     # ── Garbage filtering — quarantine review (Graph-Quality v-next, Topic 2) ──
 
+    @router.post(
+        "/graph/garbage/scan",
+        dependencies=[Depends(combined_auth)],
+        summary="Retroactively remove garbage nodes from an existing graph",
+    )
+    async def garbage_scan(
+        apply: bool = Query(default=True, description="Remove rejects (false = preview)."),
+        limit: int = Query(default=100000, ge=1, le=1000000),
+    ):
+        """Run the node-quality filter over every existing entity; quarantine and
+        remove the rejects (restorable). ``apply=false`` previews without changing."""
+        _require_context_graph(rag)
+        try:
+            return await rag.scan_garbage(apply=apply, limit=limit)
+        except Exception as e:
+            logger.error(f"garbage_scan error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
     @router.get(
         "/graph/quarantine",
         dependencies=[Depends(combined_auth)],
