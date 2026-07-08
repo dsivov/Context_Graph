@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 from lightrag.utils import logger
 
 from context_graph.rules.gate import GateDecision, RulesGate

@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import numpy as np
 import pytest
 
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 from context_graph.rules import ConceptCatalog, RulesGate, RuleViolation
 
 

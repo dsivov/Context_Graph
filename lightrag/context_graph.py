@@ -43,7 +43,7 @@ from dataclasses import asdict
 from typing import Any, Optional
 
 from lightrag.base import BaseKVStorage, BaseVectorStorage, TextChunkSchema
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 from lightrag.exceptions import PipelineCancelledException
 from lightrag.lightrag import LightRAG
 from lightrag.namespace import NameSpace

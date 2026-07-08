@@ -294,7 +294,7 @@ def create_mcp_server(
         """Get all decision-bearing relationships connected to a specific entity. Use when the question names ONE entity and asks what decisions, approvals, or relationships involve them (e.g., "What decisions involve VP of Sales?", "Show everything connected to X", "What has entity Y done?"). Returns all edges with approval/decision metadata. If the question asks to FILTER decisions by channel/policy/confidence, use list_decisions instead."""
         _require_context_graph(rag)
         try:
-            from lightrag.context_graph_types import RelationContext
+            from context_graph.types import RelationContext
 
             raw_edges = await rag.get_edges_with_context(entity_name)
             edges = []
@@ -347,7 +347,7 @@ def create_mcp_server(
         confidence_score = max(0.0, min(1.0, confidence_score))
         _require_context_graph(rag)
         try:
-            from lightrag.context_graph_types import RelationContext
+            from context_graph.types import RelationContext
 
             rc = RelationContext(
                 decision_trace=decision_trace,

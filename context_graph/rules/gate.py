@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 
 from context_graph.rules.engine import EvaluationResult, RulesEngine
 from context_graph.rules.similarity import ConceptCatalog

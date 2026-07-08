@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 from context_graph.rules import (
     ConceptCatalog,
     RulesEngine,

@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from lightrag.context_graph_types import RelationContext, ContextNode, ContextEdge
+from context_graph.types import RelationContext, ContextNode, ContextEdge
 
 
 # ─────────────────────────────────────────────────────────────────────────────

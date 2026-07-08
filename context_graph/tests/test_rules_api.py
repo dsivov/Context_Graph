@@ -7,7 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 from context_graph.rules import InMemoryRuleStore, RulesService
 from lightrag.api.routers.rules_routes import create_rules_routes
 

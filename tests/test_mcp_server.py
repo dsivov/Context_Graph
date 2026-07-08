@@ -211,7 +211,7 @@ class TestToolCalls:
     @pytest.mark.asyncio
     async def test_search_precedents(self):
         rag = _make_mock_rag(is_context_graph=True)
-        from lightrag.context_graph_types import RelationContext
+        from context_graph.types import RelationContext
 
         mock_rc = RelationContext(decision_trace="20% discount approved")
         rag.find_precedents = AsyncMock(
@@ -231,7 +231,7 @@ class TestToolCalls:
     @pytest.mark.asyncio
     async def test_list_decisions(self):
         rag = _make_mock_rag(is_context_graph=True)
-        from lightrag.context_graph_types import RelationContext
+        from context_graph.types import RelationContext
 
         mock_rc = RelationContext(decision_trace="Policy exception granted")
         rag.get_all_decisions = AsyncMock(
@@ -247,7 +247,7 @@ class TestToolCalls:
     @pytest.mark.asyncio
     async def test_get_edge_context(self):
         rag = _make_mock_rag(is_context_graph=True)
-        from lightrag.context_graph_types import RelationContext
+        from context_graph.types import RelationContext
 
         mock_rc = RelationContext(
             decision_trace="Approved by VP",
@@ -264,7 +264,7 @@ class TestToolCalls:
     @pytest.mark.asyncio
     async def test_get_entity_context(self):
         rag = _make_mock_rag(is_context_graph=True)
-        from lightrag.context_graph_types import RelationContext
+        from context_graph.types import RelationContext
 
         mock_rc = RelationContext(decision_trace="Discount approved")
         rag.get_edges_with_context = AsyncMock(

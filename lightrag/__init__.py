@@ -1,6 +1,6 @@
 from .lightrag import LightRAG as LightRAG, QueryParam as QueryParam
 from .context_graph import ContextGraph as ContextGraph
-from .context_graph_types import (
+from context_graph.types import (
     RelationContext as RelationContext,
     ContextNode as ContextNode,
     ContextEdge as ContextEdge,

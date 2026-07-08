@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 from context_graph.rules import (
     project_decision,
     project_edge,

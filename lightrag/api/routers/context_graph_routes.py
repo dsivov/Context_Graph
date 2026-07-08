@@ -315,7 +315,7 @@ def _rc_to_pydantic(rc) -> RelationContextData:
 
 def _pydantic_to_rc(data: RelationContextData):
     """Convert a RelationContextData Pydantic model to a RelationContext dataclass."""
-    from lightrag.context_graph_types import RelationContext
+    from context_graph.types import RelationContext
 
     return RelationContext(
         supporting_sentences=data.supporting_sentences or [],
@@ -660,7 +660,7 @@ def create_context_graph_routes(
                 if rc is None:
                     continue
                 # rc is already a RelationContext dataclass (from get_edges_with_context)
-                from lightrag.context_graph_types import RelationContext
+                from context_graph.types import RelationContext
 
                 if isinstance(rc, str):
                     rc = RelationContext.from_json(rc)

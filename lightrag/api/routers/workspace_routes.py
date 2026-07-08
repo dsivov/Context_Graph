@@ -508,7 +508,7 @@ def create_workspace_routes(rag, *, ontology_service=None, action_service=None,
         #    opens its first session with a concrete starting point.
         first_cr = None
         if p.first_cr is not None:
-            from lightrag.context_graph_types import RelationContext
+            from context_graph.types import RelationContext
             cr = p.first_cr
             trace = cr.title if not cr.description else f"{cr.title} — {cr.description}"
             rc = RelationContext(

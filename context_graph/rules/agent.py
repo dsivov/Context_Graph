@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from lightrag.context_graph import _extract_json_object
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 from lightrag.utils import logger
 
 from context_graph.rules.engine import ACTION_VERBS, RulesEngine

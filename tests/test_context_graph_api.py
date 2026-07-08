@@ -25,7 +25,7 @@ from lightrag.api.routers.context_graph_routes import (
     RelationContextData,
     create_context_graph_routes,
 )
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 
 
 # ─────────────────────────────────────────────────────────────────────────────

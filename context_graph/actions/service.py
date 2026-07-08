@@ -17,7 +17,7 @@ from __future__ import annotations
 import contextlib
 from typing import Any, Dict, List, Optional
 
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 
 from context_graph.actions.schema import ActionCatalog, ActionDefinition
 from context_graph.actions.store import ActionStore

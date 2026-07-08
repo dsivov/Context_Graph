@@ -29,7 +29,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional, Union
 
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 
 RCLike = Union[RelationContext, dict, str, None]
 
