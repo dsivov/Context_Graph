@@ -1017,16 +1017,19 @@ class ContextGraph(LightRAG):
                     counts = {name: await mention_count(name, my_node),
                               cand: await mention_count(cand)}
                     canonical = prefer_canonical_name([name, cand], counts=counts)
+                    # The representative form SURVIVES as the node; the other folds in
+                    # — so the graph/UI shows "Kubernetes", not "kubernetes".
+                    survivor, alias = (name, cand) if canonical.strip() == name.strip() else (cand, name)
                     try:
-                        await self._apply_entity_merge(name, cand, canonical)
+                        await self._apply_entity_merge(alias, survivor, canonical)
                     except Exception as e:  # pragma: no cover
-                        logger.warning(f"dedup merge {name}->{cand} failed: {e}")
+                        logger.warning(f"dedup merge {alias}->{survivor} failed: {e}")
                         continue
                     store.record_merge(
-                        self.workspace, alias=name, alias_key=canonicalize(name),
-                        into=cand, method="embedding", score=score, canonical_name=canonical,
+                        self.workspace, alias=alias, alias_key=canonicalize(alias),
+                        into=survivor, method="embedding", score=score, canonical_name=canonical,
                     )
-                    merged_away.add(name)
+                    merged_away.add(alias)
                 summary["merged"] += 1
             elif score >= gray and type_ok(my_type, ctype):
                 if apply:

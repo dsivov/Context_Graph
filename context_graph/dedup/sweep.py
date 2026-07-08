@@ -112,13 +112,14 @@ class DedupSweep:
         return payload.get("verdicts") or []
 
     async def _merge(self, name: str, cand: str, canonical: str) -> None:
-        # Record the reversible merge (alias `name` → canonical node `cand`).
+        # The representative form survives as the node; the other folds into it.
+        survivor, alias = (name, cand) if canonical.strip() == name.strip() else (cand, name)
         self._store.record_merge(
-            self._ws, alias=name, alias_key=canonicalize(name), into=cand,
+            self._ws, alias=alias, alias_key=canonicalize(alias), into=survivor,
             method="llm", score=None, canonical_name=canonical,
         )
         if self._apply is not None:
             try:
-                await self._apply(name, cand, canonical)   # graph-level rewrite
+                await self._apply(alias, survivor, canonical)   # graph-level rewrite
             except Exception as e:  # pragma: no cover
-                logger.warning(f"DedupSweep apply_merge failed for {name}->{cand}: {e}")
+                logger.warning(f"DedupSweep apply_merge failed for {alias}->{survivor}: {e}")

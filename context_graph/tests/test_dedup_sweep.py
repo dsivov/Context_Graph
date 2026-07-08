@@ -105,8 +105,17 @@ async def test_canonical_name_driven_by_frequency_not_llm():
         return freq.get(name, 1)
 
     payload = {"verdicts": [{"id": 0, "same": True}]}   # no 'canonical' from the LLM
-    await DedupSweep(store, "ws", _llm(payload), get_count=get_count).run()
-    assert store.canonical_name("ws", "International Business Machines") == "IBM"
+    applied = []
+
+    async def apply(alias, into, canonical):
+        applied.append((alias, into, canonical))
+
+    await DedupSweep(store, "ws", _llm(payload),
+                     apply_merge=apply, get_count=get_count).run()
+    # "IBM" is far more frequent → it is the canonical survivor; the full name folds in
+    assert applied == [("International Business Machines", "IBM", "IBM")]
+    assert store.canonical_name("ws", "IBM") == "IBM"
+    assert store.resolve_key("ws", canonicalize("International Business Machines")) == "IBM"
 
 
 @pytest.mark.offline
