@@ -463,6 +463,13 @@ def parse_args() -> argparse.Namespace:
     args.cgr3_max_iterations = get_env_value("CGR3_MAX_ITERATIONS", 3, int)
     args.enable_mcp = get_env_value("ENABLE_MCP", True, bool)
 
+    # Entity deduplication (Graph-Quality v-next, Topic 1)
+    args.dedup_enabled = get_env_value("DEDUP_ENABLED", True, bool)      # master switch
+    args.dedup_hard = get_env_value("DEDUP_HARD", 0.93, float)           # auto-merge cosine
+    args.dedup_gray = get_env_value("DEDUP_GRAY", 0.85, float)           # queue cosine
+    args.dedup_sweep_interval = get_env_value("DEDUP_SWEEP_INTERVAL", 0, int)  # sec; 0 = off
+    args.dedup_sweep_batch = get_env_value("DEDUP_SWEEP_BATCH", 10, int)
+
     ollama_server_infos.LIGHTRAG_NAME = args.simulated_model_name
     ollama_server_infos.LIGHTRAG_TAG = args.simulated_model_tag
 

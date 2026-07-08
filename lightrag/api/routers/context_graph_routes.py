@@ -1071,6 +1071,14 @@ def create_context_graph_routes(
 
     # ── Entity deduplication (Graph-Quality v-next, Topic 1) ──────────────────
 
+    def _require_dedup(rag) -> None:
+        _require_context_graph(rag)
+        if not getattr(rag, "dedup_enabled", True):
+            raise HTTPException(
+                status_code=403,
+                detail="Deduplication is disabled (DEDUP_ENABLED=false).",
+            )
+
     @router.post(
         "/graph/dedup/scan",
         dependencies=[Depends(combined_auth)],
@@ -1082,7 +1090,7 @@ def create_context_graph_routes(
     ):
         """Layer E: auto-merge near-certain duplicates (reversibly) and queue the
         gray zone for the LLM sweep. Runs off the ingest path."""
-        _require_context_graph(rag)
+        _require_dedup(rag)
         try:
             return await rag.deduplicate_entities(apply=apply, limit=limit)
         except Exception as e:
@@ -1096,7 +1104,7 @@ def create_context_graph_routes(
     )
     async def dedup_sweep():
         """Layer C: batched LLM adjudication (+ canonical naming) of the review queue."""
-        _require_context_graph(rag)
+        _require_dedup(rag)
         try:
             return await rag.run_dedup_sweep()
         except Exception as e:

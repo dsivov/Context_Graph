@@ -941,6 +941,21 @@ class ContextGraph(LightRAG):
         gray = float(os.getenv("DEDUP_GRAY", DEFAULT_GRAY))
         return hard, gray
 
+    @property
+    def dedup_enabled(self) -> bool:
+        """Master switch (DEDUP_ENABLED, default on). Gates the scan/sweep endpoints
+        and the periodic background sweep."""
+        import os
+        return os.getenv("DEDUP_ENABLED", "true").strip().lower() not in (
+            "false", "0", "no", "off", "")
+
+    def _dedup_sweep_batch(self) -> int:
+        import os
+        try:
+            return max(1, int(os.getenv("DEDUP_SWEEP_BATCH", "10")))
+        except ValueError:
+            return 10
+
     async def _apply_entity_merge(self, alias: str, into: str, canonical: str) -> None:
         """Graph-level merge: fold node *alias* into *into*, remember the canonical
         display name. Reuses the vetted amerge_entities (rewires edges, updates vdb)."""
@@ -1058,6 +1073,7 @@ class ContextGraph(LightRAG):
         sweep = DedupSweep(
             self.dedup_store, self.workspace, self.llm_model_func,
             apply_merge=apply, get_count=get_count,
+            batch_size=self._dedup_sweep_batch(),
         )
         return await sweep.run()
 

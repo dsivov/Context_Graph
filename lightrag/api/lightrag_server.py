@@ -9,6 +9,7 @@ from fastapi.openapi.docs import (
     get_swagger_ui_html,
     get_swagger_ui_oauth2_redirect_html,
 )
+import asyncio
 import os
 import logging
 import logging.config
@@ -292,6 +293,51 @@ def check_frontend_build():
         return (True, False)  # Assume assets exist and up-to-date on error
 
 
+async def _dedup_sweep_loop(workspace_pool, args) -> None:
+    """Periodic background dedup sweep (Graph-Quality v-next).
+
+    Every ``DEDUP_SWEEP_INTERVAL`` seconds, drains each workspace's gray-zone review
+    queue: reads the per-workspace dedup stores under ``working_dir/dedup``, and for
+    any with pending pairs runs the LLM sweep (which applies confirmed merges,
+    reversibly). Opt-in and fully logged.
+    """
+    from context_graph.dedup import JsonDedupStore
+
+    interval = int(getattr(args, "dedup_sweep_interval", 0) or 0)
+    dedup_dir = os.path.join(str(args.working_dir), "dedup")
+    prefix, suffix = "dedup_", ".json"
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            if not os.path.isdir(dedup_dir):
+                continue
+            store = JsonDedupStore(dedup_dir)
+            swept = 0
+            for fname in sorted(os.listdir(dedup_dir)):
+                if not (fname.startswith(prefix) and fname.endswith(suffix)):
+                    continue
+                ws = fname[len(prefix):-len(suffix)]
+                pending = store.list_pending(ws)
+                if not pending:
+                    continue
+                logger.info(
+                    f"[dedup-sweep] workspace '{ws}': {len(pending)} pending pair(s) "
+                    f"→ adjudicating"
+                )
+                inst = await workspace_pool.get_rag(ws)
+                if hasattr(inst, "run_dedup_sweep"):
+                    result = await inst.run_dedup_sweep()
+                    swept += 1
+                    logger.info(f"[dedup-sweep] workspace '{ws}': {result}")
+            if swept == 0:
+                logger.debug("[dedup-sweep] tick — no workspaces with pending pairs")
+        except asyncio.CancelledError:
+            logger.info("[dedup-sweep] scheduler stopped")
+            raise
+        except Exception as e:  # pragma: no cover - never let the loop die
+            logger.error(f"[dedup-sweep] scheduler error: {e}", exc_info=True)
+
+
 def create_app(args):
     # Check frontend build first and get status
     webui_assets_exist, is_frontend_outdated = check_frontend_build()
@@ -419,6 +465,7 @@ def create_app(args):
         """Lifespan context manager for startup and shutdown events"""
         # Store background tasks
         app.state.background_tasks = set()
+        dedup_task = None
 
         async with AsyncExitStack() as stack:
             try:
@@ -446,11 +493,28 @@ def create_app(args):
                         "Using default JWT secret — set TOKEN_SECRET env var for production"
                     )
 
+                # Periodic entity-dedup sweep (opt-in via DEDUP_SWEEP_INTERVAL > 0).
+                # Drains each workspace's gray-zone review queue with the LLM and
+                # applies confirmed merges. Off by default; every run is logged.
+                if (getattr(args, "use_context_graph", False)
+                        and getattr(args, "dedup_enabled", True)
+                        and getattr(args, "dedup_sweep_interval", 0) > 0):
+                    dedup_task = asyncio.create_task(
+                        _dedup_sweep_loop(workspace_pool, args)
+                    )
+                    app.state.background_tasks.add(dedup_task)
+                    logger.info(
+                        f"Scheduled dedup sweep: every {args.dedup_sweep_interval}s "
+                        f"(batch {getattr(args, 'dedup_sweep_batch', 10)})"
+                    )
+
                 ASCIIColors.green("\nServer is ready to accept connections! 🚀\n")
 
                 yield
 
             finally:
+                if dedup_task is not None:
+                    dedup_task.cancel()
                 # Clean up all workspace instances
                 await workspace_pool.shutdown()
 

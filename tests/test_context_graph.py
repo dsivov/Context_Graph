@@ -948,6 +948,24 @@ class TestDedupWiring:
         assert cg._dedup_store.canonical_name("ws", "International Business Machines") == \
             "International Business Machines"
 
+    def test_master_switch(self, monkeypatch):
+        from lightrag.context_graph import ContextGraph
+        cg = ContextGraph.__new__(ContextGraph)
+        monkeypatch.delenv("DEDUP_ENABLED", raising=False)
+        assert cg.dedup_enabled is True                 # default on
+        monkeypatch.setenv("DEDUP_ENABLED", "false")
+        assert cg.dedup_enabled is False
+        monkeypatch.setenv("DEDUP_ENABLED", "true")
+        assert cg.dedup_enabled is True
+
+    def test_sweep_batch_config(self, monkeypatch):
+        from lightrag.context_graph import ContextGraph
+        cg = ContextGraph.__new__(ContextGraph)
+        monkeypatch.setenv("DEDUP_SWEEP_BATCH", "25")
+        assert cg._dedup_sweep_batch() == 25
+        monkeypatch.setenv("DEDUP_SWEEP_BATCH", "bad")
+        assert cg._dedup_sweep_batch() == 10            # graceful fallback
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # P3: query-time decision blend & by-name injection (aquery_llm)
