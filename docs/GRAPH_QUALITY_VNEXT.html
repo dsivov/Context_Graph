@@ -603,7 +603,7 @@ sweep():                                <span class="cm"># C (core) + E</span>
     <thead><tr><th>Phase</th><th>Ships</th><th>From</th></tr></thead>
     <tbody>
       <tr><td><b>0 · Measure</b></td><td>Connectivity report — <code>connected_components</code>/isolates/degree on the backends + <code>GET /graph/connectivity</code>. Capture a baseline on a real workspace.</td><td>T3 · layer 0</td></tr>
-      <tr><td><b>1 · Dedup</b></td><td><code>canonical.py</code> (A) → alias/audit resolver (D) → inline embedding blocking (B) → async LLM adjudication + canonical naming (C/E) → merge audit &amp; unmerge API. Conservative, reversible, type-aware.</td><td>D1–D7</td></tr>
+      <tr><td><b>1 · Dedup</b> <span class="pill win">built</span></td><td><code>context_graph/dedup/</code>: <code>canonical.py</code> (A), reversible alias/audit store (D), type-aware resolver (B), async LLM adjudication + canonical naming (C/E). Wired to <code>ContextGraph.deduplicate_entities</code>/<code>run_dedup_sweep</code>/<code>unmerge_entity</code> + <code>/graph/dedup/*</code> &amp; <code>/graph/entities/merges|unmerge</code> routes. 74 tests. <b>Live-verified</b>: case variant <code>Kubernetes→kubernetes</code> auto-merged (cos 0.969), <code>Terraform</code> untouched, unmerge reverses it.</td><td>D1–D7</td></tr>
       <tr><td><b>2 · Garbage</b></td><td>Constrain the prompt (1) → wire <code>ExtractionValidator</code> at ingest, open-world default, <code>DEFAULT_ENTITY_TYPES</code> fallback (2) → deterministic gate (3) → gleaning held to the bar (6) → quarantine queue.</td><td>D9–D13</td></tr>
       <tr><td><b>· Re-measure</b></td><td>Run the report again. Set the connectivity acceptance target; see what isolates remain after 1+2.</td><td>D16</td></tr>
       <tr><td><b>3 · Connectivity</b></td><td>Harder-for-relations extraction prompt (1). Then, if isolates remain: async LLM isolate-rescue (3). Community-detection global mode + summaries (4).</td><td>D14–D15</td></tr>
@@ -626,6 +626,24 @@ sweep():                                <span class="cm"># C (core) + E</span>
   (313 for a 806-node graph), and the largest component holds barely a third. The isolate sample is exactly
   the garbage Topic 2 targets — a git hash <code>37b04c1</code>, <code>8894291</code>, the env var
   <code>ANALYTIC_ENGINE_ENABLED</code>. <b>The problem is real and measurable; this is the number to move.</b></p>
+
+  <div class="callout ok">
+    <div class="clabel">Phase 1 shipped — dedup engine built &amp; wired (2026-07-07)</div>
+    <code>context_graph/dedup/</code> (Layers A–E), wired to <code>deduplicate_entities</code> /
+    <code>run_dedup_sweep</code> / <code>unmerge_entity</code> and the <code>/graph/dedup/*</code> +
+    <code>/graph/entities/merges|unmerge</code> routes. 74 tests. <b>Live-verified</b>: a case variant
+    <code>Kubernetes→kubernetes</code> auto-merged at cosine 0.969, a genuinely different <code>Terraform</code>
+    was left alone, and <code>unmerge</code> reversed it while preserving the audit record.
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Live finding</th><th>Detail &amp; follow-up</th></tr></thead>
+    <tbody>
+      <tr><td><b>Query representation</b> <span class="pill win">fixed</span></td><td>The scan must query the vdb with the entity's <b>name + description</b> (how the vector was stored), not the bare name — else a short name is diluted against the long stored content and true dupes miss.</td></tr>
+      <tr><td><b>Acronym gap</b> <span class="pill c">follow-up</span></td><td>Embeddings are weak on <code>IBM</code>↔<code>International Business Machines</code> (below the gray band), so acronyms never reach the LLM sweep. Fix: rule-based candidate generation via <code>is_acronym_of</code> (already built) to feed the queue independent of cosine.</td></tr>
+      <tr><td><b>Scan latency</b> <span class="pill c">follow-up</span></td><td>One embedding call per entity (806 nodes ≈ 3&nbsp;min). Batch / background it for large graphs; fine inline for small ones.</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>Next (per D16):</b> Phase 2 (garbage filtering), then re-measure connectivity before Topic 3.</p>
 </section>
 
 <!-- 7 -->

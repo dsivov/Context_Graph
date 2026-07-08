@@ -1069,4 +1069,87 @@ def create_context_graph_routes(
             logger.error(f"graph_connectivity error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
+    # ── Entity deduplication (Graph-Quality v-next, Topic 1) ──────────────────
+
+    @router.post(
+        "/graph/dedup/scan",
+        dependencies=[Depends(combined_auth)],
+        summary="Scan existing entities for near-duplicates (conservative, type-aware)",
+    )
+    async def dedup_scan(
+        apply: bool = Query(default=True, description="Apply hard-threshold auto-merges."),
+        limit: int = Query(default=5000, ge=1, le=100000),
+    ):
+        """Layer E: auto-merge near-certain duplicates (reversibly) and queue the
+        gray zone for the LLM sweep. Runs off the ingest path."""
+        _require_context_graph(rag)
+        try:
+            return await rag.deduplicate_entities(apply=apply, limit=limit)
+        except Exception as e:
+            logger.error(f"dedup_scan error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.post(
+        "/graph/dedup/sweep",
+        dependencies=[Depends(combined_auth)],
+        summary="LLM-adjudicate the gray-zone review queue and apply confirmed merges",
+    )
+    async def dedup_sweep():
+        """Layer C: batched LLM adjudication (+ canonical naming) of the review queue."""
+        _require_context_graph(rag)
+        try:
+            return await rag.run_dedup_sweep()
+        except Exception as e:
+            logger.error(f"dedup_sweep error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.get(
+        "/graph/dedup/review",
+        dependencies=[Depends(combined_auth)],
+        summary="Pending gray-zone duplicate pairs awaiting adjudication",
+    )
+    async def dedup_review():
+        _require_context_graph(rag)
+        try:
+            return {
+                "pending": rag.dedup_store.list_pending(rag.workspace),
+                "summary": rag.dedup_store.summary(rag.workspace),
+            }
+        except Exception as e:
+            logger.error(f"dedup_review error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.get(
+        "/graph/entities/merges",
+        dependencies=[Depends(combined_auth)],
+        summary="Audit log of entity merges (reversible)",
+    )
+    async def entity_merges(include_undone: bool = Query(default=False)):
+        _require_context_graph(rag)
+        try:
+            recs = rag.dedup_store.list_merges(rag.workspace, include_undone=include_undone)
+            return {"merges": [m.to_dict() for m in recs]}
+        except Exception as e:
+            logger.error(f"entity_merges error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.post(
+        "/graph/entities/unmerge",
+        dependencies=[Depends(combined_auth)],
+        summary="Reverse a recorded entity merge by id",
+    )
+    async def entity_unmerge(merge_id: str = Query(..., min_length=1)):
+        _require_context_graph(rag)
+        try:
+            ok = await rag.unmerge_entity(merge_id)
+            if not ok:
+                raise HTTPException(status_code=404,
+                                    detail=f"No live merge '{merge_id}'.")
+            return {"status": "ok", "merge_id": merge_id}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"entity_unmerge error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
     return router

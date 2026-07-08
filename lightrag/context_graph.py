@@ -64,7 +64,11 @@ from lightrag.utils import (
     update_chunk_cache_list,
     use_llm_func_with_cache,
 )
-from lightrag.constants import DEFAULT_ENTITY_NAME_MAX_LENGTH, DEFAULT_SUMMARY_LANGUAGE
+from lightrag.constants import (
+    DEFAULT_ENTITY_NAME_MAX_LENGTH,
+    DEFAULT_SUMMARY_LANGUAGE,
+    GRAPH_FIELD_SEP,
+)
 from lightrag.kg.shared_storage import get_storage_keyed_lock
 
 
@@ -582,6 +586,9 @@ class ContextGraph(LightRAG):
         # Optional pre-emit rules gate (context_graph.rules.RulesGate). When set,
         # emit_decision_trace evaluates it before persisting. None → no-op.
         self.rules_gate = None
+        # Entity deduplication (Graph-Quality v-next). The store is cheap and
+        # inert until a scan/sweep is invoked, so this touches no ingest path.
+        self._dedup_store = None  # lazily created (needs working_dir)
 
     async def initialize_storages(self) -> None:
         await super().initialize_storages()
@@ -913,6 +920,128 @@ class ContextGraph(LightRAG):
             },
             "isolate_sample": isolate_sample,
         }
+
+    # ------------------------------------------------------------------
+    # Entity deduplication (Graph-Quality v-next, Topic 1)
+    # ------------------------------------------------------------------
+
+    @property
+    def dedup_store(self):
+        """Lazily-created per-workspace alias/audit store (reversible merges, D3)."""
+        if self._dedup_store is None:
+            import os
+            from context_graph.dedup import JsonDedupStore
+            self._dedup_store = JsonDedupStore(os.path.join(self.working_dir, "dedup"))
+        return self._dedup_store
+
+    def _dedup_thresholds(self) -> tuple:
+        import os
+        from context_graph.dedup import DEFAULT_HARD, DEFAULT_GRAY
+        hard = float(os.getenv("DEDUP_HARD", DEFAULT_HARD))
+        gray = float(os.getenv("DEDUP_GRAY", DEFAULT_GRAY))
+        return hard, gray
+
+    async def _apply_entity_merge(self, alias: str, into: str, canonical: str) -> None:
+        """Graph-level merge: fold node *alias* into *into*, remember the canonical
+        display name. Reuses the vetted amerge_entities (rewires edges, updates vdb)."""
+        if alias == into:
+            return
+        await self.amerge_entities(
+            [alias], into,
+            merge_strategy={"description": "concatenate", "entity_type": "keep_first"},
+        )
+        if canonical:
+            self.dedup_store.set_canonical_name(self.workspace, into, canonical)
+
+    async def deduplicate_entities(self, *, apply: bool = True, limit: int = 5000) -> dict:
+        """Layer E — scan existing entities for duplicates (conservative, type-aware).
+
+        For each entity, find its nearest neighbour in ``entities_vdb``; auto-merge
+        only above the HARD cosine threshold with compatible types and a name backstop
+        (recorded reversibly), and queue the gray band for :meth:`run_dedup_sweep`.
+        Backend-agnostic; runs off the ingest path. Returns a summary.
+        """
+        from context_graph.dedup import canonicalize, prefer_canonical_name, type_ok, name_ok
+
+        hard, gray = self._dedup_thresholds()
+        graph = self.chunk_entity_relation_graph
+        store = self.dedup_store
+        labels: list[str] = list(await graph.get_all_labels() or [])[:limit]
+        merged_away: set[str] = set()
+        summary = {"scanned": 0, "merged": 0, "queued": 0, "skipped": 0}
+
+        async def node_type(name: str):
+            node = await graph.get_node(name)
+            return (node or {}).get("entity_type")
+
+        for name in labels:
+            summary["scanned"] += 1
+            if name in merged_away:
+                summary["skipped"] += 1
+                continue
+            my_node = await graph.get_node(name) or {}
+            my_type = my_node.get("entity_type")
+            # Query with the SAME representation entities_vdb stored (name + first
+            # description line), not the bare name — else a short name is diluted
+            # against the long stored name+description content and true dupes miss.
+            desc = (my_node.get("description") or "").split(GRAPH_FIELD_SEP)[0].strip()
+            query_text = f"{name}\n{desc}" if desc else name
+            try:
+                hits = await self.entities_vdb.query(query_text, top_k=5) or []
+            except Exception:
+                hits = []
+            top = next(
+                (h for h in hits
+                 if (h.get("entity_name") or h.get("id")) not in (None, "", name)
+                 and (h.get("entity_name") or h.get("id")) not in merged_away),
+                None,
+            )
+            if top is None:
+                continue
+            cand = top.get("entity_name") or top.get("id")
+            score = float(top.get("distance") or 0.0)
+            ctype = top.get("entity_type")
+            if ctype is None:
+                ctype = await node_type(cand)
+            if score >= hard and type_ok(my_type, ctype) and name_ok(name, cand):
+                # apply=False is a pure preview: count, but touch neither graph nor store.
+                if apply:
+                    try:
+                        await self._apply_entity_merge(name, cand, canonical := prefer_canonical_name([name, cand]))
+                    except Exception as e:  # pragma: no cover
+                        logger.warning(f"dedup merge {name}->{cand} failed: {e}")
+                        continue
+                    store.record_merge(
+                        self.workspace, alias=name, alias_key=canonicalize(name),
+                        into=cand, method="embedding", score=score, canonical_name=canonical,
+                    )
+                    merged_away.add(name)
+                summary["merged"] += 1
+            elif score >= gray and type_ok(my_type, ctype):
+                if apply:
+                    store.enqueue_review(self.workspace, name=name, candidate=cand, score=score)
+                summary["queued"] += 1
+
+        logger.info(f"deduplicate_entities: {summary}")
+        return summary
+
+    async def run_dedup_sweep(self) -> dict:
+        """Layer C — LLM-adjudicate the gray-zone queue (+ canonical naming, D5) and
+        apply confirmed merges to the graph. Off the ingest path."""
+        from context_graph.dedup import DedupSweep
+
+        async def apply(alias: str, into: str, canonical: str):
+            await self._apply_entity_merge(alias, into, canonical)
+
+        sweep = DedupSweep(
+            self.dedup_store, self.workspace, self.llm_model_func, apply_merge=apply,
+        )
+        return await sweep.run()
+
+    async def unmerge_entity(self, merge_id: str) -> bool:
+        """Reverse a recorded merge's *resolution* (D3). Note: this restores the alias
+        mapping/audit; re-splitting already-folded graph edges is not automatic."""
+        return self.dedup_store.unmerge(self.workspace, merge_id)
 
     async def _index_decision(
         self, src: str, tgt: str, relation_type: str, rc: RelationContext

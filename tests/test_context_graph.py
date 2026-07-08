@@ -886,6 +886,69 @@ class TestContextGraphNewMethods:
         assert r["total_nodes"] == 0 and r["connected_components"] == 0
 
 
+class TestDedupWiring:
+    """ContextGraph dedup methods (Topic 1, increment 4) over injected deps."""
+
+    def _cg(self, labels, query_fn, node_type="Organization"):
+        from unittest.mock import AsyncMock
+        from lightrag.context_graph import ContextGraph
+        from context_graph.dedup import InMemoryDedupStore
+
+        cg = ContextGraph.__new__(ContextGraph)
+        cg.workspace = "ws"
+        cg._dedup_store = InMemoryDedupStore()
+        graph = AsyncMock()
+        graph.get_all_labels = AsyncMock(return_value=labels)
+        graph.get_node = AsyncMock(return_value={"entity_type": node_type})
+        cg.chunk_entity_relation_graph = graph
+        vdb = AsyncMock()
+        vdb.query = query_fn
+        cg.entities_vdb = vdb
+        cg.amerge_entities = AsyncMock()
+        for m in ("deduplicate_entities", "_apply_entity_merge", "_dedup_thresholds",
+                  "run_dedup_sweep", "unmerge_entity"):
+            setattr(cg, m, getattr(ContextGraph, m).__get__(cg, type(cg)))
+        return cg
+
+    async def test_scan_auto_merges_hard_and_records(self):
+        async def q(text, top_k=5):
+            other = "Apple" if text == "Apple Inc." else "Apple Inc."
+            return [{"entity_name": other, "distance": 0.97, "entity_type": "Organization"}]
+
+        cg = self._cg(["Apple Inc.", "Apple"], q)
+        r = await cg.deduplicate_entities()
+        assert r["merged"] == 1                      # Apple Inc. → Apple (second is skipped)
+        cg.amerge_entities.assert_awaited()          # graph-level merge applied
+        assert len(cg._dedup_store.list_merges("ws")) == 1
+
+    async def test_scan_queues_gray_zone(self):
+        async def q(text, top_k=5):
+            other = "Apple" if text != "Apple" else "Apple Inc."
+            return [{"entity_name": other, "distance": 0.88, "entity_type": "Organization"}]
+
+        cg = self._cg(["Apple Inc.", "Apple"], q)
+        r = await cg.deduplicate_entities()
+        assert r["merged"] == 0 and r["queued"] >= 1
+        cg.amerge_entities.assert_not_awaited()      # never merged inline
+        assert len(cg._dedup_store.list_pending("ws")) >= 1
+
+    async def test_scan_respects_type_conflict(self):
+        async def q(text, top_k=5):
+            return [{"entity_name": "Apple", "distance": 0.99, "entity_type": "Person"}]
+
+        cg = self._cg(["Apple Inc."], q, node_type="Organization")
+        r = await cg.deduplicate_entities()
+        assert r["merged"] == 0                       # D4: known type conflict blocks
+
+    async def test_apply_entity_merge_sets_canonical_name(self):
+        cg = self._cg([], None)
+        await cg._apply_entity_merge("IBM", "International Business Machines",
+                                     "International Business Machines")
+        cg.amerge_entities.assert_awaited_once()
+        assert cg._dedup_store.canonical_name("ws", "International Business Machines") == \
+            "International Business Machines"
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # P3: query-time decision blend & by-name injection (aquery_llm)
 # ─────────────────────────────────────────────────────────────────────────────
