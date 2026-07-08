@@ -826,6 +826,31 @@ sweep():                                <span class="cm"># C (core) + E</span>
     </tbody>
   </table></div>
 
+  <h3>Scheduling &amp; configuration</h3>
+  <p>The gray-zone queue is filled by the scan and drained by the sweep. The sweep runs
+  <b>off the write path</b> two ways: on demand (<code>POST /graph/dedup/sweep</code>), or on a
+  <b>periodic background schedule</b> — a server loop that, every <code>DEDUP_SWEEP_INTERVAL</code>
+  seconds, finds workspaces with pending pairs and drains them (auto-applying confirmed merges,
+  reversibly). The scheduler is <b>opt-in</b> (interval <code>0</code> = manual only) and <b>fully
+  logged</b>: a startup announce, a per-workspace pending count, and a result summary each tick.</p>
+  <figure><div class="fig">
+<pre><code><span class="cm"># server log with DEDUP_SWEEP_INTERVAL=12</span>
+INFO: Scheduled dedup sweep: every 12s (batch 10)
+INFO: [dedup-sweep] workspace 'acme': 3 pending pair(s) → adjudicating
+INFO: [dedup-sweep] workspace 'acme': {<span class="str">'adjudicated'</span>: 3, <span class="str">'merged'</span>: 2, <span class="str">'rejected'</span>: 1, <span class="str">'errors'</span>: 0}</code></pre>
+  </div><figcaption>Confirmed merges are <b>auto-applied</b> (still reversible via <code>unmerge</code>);
+  rejected pairs are dropped from the queue; LLM/parse failures are left queued for the next tick.</figcaption></figure>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Env var</th><th>Default</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>DEDUP_ENABLED</code></td><td><code>true</code></td><td>Master switch — off ⇒ endpoints 403 and the scheduler doesn't start</td></tr>
+      <tr><td><code>DEDUP_HARD</code></td><td><code>0.93</code></td><td>Cosine ≥ this ⇒ inline auto-merge</td></tr>
+      <tr><td><code>DEDUP_GRAY</code></td><td><code>0.85</code></td><td>Cosine in [gray, hard) ⇒ queued for the sweep</td></tr>
+      <tr><td><code>DEDUP_SWEEP_INTERVAL</code></td><td><code>0</code></td><td>Seconds between periodic sweeps; <code>0</code> = manual only</td></tr>
+      <tr><td><code>DEDUP_SWEEP_BATCH</code></td><td><code>10</code></td><td>Pairs adjudicated per LLM call</td></tr>
+    </tbody>
+  </table></div>
+
   <div class="callout ok">
     <div class="clabel">Live-verified walkthrough</div>
     Two <code>Method</code> nodes <code>Kubernetes</code> and <code>kubernetes</code> (same description) plus an
@@ -862,6 +887,7 @@ sweep():                                <span class="cm"># C (core) + E</span>
       <tr><td>D15</td><td>2026-07-07</td><td>Connectivity</td><td><b>Community-detection "global" mode</b> (Leiden/Louvain + per-community summaries) <b>is in scope this release</b></td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D16</td><td>2026-07-07</td><td>Process</td><td>Ship connectivity <b>report first</b> (baseline) → build <b>dedup (1)</b> → <b>garbage (2)</b> → <b>re-measure</b> → decide isolate-rescue scope; community global built for the release</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D17</td><td>2026-07-08</td><td>Dedup</td><td>Canonical <b>name</b> chosen by a <b>frequency-weighted score</b> (refines D5) — <code>1·freq + .25·proper_noun + .25·completeness − .25·acronym</code> — not the LLM. The LLM does only the same-or-not verdict. Faster, deterministic, favours the form people actually use.</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D18</td><td>2026-07-08</td><td>Dedup</td><td>Sweep scheduling: <b>periodic background loop, opt-in</b> (<code>DEDUP_SWEEP_INTERVAL</code>, default off) + always-on manual endpoint; confirmed merges <b>auto-applied</b> (reversible); <b>master switch <code>DEDUP_ENABLED</code>, default on</b>; every run logged.</td><td><span class="pill win">decided</span></td></tr>
     </tbody>
   </table></div>
 </section>
