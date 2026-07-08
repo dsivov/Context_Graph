@@ -905,6 +905,50 @@ class ContextGraph(LightRAG):
             logger.warning(f"isolate rescue persist failed: {e}")
         return result
 
+    async def prune_isolates(self, *, apply: bool = False, limit: int = 100000) -> dict:
+        """Propose-only pruning of degree-0 isolates (D13). Run *after* connectivity
+        repair, so candidates are the isolates rescue couldn't connect.
+
+        Default is a preview — ``apply=false`` lists candidates and changes nothing.
+        Only degree-1 leaves are never touched (they are real single-relationship
+        entities). When applied, nodes are moved to the restorable quarantine, never
+        hard-deleted, in keeping with the never-lose-data ethos.
+        """
+        graph = self.chunk_entity_relation_graph
+        isolates = await self._isolated_nodes(limit)
+        summary = {"isolates": len(isolates), "removed": 0, "preview": not apply,
+                   "sample": [i["name"] for i in isolates[:20]]}
+        if not apply:
+            return summary
+        rejected: list[dict] = []
+        for iso in isolates:
+            name = iso["name"]
+            node = await graph.get_node(name) or {}
+            rejected.append({
+                "entity_name": name, "entity_type": node.get("entity_type", ""),
+                "description": (node.get("description") or "")[:300],
+                "reason": "low-degree isolate (pruned)",
+            })
+            try:
+                await self._remove_entity(name)
+                summary["removed"] += 1
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"prune isolate {name} failed: {e}")
+        if rejected:
+            try:
+                self.quarantine_store.add(self.workspace, rejected)
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"quarantine add failed: {e}")
+        if summary["removed"]:
+            try:
+                await graph.index_done_callback()
+                await self.entities_vdb.index_done_callback()
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"prune persist failed: {e}")
+        logger.info(f"prune_isolates: {{'isolates': {summary['isolates']}, "
+                    f"'removed': {summary['removed']}}}")
+        return summary
+
     # ------------------------------------------------------------------
     # Community "global" mode (Graph-Quality v-next, Topic 3, Layer 4)
     # ------------------------------------------------------------------

@@ -1067,6 +1067,29 @@ class TestConnectivityRescueWiring:
         cg.llm_model_func.assert_not_awaited()             # preview is cheap
         cg.entities_vdb.query.assert_not_awaited()
 
+    async def test_prune_isolates_preview_and_apply(self):
+        from unittest.mock import AsyncMock
+        from lightrag.context_graph import ContextGraph
+        from context_graph.quality import InMemoryQuarantineStore
+        # C is a degree-0 isolate; A,B are connected (degree-1) and must be untouched.
+        cg = self._cg(["A", "B", "C"], [{"source": "A", "target": "B"}])
+        cg._quarantine_store = InMemoryQuarantineStore()
+        cg.entities_vdb = AsyncMock()
+        for m in ("prune_isolates", "_remove_entity"):
+            setattr(cg, m, getattr(ContextGraph, m).__get__(cg, type(cg)))
+        # preview (default) — no mutation
+        r = await cg.prune_isolates()
+        assert r["preview"] is True and r["isolates"] == 1 and r["sample"] == ["C"]
+        cg.chunk_entity_relation_graph.delete_node.assert_not_awaited()
+        assert cg._quarantine_store.list("ws") == []
+        # apply — only the isolate C is quarantined + removed; A,B untouched
+        cg.chunk_entity_relation_graph.delete_node = AsyncMock()
+        r = await cg.prune_isolates(apply=True)
+        assert r["removed"] == 1
+        cg.chunk_entity_relation_graph.delete_node.assert_awaited_once_with("C")
+        q = cg._quarantine_store.list("ws")
+        assert len(q) == 1 and q[0]["name"] == "C" and "low-degree" in q[0]["reason"]
+
 
 class TestCommunityWiring:
     """ContextGraph community build + thematic query (Topic 3, Layer 4)."""

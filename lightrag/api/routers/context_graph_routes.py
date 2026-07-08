@@ -1097,6 +1097,25 @@ def create_context_graph_routes(
             raise HTTPException(status_code=500, detail=str(e))
 
     @router.post(
+        "/graph/prune/isolates",
+        dependencies=[Depends(combined_auth)],
+        summary="Propose-only pruning of degree-0 isolates (opt-in, quarantine-backed)",
+    )
+    async def prune_isolates(
+        apply: bool = Query(default=False,
+                            description="Default false = preview. true moves isolates to the restorable quarantine."),
+        limit: int = Query(default=100000, ge=1, le=1000000),
+    ):
+        """D13: run AFTER connectivity repair. Previews degree-0 isolates by default;
+        degree-1 leaves are never touched (real single-relationship entities)."""
+        _require_context_graph(rag)
+        try:
+            return await rag.prune_isolates(apply=apply, limit=limit)
+        except Exception as e:
+            logger.error(f"prune_isolates error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.post(
         "/graph/community/build",
         dependencies=[Depends(combined_auth)],
         summary="Detect communities + summarise them for the thematic global mode",
