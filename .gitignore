@@ -85,3 +85,6 @@ CLAUDE.md
 .env.bak*
 *.out
 lightrag-server.out
+
+# Internal-only discussion notes — never commit
+docs/LINKEDIN_ESSAYS_POST.md
