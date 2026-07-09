@@ -380,7 +380,7 @@ curl http://localhost:9621/scrape/a1b2c3d4e5f6 -H "LIGHTRAG-WORKSPACE: district_
 </p>
 <p align="center"><em><b>Figure 6.</b> The LLM chooses the connector from the site's own signals — so a new platform is a new plugin with a one-line hint, not a rewrite.</em></p>
 
-> 📖 Full guide: [`docs/SCRAPER.html`](docs/SCRAPER.html)
+> 📖 Full guide: [`docs/SCRAPER.html`](https://dsivov.github.io/Context_Graph/SCRAPER.html)
 
 ---
 
@@ -438,11 +438,11 @@ then
 end
 ```
 
-Describe a policy in plain English and `POST /rules/generate` writes the DSL, defines the concepts, and **proves it** with a dry-run self-test before you save. See [`docs/RULES_ENGINE.html`](docs/RULES_ENGINE.html).
+Describe a policy in plain English and `POST /rules/generate` writes the DSL, defines the concepts, and **proves it** with a dry-run self-test before you save. See [`docs/RULES_ENGINE.html`](https://dsivov.github.io/Context_Graph/RULES_ENGINE.html).
 
 ### Ontology
 
-A **typed schema** for the workspace — object types and directed link types, each with typed properties — that every extraction is validated against. Validation is *coercing*: the same pass that checks a record normalizes it (`"$25,000"` → `25000.0`, `"20%"` → `0.2`), which is what gives the rules engine real numbers to reason over instead of free text. Open-world by default (unknown types warn); closed-world rejects them. `POST /ontology/generate` drafts a schema from a domain description. See [`docs/ONTOLOGY.html`](docs/ONTOLOGY.html).
+A **typed schema** for the workspace — object types and directed link types, each with typed properties — that every extraction is validated against. Validation is *coercing*: the same pass that checks a record normalizes it (`"$25,000"` → `25000.0`, `"20%"` → `0.2`), which is what gives the rules engine real numbers to reason over instead of free text. Open-world by default (unknown types warn); closed-world rejects them. `POST /ontology/generate` drafts a schema from a domain description. See [`docs/ONTOLOGY.html`](https://dsivov.github.io/Context_Graph/ONTOLOGY.html).
 
 ### Action Layer
 
@@ -465,7 +465,7 @@ curl -X POST http://localhost:9621/actions/invoke -H "LIGHTRAG-WORKSPACE: sales"
 - **Typed arguments** — money/percent args are coerced and rendered into `quantitative_data`, so rules reason over them.
 - **SSRF-guarded handlers** — `none` (record-only) or `webhook`; webhooks refuse loopback/private hosts unless `allow_internal`.
 
-> 📖 Full guide: [`docs/ACTIONS.html`](docs/ACTIONS.html)
+> 📖 Full guide: [`docs/ACTIONS.html`](https://dsivov.github.io/Context_Graph/ACTIONS.html)
 
 > These features require `USE_CONTEXT_GRAPH=true` and return **HTTP 503** otherwise.
 
@@ -491,7 +491,7 @@ curl -s http://localhost:9621/workspace/playbook -H "LIGHTRAG-WORKSPACE: myproj"
 
 Onboarding a *brand-new* workspace? `POST /onboard` with a plain-English description tailors the ontology + rules and returns the same bootstrap bundle, handing the agent its entry points in one call.
 
-> 📖 Full use case: [`docs/AGENTIC_DEVELOPMENT.html`](docs/AGENTIC_DEVELOPMENT.html) · design discussion: [`docs/AGENTIC_PROJECT_GRAPH.html`](docs/AGENTIC_PROJECT_GRAPH.html)
+> 📖 Full use case: [`docs/AGENTIC_DEVELOPMENT.html`](https://dsivov.github.io/Context_Graph/AGENTIC_DEVELOPMENT.html) · design discussion: [`docs/AGENTIC_PROJECT_GRAPH.html`](https://dsivov.github.io/Context_Graph/AGENTIC_PROJECT_GRAPH.html)
 
 > Requires `USE_CONTEXT_GRAPH=true`.
 
@@ -1061,9 +1061,6 @@ python -m pytest tests --run-integration
 # Keep artifacts for debugging
 python -m pytest tests --keep-artifacts
 ```
-
-> The project's conda env is `lightgraph_custom` — if it isn't active, use its interpreter
-> directly: `/storage/conda/envs/lightgraph_custom/bin/python -m pytest tests context_graph/tests`.
 
 **Test suite coverage** (711 passing / 35 skipped):
 

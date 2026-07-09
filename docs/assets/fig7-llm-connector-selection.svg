@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 150" role="img" aria-label="LLM connector selection">
-    <defs><marker id="cs-ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b93a7"/></marker></defs>
+    <defs>
+      <marker id="cs-ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b93a7"/></marker>
+      <style>
+        .wb{font:600 13px "Segoe UI",system-ui,sans-serif;fill:#e7ebf3}
+        .ws{font:500 10.5px "Segoe UI",system-ui,sans-serif;fill:#aab3c5}
+      </style>
+    </defs>
     <g><rect x="8" y="34" width="212" height="82" rx="11" style="fill:rgba(240,167,60,.12);stroke:#f0a73c;stroke-width:1.7"/>
       <text x="114" y="60" text-anchor="middle" class="wb">Real-site signals</text>
       <text x="114" y="80" text-anchor="middle" class="ws">generator tag · markers</text>
