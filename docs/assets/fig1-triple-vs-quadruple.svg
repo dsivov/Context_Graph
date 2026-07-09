@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 300" role="img" aria-label="Triple versus quadruple">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
+        <linearGradient id="gA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22314f"/><stop offset="1" stop-color="#1a2236"/></linearGradient>
+        <linearGradient id="gB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#173a34"/><stop offset="1" stop-color="#13251f"/></linearGradient>
+        <linearGradient id="gC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a2f17"/><stop offset="1" stop-color="#241c10"/></linearGradient>
+        <linearGradient id="gP" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2e2347"/><stop offset="1" stop-color="#1d1730"/></linearGradient>
+      </defs>
+      <style>
+        .bx{rx:10;stroke:#39425a;stroke-width:1}
+        .t{fill:#e7ebf3;font:13px "Segoe UI",sans-serif} .ts{fill:#aab3c5;font:11px "Segoe UI",sans-serif}
+        .m{fill:#8fd9c9;font:11px var(--mono),monospace} .h{fill:#cfe0ff;font:600 12px "Segoe UI",sans-serif}
+        .ln{stroke:#8a93a8;stroke-width:1.8;fill:none;marker-end:url(#ar)}
+      </style>
+      <text class="h" x="220" y="22" text-anchor="middle">STANDARD KG — a triple</text>
+      <rect class="bx" x="40" y="44" width="140" height="40" fill="url(#gA)"/>
+      <text class="t" x="110" y="69" text-anchor="middle">Sarah Chen</text>
+      <rect class="bx" x="300" y="44" width="140" height="40" fill="url(#gA)"/>
+      <text class="t" x="370" y="69" text-anchor="middle">MegaCorp</text>
+      <path class="ln" d="M182 64 H298"/>
+      <text class="ts" x="240" y="58" text-anchor="middle">APPROVES</text>
+      <text class="ts" x="240" y="104" text-anchor="middle">…but approved what? why? still valid?</text>
+
+      <text class="h" x="650" y="22" text-anchor="middle">CONTEXT GRAPH — a quadruple</text>
+      <rect class="bx" x="470" y="44" width="140" height="40" fill="url(#gA)"/>
+      <text class="t" x="540" y="69" text-anchor="middle">Sarah Chen</text>
+      <rect class="bx" x="700" y="44" width="140" height="40" fill="url(#gA)"/>
+      <text class="t" x="770" y="69" text-anchor="middle">MegaCorp</text>
+      <path class="ln" d="M612 64 H698"/>
+      <text class="ts" x="655" y="58" text-anchor="middle">APPROVES</text>
+      <!-- rc card -->
+      <rect class="bx" x="470" y="104" width="370" height="176" fill="url(#gB)"/>
+      <text class="m" x="486" y="126">rc = RelationContext {</text>
+      <text class="m" x="500" y="146">decision_trace: "20% discount — 5-yr</text>
+      <text class="m" x="500" y="162">&#160;&#160;relationship + Salesforce pressure"</text>
+      <text class="m" x="500" y="182">approved_by: "Sarah Chen"</text>
+      <text class="m" x="500" y="198">approved_via: "in_person"</text>
+      <text class="m" x="500" y="214">valid_from→until: 2024-08-14 → 12-31</text>
+      <text class="m" x="500" y="230">policy_ref: "DiscountPolicy_Standard"</text>
+      <text class="m" x="500" y="246">provenance: "Slack #deals-review"</text>
+      <text class="m" x="500" y="262">confidence_score: 0.97</text>
+      <text class="m" x="486" y="278">}</text>
+      <path class="ln" d="M655 84 V102"/>
+    </svg>

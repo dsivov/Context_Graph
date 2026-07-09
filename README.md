@@ -55,6 +55,11 @@ Context Graph:  Sarah Chen  --APPROVES-->  MegaCorp
                   }
 ```
 
+<p align="center">
+  <img src="docs/assets/fig1-triple-vs-quadruple.svg" alt="Standard triple versus a Context Graph quadruple" width="820">
+</p>
+<p align="center"><em><b>Figure 1.</b> Same edge, two memories. The triple knows an approval happened; the quadruple knows the decision behind it — and can be queried on any of those fields.</em></p>
+
 With Context Graph you can answer questions like:
 
 - *"Who approved discounts above 15% in Q3 2024, and are those approvals still valid?"*
@@ -82,7 +87,7 @@ Every relationship in a Context Graph is a four-component structure:
 
 ### RelationContext
 
-`RelationContext` ([lightrag/context_graph_types.py](lightrag/context_graph_types.py)) is a dataclass with 11 fields:
+`RelationContext` ([context_graph/types.py](context_graph/types.py)) is a dataclass with 11 fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -98,6 +103,11 @@ Every relationship in a Context Graph is a four-component structure:
 | `provenance` | `str \| None` | Source reference: thread ID, doc section, call timestamp |
 | `confidence_score` | `float` | Extraction reliability 0.0–1.0 (default `1.0`) |
 
+<p align="center">
+  <img src="docs/assets/fig2-relationcontext-anatomy.svg" alt="RelationContext anatomy — the 11 fields grouped by what they answer" width="820">
+</p>
+<p align="center"><em><b>Figure 2.</b> The 11 RelationContext fields, grouped by what they answer — where it came from, who decided, and how long it holds.</em></p>
+
 ### Two Paths to RelationContext
 
 **Extraction path** — ingest prose documents via `ainsert()`. The LLM extracts entities, relationships, and a RelationContext JSON object from each sentence. Suitable for historical records, call transcripts, email threads, meeting notes.
@@ -106,6 +116,11 @@ Every relationship in a Context Graph is a four-component structure:
 
 Both paths feed the same graph and the same vector indexes.
 
+<p align="center">
+  <img src="docs/assets/fig3-two-capture-paths.svg" alt="Two capture paths — extraction from prose and direct emission" width="820">
+</p>
+<p align="center"><em><b>Figure 3.</b> Extraction mines RelationContext from prose at ingestion; emission writes it directly at decision time. Both land in the same graph and indexes.</em></p>
+
 ### CGR3 Reasoning
 
 CGR3 (Retrieve → Rank → Reason) is Context Graph's iterative multi-hop query loop. It repeats up to `max_iterations` times, each pass potentially discovering new entities that become seeds for the next retrieval:
@@ -113,6 +128,11 @@ CGR3 (Retrieve → Rank → Reason) is Context Graph's iterative multi-hop query
 1. **Retrieve** — fetch candidate entities and edges with their RelationContext
 2. **Rank** — ask the LLM to order candidates by relevance
 3. **Reason** — ask the LLM whether the accumulated context is sufficient to answer; if not, identify follow-up entities and repeat
+
+<p align="center">
+  <img src="docs/assets/fig4-cgr3-loop.svg" alt="The CGR3 Retrieve-Rank-Reason loop" width="800">
+</p>
+<p align="center"><em><b>Figure 4.</b> Each pass can surface new entities that seed the next retrieval, so the graph walk deepens until the context is sufficient (or <code>max_iterations</code> is hit).</em></p>
 
 ---
 
@@ -336,6 +356,11 @@ The LLM fills `approved_by` / `approved_via` when an approver and channel are na
 
 Point Context Graph at a public website and it crawls the content straight into the graph. `POST /scrape` starts an async job that walks the same domain breadth-first — respecting `robots.txt`, rate-limited, bounded by depth and page count — strips each page to its readable main text, and inserts it **with the page URL as the file path**, so that URL becomes the `provenance` on every quadruple extracted from it. Binary/structured files (PDFs, Office docs, JSON) found while crawling are downloaded and picked up by the standard document scan.
 
+<p align="center">
+  <img src="docs/assets/fig6-web-ingestion-pipeline.svg" alt="Web ingestion pipeline — crawl, read, ingest" width="860">
+</p>
+<p align="center"><em><b>Figure 5.</b> Point it at a URL; it crawls politely, reads any format, and hands the content to Context Graph's ingestion with the URL preserved as provenance.</em></p>
+
 ```bash
 # Start a JS-rendered, LLM-filtered crawl (workspace-scoped)
 curl -X POST http://localhost:9621/scrape \
@@ -349,6 +374,11 @@ curl http://localhost:9621/scrape/a1b2c3d4e5f6 -H "LIGHTRAG-WORKSPACE: district_
 - **Polite crawler** — same-domain BFS, `robots.txt`, per-host rate limit, sitemap seeding, main-text extraction.
 - **Pluggable connectors** — platform plugins that crack sites hiding files behind a JS widget or private API. WordPress, Finalsite/Blackboard, and BoardDocs ship enabled; adding one is copy-a-template.
 - **LLM-guided acquisition** — with `analyze=true`, an LLM selects the right connector and filters which resources are worth ingesting. Fails open to deterministic behavior if no LLM is configured.
+
+<p align="center">
+  <img src="docs/assets/fig7-llm-connector-selection.svg" alt="LLM connector selection from a site's own signals" width="860">
+</p>
+<p align="center"><em><b>Figure 6.</b> The LLM chooses the connector from the site's own signals — so a new platform is a new plugin with a one-line hint, not a rewrite.</em></p>
 
 > 📖 Full guide: [`docs/SCRAPER.html`](docs/SCRAPER.html)
 
@@ -469,6 +499,13 @@ Onboarding a *brand-new* workspace? `POST /onboard` with a plain-English descrip
 
 ## Querying
 
+Context Graph keeps every standard retrieval mode and adds an `auto` router that picks the best one for you — classify once, cache the verdict, and answer with the reasoning attached.
+
+<p align="center">
+  <img src="docs/assets/fig5-auto-query-router.svg" alt="Auto query router — classify once, route to the best mode" width="860">
+</p>
+<p align="center"><em><b>Figure 7.</b> The <code>auto</code> router classifies the question once (and caches it), routes to the best mode, and returns the answer with its reasoning.</em></p>
+
 ### Standard Query
 
 All standard LightRAG query modes work unchanged. Retrieved edges include their RelationContext in the LLM's context window, grounding answers in actual decision records.
@@ -572,7 +609,7 @@ Start the server with `USE_CONTEXT_GRAPH=true`. All endpoints below return **HTT
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/query` | Standard RAG query — edges enriched by RelationContext |
-| `POST` | `/insert` | Ingest documents and extract RelationContext |
+| `POST` | `/documents/text` · `/documents/texts` · `/documents/upload` | Ingest content and extract RelationContext |
 | `POST` | `/cgr3/query` | CGR3 iterative Retrieve→Rank→Reason |
 | `GET`  | `/graph/edge/context` | RelationContext for a specific edge |
 | `GET`  | `/graph/entity/edges-with-context` | All context-enriched edges for an entity |
@@ -1012,28 +1049,29 @@ The `decisions` vector namespace (new in Context Graph) uses the same configured
 ## Testing
 
 ```bash
-# Run all offline tests (no external services needed)
-~/.conda/envs/context_graph/bin/python -m pytest tests/ -v
+# Run the full offline suite (no external services needed) — 711 passing
+python -m pytest tests context_graph/tests -q
 
-# Run only Context Graph tests
-~/.conda/envs/context_graph/bin/python -m pytest \
-    tests/test_context_graph.py \
-    tests/test_context_graph_api.py \
-    -v --tb=short
+# Run only the core Context Graph tests
+python -m pytest tests/test_context_graph.py tests/test_context_graph_api.py -v --tb=short
 
 # Run integration tests (requires configured external services)
-python -m pytest tests/ --run-integration
+python -m pytest tests --run-integration
 
 # Keep artifacts for debugging
-python -m pytest tests/ --keep-artifacts
+python -m pytest tests --keep-artifacts
 ```
 
-**Test suite coverage:**
+> The project's conda env is `lightgraph_custom` — if it isn't active, use its interpreter
+> directly: `/storage/conda/envs/lightgraph_custom/bin/python -m pytest tests context_graph/tests`.
 
-| File | Tests | Coverage |
+**Test suite coverage** (711 passing / 35 skipped):
+
+| Area | Where | Coverage |
 |------|-------|---------|
-| `tests/test_context_graph.py` | 44 | RelationContext fields, `is_active()`, `merge()`, extraction pipeline, `emit_decision_trace`, `find_precedents`, `get_all_decisions` |
-| `tests/test_context_graph_api.py` | 36 | All 7 API endpoints, Pydantic models, 503 on plain LightRAG, config parsing |
+| Core CG | `tests/test_context_graph.py` (75) | RelationContext fields, `is_active()`, `merge()`, extraction pipeline, `emit_decision_trace`, `find_precedents`, `get_all_decisions` |
+| CG API | `tests/test_context_graph_api.py` (36) | CG endpoints, Pydantic models, 503 on plain LightRAG, config parsing |
+| Governance & quality | `context_graph/tests/` | Rules engine/gate/store, ontology, RBAC, lifecycle, actions, dedup, garbage filter, connectivity, communities |
 
 ---
 
@@ -1084,7 +1122,7 @@ Where `RC_JSON` is a compact single-line JSON object. Standard LightRAG extracti
 
 - All new RelationContext fields default to `None` — existing graph data loads without modification
 - Standard 5-field extraction records are parsed identically to before
-- All standard LightRAG endpoints (`/query`, `/insert`, `/graph/...`) work unchanged
+- All standard LightRAG endpoints (`/query`, `/documents/*`, `/graph/...`) work unchanged
 - Context Graph endpoints return HTTP 503 when `USE_CONTEXT_GRAPH=false`, so clients degrade gracefully
 
 ### Confidence Score Guidelines
@@ -1095,37 +1133,6 @@ Where `RC_JSON` is a compact single-line JSON object. Standard LightRAG extracti
 | `0.9+` | Explicit, unambiguous statement in source text |
 | `0.7–0.9` | Clear but implicit or inferred |
 | `< 0.7` | Ambiguous — consider filtering with `min_confidence` |
-
----
-
-## Project Structure
-
-```
-lightrag/
-├── context_graph.py            — ContextGraph class (main entry point)
-├── context_graph_types.py      — RelationContext, ContextNode, ContextEdge
-├── lightrag.py                 — Base LightRAG engine
-├── operate.py                  — Extraction and merge pipeline
-├── prompt.py                   — CG extraction prompts (11-field RC schema)
-├── namespace.py                — Storage namespace constants
-├── base.py                     — Abstract storage interfaces
-├── api/
-│   ├── lightrag_server.py      — FastAPI application entry point
-│   ├── config.py               — Environment config (USE_CONTEXT_GRAPH etc.)
-│   └── routers/
-│       └── context_graph_routes.py  — CG API endpoints
-├── kg/                         — Storage backend implementations
-└── llm/                        — LLM provider bindings
-
-tests/
-├── test_context_graph.py       — Core CG unit tests (44 tests)
-├── test_context_graph_api.py   — API route tests (36 tests)
-└── conftest.py                 — Pytest configuration and fixtures
-
-CONTEXTGRAPH_README.md          — Detailed CG usage guide
-CONTEXTGRAPH_IMPLEMENTATION_PLAN.md — Development roadmap
-CONTEXTGRAPH_PAPER.md           — Research background
-```
 
 ---
 
@@ -1167,7 +1174,7 @@ The anonymized conversation documents teach the graph **behavioral patterns**:
 
 This approach is inspired by the [Context Graphs](https://foundationcapital.com/ideas/context-graphs-ais-trillion-dollar-opportunity) paradigm: the value is in the **patterns** (what products go together, what objections arise) — not in the **identities** (who bought what).
 
-See [`conversation_formatter.py`](conversation_formatter.py) for the full anonymization implementation.
+> This is a recommended **client-side** pattern: scrub and bucket PII before it reaches `ainsert()` / `emit_decision_trace()`, so identifying data never enters the graph in the first place.
 
 ---
 
@@ -1206,65 +1213,46 @@ Context Graph implements the **CGR3 (Context Graphs with Retrieve-Rank-Reason)**
 
 ## Project Structure
 
+All Context Graph code lives in the top-level **`context_graph/`** package; **`lightrag/`** is the reused base RAG engine and HTTP server it plugs into.
+
 ```
-lightrag/
-├── context_graph.py            — ContextGraph class (main entry point)
-├── context_graph_types.py      — RelationContext, ContextNode, ContextEdge
-├── lightrag.py                 — Base LightRAG engine
-├── operate.py                  — Extraction and merge pipeline
-├── prompt.py                   — CG extraction prompts (11-field RC schema)
-├── namespace.py                — Storage namespace constants
-├── base.py                     — Abstract storage interfaces
+context_graph/                  — All Context Graph code (the fork's own package)
+├── core.py                     — ContextGraph class + CG extraction pipeline (main entry point)
+├── types.py                    — RelationContext, ContextNode, ContextEdge dataclasses
+├── jsonio.py                   — Dependency-free LLM-JSON parser, shared by every CG module
 ├── api/
-│   ├── lightrag_server.py      — FastAPI application entry point
-│   ├── config.py               — Environment config (USE_CONTEXT_GRAPH etc.)
-│   ├── workspace_pool.py       — Multi-tenant workspace pool and middleware
-│   └── routers/
-│       ├── query_routes.py     — Standard query endpoints
-│       ├── document_routes.py  — Document upload and management
-│       ├── graph_routes.py     — Graph CRUD operations
-│       ├── context_graph_routes.py  — CG API endpoints (CGR3, decisions)
-│       ├── rules_routes.py     — Business Rules Engine API (/rules)
-│       ├── ontology_routes.py  — Ontology API (/ontology)
-│       ├── webingest_routes.py — Web ingestion API (/scrape)
-│       └── actions_routes.py   — Action layer API (/actions)
-├── kg/                         — Storage backend implementations
-│   ├── neo4j_impl.py           — Neo4j graph storage (workspace-aware)
-│   ├── networkx_impl.py        — In-memory NetworkX graph
-│   ├── nano_vector_db_impl.py  — NanoVectorDB file-based vectors
-│   ├── json_kv_impl.py         — JSON file KV storage
-│   ├── postgres_impl.py        — PostgreSQL (KV + vector + graph)
-│   └── ...                     — Redis, MongoDB, Qdrant, Milvus, Faiss
-└── llm/                        — LLM provider bindings
-    ├── openai.py               — OpenAI / compatible
-    ├── ollama.py               — Local Ollama
-    ├── anthropic.py            — Anthropic Claude
-    └── ...                     — Azure, Gemini, Bedrock, HF, NVIDIA
-
-context_graph/                  — Governance, ingestion & action packages
+│   └── routes.py               — CG API endpoints (CGR3, decisions, dedup/quality/community)
 ├── rules/                      — Business Rules Engine (DSL, gate, sim(), NL author)
-├── ontology/                   — Typed schema, validation, NL author
+├── ontology/                   — Typed schema, coercing validation, NL author
+├── rbac/                       — Object-level role-based access control
+├── lifecycle/                  — Declarative object state machines
+├── actions/                    — Executable operations bound to object types, governed by the gate
 ├── webingest/                  — Polite crawler + pluggable site connectors
-└── actions/                    — Executable operations bound to object types, governed by the gate
+├── dedup/                      — Entity deduplication (canonicalize, resolve, async sweep)
+├── quality/                    — Garbage-node filtering + quarantine
+├── connectivity/               — Isolate rescue + low-degree pruning
+├── community/                  — Louvain community detection + summaries (global mode)
+└── tests/                      — Governance/quality test suites
 
-tests/
-├── test_context_graph.py       — Core CG unit tests (44 tests)
-├── test_context_graph_api.py   — API route tests (36 tests)
-└── conftest.py                 — Pytest configuration and fixtures
+lightrag/                       — Base LightRAG engine + FastAPI server (reused dependency)
+├── lightrag.py                 — Base LightRAG RAG engine (ainsert, aquery, storage lifecycle)
+├── operate.py                  — Extraction and merge pipeline (rc-aware)
+├── prompt.py                   — CG-tightened extraction prompts (RelationContext schema)
+├── base.py · namespace.py      — Abstract storage interfaces, namespace constants
+├── api/
+│   ├── lightrag_server.py      — FastAPI app; registers CG + governance routers
+│   ├── config.py               — Environment config (USE_CONTEXT_GRAPH etc.)
+│   ├── workspace_pool.py       — Multi-tenant workspace pool and ASGI middleware
+│   └── routers/                — query · document · graph · rules · ontology · rbac ·
+│                                 lifecycle · actions · webingest · workspace routers
+├── kg/                         — Storage backends (Neo4j, NetworkX, NanoVectorDB,
+│                                 JSON KV, PostgreSQL, Redis, MongoDB, Qdrant, Milvus, Faiss)
+└── llm/                        — LLM provider bindings (OpenAI, Ollama, Anthropic,
+                                  Azure, Gemini, Bedrock, HF, NVIDIA)
 
-docs/
-├── SCRAPER.html                — Web Ingester field guide
-├── ONTOLOGY.html               — Ontology field guide
-├── RULES_ENGINE.html           — Business Rules Engine field guide
-├── ACTIONS.html                — Action layer field guide
-├── BLOG_THE_FOURTH_ELEMENT.html — Narrative intro to Context Graph
-├── CONTEXT_GRAPH_OVERVIEW.html — Illustrated technical field guide
-├── INDEX.md                    — Documentation index
-├── Algorithm.md                — LightRAG indexing and retrieval flowcharts
-├── PaperComparison.md          — Detailed CGR3 paper alignment analysis
-├── DockerDeployment.md         — Docker deployment guide
-├── FrontendBuildGuide.md       — WebUI build guide
-└── ...
+tests/                          — Core CG + API test suites (run with pytest)
+docs/                           — Illustrated HTML field guides + Markdown references
+lightrag_webui/                 — Context Graph branded WebUI (React/TS; built into lightrag/api/webui/)
 ```
 
 ---

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 250" role="img" aria-label="RelationContext anatomy">
+      <style>
+        .gt{fill:#e7ebf3;font:600 13px "Segoe UI",sans-serif} .gs{fill:#aab3c5;font:11px var(--mono),monospace}
+      </style>
+      <rect class="bx" x="20" y="30" width="200" height="190" fill="url(#gB)"/>
+      <text class="gt" x="36" y="54">Evidence &amp; provenance</text>
+      <text class="gs" x="36" y="78">supporting_sentences[]</text>
+      <text class="gs" x="36" y="98">provenance</text>
+      <text class="gs" x="36" y="118">confidence_score</text>
+      <text class="gs" x="36" y="150" fill="#7b8499">— verbatim quotes,</text>
+      <text class="gs" x="36" y="166" fill="#7b8499">&#160;&#160;source ref, reliability</text>
+
+      <rect class="bx" x="240" y="30" width="200" height="190" fill="url(#gP)"/>
+      <text class="gt" x="256" y="54">Authority &amp; channel</text>
+      <text class="gs" x="256" y="78">approved_by</text>
+      <text class="gs" x="256" y="98">approved_via</text>
+      <text class="gs" x="256" y="118">policy_ref</text>
+      <text class="gs" x="256" y="150" fill="#7b8499">— who, through which</text>
+      <text class="gs" x="256" y="166" fill="#7b8499">&#160;&#160;channel, under what policy</text>
+
+      <rect class="bx" x="460" y="30" width="200" height="190" fill="url(#gC)"/>
+      <text class="gt" x="476" y="54">Time</text>
+      <text class="gs" x="476" y="78">valid_from</text>
+      <text class="gs" x="476" y="98">valid_until</text>
+      <text class="gs" x="476" y="118">temporal_info</text>
+      <text class="gs" x="476" y="150" fill="#7b8499">— ISO-8601 window;</text>
+      <text class="gs" x="476" y="166" fill="#7b8499">&#160;&#160;"is it still in force?"</text>
+
+      <rect class="bx" x="680" y="30" width="200" height="190" fill="url(#gA)"/>
+      <text class="gt" x="696" y="54">Rationale &amp; numbers</text>
+      <text class="gs" x="696" y="78">decision_trace</text>
+      <text class="gs" x="696" y="98">quantitative_data</text>
+      <text class="gs" x="696" y="150" fill="#7b8499">— the "why", plus the</text>
+      <text class="gs" x="696" y="166" fill="#7b8499">&#160;&#160;numbers that matter</text>
+    </svg>

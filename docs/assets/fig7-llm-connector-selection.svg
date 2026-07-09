@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 150" role="img" aria-label="LLM connector selection">
+    <defs><marker id="cs-ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b93a7"/></marker></defs>
+    <g><rect x="8" y="34" width="212" height="82" rx="11" style="fill:rgba(240,167,60,.12);stroke:#f0a73c;stroke-width:1.7"/>
+      <text x="114" y="60" text-anchor="middle" class="wb">Real-site signals</text>
+      <text x="114" y="80" text-anchor="middle" class="ws">generator tag · markers</text>
+      <text x="114" y="96" text-anchor="middle" class="ws">API request URLs</text></g>
+    <g><rect x="8" y="120" width="212" height="24" rx="7" style="fill:rgba(25,184,154,.10);stroke:#19b89a;stroke-width:1.2"/>
+      <text x="114" y="137" text-anchor="middle" class="ws">connector self-descriptions</text></g>
+    <path d="M220 84 L262 84" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#cs-ar)"/>
+    <g><rect x="264" y="46" width="188" height="60" rx="11" style="fill:rgba(169,116,240,.14);stroke:#a974f0;stroke-width:1.7"/>
+      <text x="358" y="72" text-anchor="middle" class="wb">LLM selector</text>
+      <text x="358" y="92" text-anchor="middle" class="ws">which platform is this?</text></g>
+    <path d="M452 76 L494 76" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#cs-ar)"/>
+    <g><rect x="496" y="46" width="196" height="60" rx="11" style="fill:rgba(91,141,239,.13);stroke:#5b8def;stroke-width:1.7"/>
+      <text x="594" y="72" text-anchor="middle" class="wb">Chosen connector</text>
+      <text x="594" y="92" text-anchor="middle" class="ws">finalsite · wordpress · boarddocs</text></g>
+    <path d="M692 76 L734 76" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#cs-ar)"/>
+    <g><rect x="736" y="46" width="216" height="60" rx="11" style="fill:rgba(25,184,154,.12);stroke:#19b89a;stroke-width:1.7"/>
+      <text x="844" y="72" text-anchor="middle" class="wb">Replay API → files</text>
+      <text x="844" y="92" text-anchor="middle" class="ws">every PDF/doc → the graph</text></g>
+  </svg>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 230" role="img" aria-label="Two capture paths">
+      <style>
+        .t3{fill:#e7ebf3;font:13px "Segoe UI",sans-serif} .s3{fill:#aab3c5;font:11px "Segoe UI",sans-serif}
+        .m3{fill:#8fd9c9;font:11px var(--mono),monospace}
+        .l3{stroke:#19b89a;stroke-width:2.2;fill:none;marker-end:url(#ar)}
+      </style>
+      <rect class="bx" x="40" y="30" width="230" height="54" fill="url(#gC)"/>
+      <text class="t3" x="155" y="52" text-anchor="middle" font-weight="700">Documents</text>
+      <text class="s3" x="155" y="70" text-anchor="middle">transcripts · emails · notes</text>
+      <rect class="bx" x="40" y="146" width="230" height="54" fill="url(#gP)"/>
+      <text class="t3" x="155" y="168" text-anchor="middle" font-weight="700">Application / agent</text>
+      <text class="s3" x="155" y="186" text-anchor="middle">approval bots · webhooks</text>
+
+      <rect class="bx" x="340" y="30" width="220" height="54" fill="url(#gB)"/>
+      <text class="t3" x="450" y="52" text-anchor="middle">Extraction path</text>
+      <text class="m3" x="450" y="70" text-anchor="middle">ainsert() → LLM extracts rc</text>
+      <rect class="bx" x="340" y="146" width="220" height="54" fill="url(#gB)"/>
+      <text class="t3" x="450" y="168" text-anchor="middle">Emission path</text>
+      <text class="m3" x="450" y="186" text-anchor="middle">emit_decision_trace(rc)</text>
+
+      <rect class="bx" x="640" y="86" width="220" height="58" fill="url(#gA)"/>
+      <text class="t3" x="750" y="110" text-anchor="middle" font-weight="700">Context Graph</text>
+      <text class="s3" x="750" y="128" text-anchor="middle">graph + vector indexes</text>
+
+      <path class="l3" d="M272 57 H338"/>
+      <path class="l3" d="M272 173 H338"/>
+      <path class="l3" d="M562 57 C600 70 610 90 638 104"/>
+      <path class="l3" d="M562 173 C600 160 610 140 638 126"/>
+    </svg>

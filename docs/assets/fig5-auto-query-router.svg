@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 232" role="img" aria-label="Auto query router">
+    <defs>
+      <marker id="q-ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b93a7"/></marker>
+      <style>
+        .qb{font:600 12.5px "Segoe UI",system-ui,sans-serif;fill:#e7ebf3}
+        .qk{font:700 11px ui-monospace,monospace}
+        .qs{font:500 10px "Segoe UI",system-ui,sans-serif;fill:#aab3c5}
+      </style>
+    </defs>
+    <g><rect x="10" y="92" width="120" height="52" rx="11" style="fill:rgba(91,141,239,.13);stroke:#5b8def;stroke-width:1.7"/>
+      <text x="70" y="123" text-anchor="middle" class="qb">A question</text></g>
+    <path d="M130 118 L166 118" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#q-ar)"/>
+    <g><rect x="168" y="86" width="176" height="64" rx="11" style="fill:rgba(240,167,60,.13);stroke:#f0a73c;stroke-width:1.9"/>
+      <text x="256" y="112" text-anchor="middle" class="qb">LLM classifier</text>
+      <text x="256" y="132" text-anchor="middle" class="qs">reads intent · cached · ~one call</text></g>
+    <!-- fan-out to modes -->
+    <path d="M344 100 L392 40"  style="stroke:#8b93a7;stroke-width:1.4;fill:none" marker-end="url(#q-ar)"/>
+    <path d="M344 110 L392 84"  style="stroke:#8b93a7;stroke-width:1.4;fill:none" marker-end="url(#q-ar)"/>
+    <path d="M344 118 L392 128" style="stroke:#8b93a7;stroke-width:1.4;fill:none" marker-end="url(#q-ar)"/>
+    <path d="M344 126 L392 172" style="stroke:#8b93a7;stroke-width:1.4;fill:none" marker-end="url(#q-ar)"/>
+    <path d="M344 134 L392 216" style="stroke:#8b93a7;stroke-width:1.4;fill:none" marker-end="url(#q-ar)"/>
+    <g class="qk">
+      <g><rect x="394" y="22" width="250" height="34" rx="8" style="fill:rgba(25,184,154,.10);stroke:#19b89a;stroke-width:1.4"/>
+        <text x="406" y="43" class="qk" style="fill:#7fe3cf">hybrid</text><text x="470" y="43" class="qs">default · most questions</text></g>
+      <g><rect x="394" y="66" width="250" height="34" rx="8" style="fill:rgba(91,141,239,.10);stroke:#5b8def;stroke-width:1.4"/>
+        <text x="406" y="87" class="qk" style="fill:#9cc0ff">local</text><text x="470" y="87" class="qs">one specific entity, named</text></g>
+      <g><rect x="394" y="110" width="250" height="34" rx="8" style="fill:rgba(91,141,239,.10);stroke:#5b8def;stroke-width:1.4"/>
+        <text x="406" y="131" class="qk" style="fill:#9cc0ff">global</text><text x="470" y="131" class="qs">broad category browsing</text></g>
+      <g><rect x="394" y="154" width="250" height="34" rx="8" style="fill:rgba(240,167,60,.10);stroke:#f0a73c;stroke-width:1.4"/>
+        <text x="406" y="175" class="qk" style="fill:#ffce86">mix</text><text x="470" y="175" class="qs">specs · details · comparisons</text></g>
+      <g><rect x="394" y="198" width="250" height="34" rx="8" style="fill:rgba(169,116,240,.12);stroke:#a974f0;stroke-width:1.4"/>
+        <text x="406" y="219" class="qk" style="fill:#cdb1f7">cgr3</text><text x="470" y="219" class="qs">multi-hop reasoning · comparisons</text></g>
+    </g>
+    <path d="M644 127 L688 127" style="stroke:#8b93a7;stroke-width:1.6;fill:none" marker-end="url(#q-ar)"/>
+    <g><rect x="690" y="92" width="260" height="70" rx="11" style="fill:rgba(62,207,142,.12);stroke:#3ecf8e;stroke-width:1.7"/>
+      <text x="820" y="118" text-anchor="middle" class="qb">Answer</text>
+      <text x="820" y="138" text-anchor="middle" class="qs">+ mode chosen &amp; why</text>
+      <text x="820" y="152" text-anchor="middle" class="qs">+ latency</text></g>
+  </svg>

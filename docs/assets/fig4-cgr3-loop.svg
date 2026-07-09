@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 210" role="img" aria-label="CGR3 loop">
+      <style>
+        .t4{fill:#e7ebf3;font:600 14px "Segoe UI",sans-serif} .s4{fill:#aab3c5;font:11px "Segoe UI",sans-serif}
+        .l4{stroke:#f0a73c;stroke-width:2.2;fill:none;marker-end:url(#ar)}
+      </style>
+      <rect class="bx" x="60" y="70" width="190" height="60" fill="url(#gC)"/>
+      <text class="t4" x="155" y="95" text-anchor="middle">1 · Retrieve</text>
+      <text class="s4" x="155" y="114" text-anchor="middle">entities + edges + rc</text>
+      <rect class="bx" x="345" y="70" width="190" height="60" fill="url(#gC)"/>
+      <text class="t4" x="440" y="95" text-anchor="middle">2 · Rank</text>
+      <text class="s4" x="440" y="114" text-anchor="middle">LLM orders by relevance</text>
+      <rect class="bx" x="630" y="70" width="190" height="60" fill="url(#gC)"/>
+      <text class="t4" x="725" y="95" text-anchor="middle">3 · Reason</text>
+      <text class="s4" x="725" y="114" text-anchor="middle">enough to answer?</text>
+      <path class="l4" d="M252 100 H343"/>
+      <path class="l4" d="M537 100 H628"/>
+      <path class="l4" d="M725 130 C725 175 440 182 250 145 L200 132" />
+      <text class="s4" x="455" y="178" text-anchor="middle">if not: seed new entities, iterate (≤ max_iterations)</text>
+    </svg>
