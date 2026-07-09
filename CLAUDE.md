@@ -76,8 +76,9 @@ cd lightrag_webui && bun install --frozen-lockfile && bun run build && cd ..
 
 ### Core Files
 
-- `lightrag/context_graph.py` — `ContextGraph` class extending `LightRAG` with RelationContext, CGR3 reasoning, emit_decision_trace, find_precedents, decision indexing/reindex, query-time decision blend + by-name node injection
-- `lightrag/context_graph_types.py` — `RelationContext`, `ContextNode`, `ContextEdge` dataclasses
+- `context_graph/core.py` — `ContextGraph` class extending `LightRAG` with RelationContext, CGR3 reasoning, emit_decision_trace, find_precedents, decision indexing/reindex, query-time decision blend + by-name node injection. Also the CG entity/relation extraction pipeline. Import via `from context_graph.core import ContextGraph` (also re-exported lazily as `from lightrag import ContextGraph`)
+- `context_graph/types.py` — `RelationContext`, `ContextNode`, `ContextEdge` dataclasses
+- `context_graph/jsonio.py` — dependency-free `_extract_json_object` LLM-JSON parser, shared by all CG submodules (kept leaf to avoid an import cycle through `core.py`)
 - `lightrag/lightrag.py` — Base `LightRAG` orchestrator (insert, query, storage management)
 - `lightrag/operate.py` — Core extraction and query operations (6-field rc-aware extraction/merge/rebuild)
 - `lightrag/base.py` — Abstract storage interfaces (`BaseKVStorage`, `BaseVectorStorage`, `BaseGraphStorage`)
@@ -86,11 +87,11 @@ cd lightrag_webui && bun install --frozen-lockfile && bun run build && cd ..
 - `lightrag/api/lightrag_server.py` — FastAPI server, route registration, per-workspace instance pool, governance-service wiring
 - `lightrag/api/workspace_pool.py` — Per-workspace `ContextGraph` pool + pure-ASGI workspace-routing middleware
 - `lightrag/api/mcp_server.py` — MCP server (12 tools, X-API-Key auth) mounted into the FastAPI app
-- `lightrag/api/routers/context_graph_routes.py` — Context Graph API endpoints (emit, precedents, decisions, reindex, CGR3)
-- `lightrag/api/routers/` — Also: `workspace_routes.py` (manifest/onboarding), `rules_routes.py`, `ontology_routes.py`, `rbac_routes.py`, `lifecycle_routes.py`, `actions_routes.py`, `webingest_routes.py`, `query_routes.py`
+- `context_graph/api/routes.py` — Context Graph API endpoints (emit, precedents, decisions, reindex, CGR3, dedup/quality/connectivity/community); `create_context_graph_routes` factory is registered by `lightrag_server.py`
+- `lightrag/api/routers/` — Governance/support routers: `workspace_routes.py` (manifest/onboarding), `rules_routes.py`, `ontology_routes.py`, `rbac_routes.py`, `lifecycle_routes.py`, `actions_routes.py`, `webingest_routes.py`, `query_routes.py`
 - `lightrag/api/config.py` — Configuration parsing (env vars → args)
 - `lightrag/kg/shared_storage.py` — Multi-process shared memory, workspace namespace isolation, pipeline locks
-- `context_graph/` — Governance/agent package (top-level, shipped): `rules/` (DSL gate), `ontology/` (schema validation), `rbac/` (object-level RBAC), `lifecycle/` (state machines), `actions/` (invokable actions + webhooks), `webingest/` (crawl/clean/render ingestion)
+- `context_graph/` — Top-level shipped CG package. Core: `core.py` (ContextGraph class), `types.py`, `jsonio.py`, `api/routes.py`. Governance/agent subpackages: `rules/` (DSL gate), `ontology/` (schema validation), `rbac/` (object-level RBAC), `lifecycle/` (state machines), `actions/` (invokable actions + webhooks), `webingest/` (crawl/clean/render ingestion), plus the Graph-Quality layers `dedup/`, `quality/`, `connectivity/`, `community/`
 - `presets/backfill_git.py` — Client-side git backfill CLI (`--docs`, `--code`, reindex)
 
 ### Storage Layer (4 pluggable backends)
@@ -218,7 +219,7 @@ await rag.finalize_storages()
 
 ### Emit decisions from application code (no document ingestion):
 ```python
-from lightrag.context_graph_types import RelationContext
+from context_graph.types import RelationContext
 rc = RelationContext(decision_trace="VP approved 20% discount", approved_by="Sarah Chen", ...)
 await rag.emit_decision_trace("Sarah Chen", "MegaCorp", "discount_approval", rc)
 ```
