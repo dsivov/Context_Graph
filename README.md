@@ -1,5 +1,11 @@
 # Context Graph
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688.svg?logo=fastapi&logoColor=white)](lightrag/api)
+[![WebUI: React](https://img.shields.io/badge/WebUI-React%2019-61DAFB.svg?logo=react&logoColor=black)](lightrag_webui)
+[![Built on LightRAG](https://img.shields.io/badge/built%20on-LightRAG-6E56CF.svg)](https://github.com/HKUDS/LightRAG)
+
 **A decision-aware knowledge graph system built on LightRAG.**
 
 Context Graph extends the standard triple-based knowledge graph `(head, relation, tail)` into contextual quadruples `(h, r, t, rc)` — where `rc` is a **RelationContext** that captures the full decision lineage behind every graph edge: who approved it, why, via which channel, under which policy, and for how long.
@@ -138,24 +144,34 @@ CGR3 (Retrieve → Rank → Reason) is Context Graph's iterative multi-hop query
 
 ## Installation
 
+### Docker (recommended)
+
+The repo ships a `Dockerfile` and `docker-compose.yml` — the fastest way to a running server + WebUI:
+
 ```bash
-# Clone
+git clone https://github.com/dsivov/Context_Graph.git
+cd Context_Graph
+cp env.example .env          # set USE_CONTEXT_GRAPH=true + your LLM/embedding keys
+docker compose up -d         # server + WebUI on http://localhost:9621/webui/
+```
+
+See [`docs/DockerDeployment.md`](docs/DockerDeployment.md) for storage backends and production notes.
+
+### From source (Python 3.12)
+
+```bash
 git clone https://github.com/dsivov/Context_Graph.git
 cd Context_Graph
 
-# Install with API server support (recommended)
-uv sync --extra api
-
-# Or install with all optional extras
-uv sync --extra api --extra offline-storage --extra offline-llm --extra test
-
-# Activate environment
+uv sync --extra api                     # API server support (recommended)
+# or: uv sync --extra api --extra offline-storage --extra offline-llm --extra test
 source .venv/bin/activate
+lightrag-server --host 0.0.0.0 --port 9621
 ```
 
 **Requirements:**
-- Python 3.10+
-- An LLM with at least 32B parameters and 32K context window
+- Python 3.12
+- An LLM with at least 32B parameters and 32K context window (e.g. `gpt-4o`)
 - An embedding model (e.g., `text-embedding-3-large`, `BAAI/bge-m3`)
 
 ---
@@ -1251,6 +1267,18 @@ tests/                          — Core CG + API test suites (run with pytest)
 docs/                           — Illustrated HTML field guides + Markdown references
 lightrag_webui/                 — Context Graph branded WebUI (React/TS; built into lightrag/api/webui/)
 ```
+
+---
+
+## What Context Graph is NOT
+
+To set expectations honestly:
+
+- **Not a standalone graph database.** It layers decision context, governance, and CGR3 retrieval on top of LightRAG's pluggable storage (NetworkX / Neo4j / PostgreSQL). Bring your own backend.
+- **Not a drop-in LightRAG replacement.** It's a fork that adds a decision/governance layer. It stays API-compatible with LightRAG's endpoints, but the value is the additions.
+- **Not an authenticated multi-tenant SaaS out of the box.** Workspaces isolate data per tenant, but production authentication and object-level access enforcement are opt-in and still hardening — do not expose it to untrusted users without adding auth.
+- **Not hardened for untrusted input yet.** Some security items (SSRF edge cases in web ingest, verbose error responses) are known and tracked; review before public exposure.
+- **Not an IDE plugin or code index.** The agentic-dev preset governs how coding agents work, but Context Graph is a knowledge/decision platform, not an editor extension.
 
 ---
 
