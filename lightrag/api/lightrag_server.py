@@ -53,7 +53,7 @@ from lightrag.api.routers.document_routes import (
 )
 from lightrag.api.routers.query_routes import create_query_routes
 from lightrag.api.routers.graph_routes import create_graph_routes
-from lightrag.api.routers.context_graph_routes import create_context_graph_routes
+from context_graph.api.routes import create_context_graph_routes
 from lightrag.api.mcp_server import create_mcp_server
 from lightrag.api.routers.ollama_api import OllamaAPI
 from lightrag.api.workspace_pool import (

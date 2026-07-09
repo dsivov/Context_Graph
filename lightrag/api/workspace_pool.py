@@ -145,7 +145,7 @@ class WorkspaceProxy:
     def __setattr__(self, name, value):
         setattr(self._get_current_rag(), name, value)
 
-    # Support isinstance() checks used by context_graph_routes._require_context_graph()
+    # Support isinstance() checks used by context_graph.api.routes._require_context_graph()
     def __class_getitem__(cls, item):
         return cls
 

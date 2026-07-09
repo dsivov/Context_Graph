@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from lightrag.api.utils_api import get_combined_auth_dependency
-from lightrag.api.routers.context_graph_routes import (
+from context_graph.api.routes import (
     RelationContextData,
     _pydantic_to_rc,
 )

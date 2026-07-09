@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from lightrag.api.routers.context_graph_routes import (
+from context_graph.api.routes import (
     CGR3QueryRequest,
     CGR3QueryResponse,
     EdgeContextResponse,
