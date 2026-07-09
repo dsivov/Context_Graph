@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 232" role="img" aria-label="Auto query router">
+  <rect id="bg-panel" x="1" y="1" width="958" height="230" rx="12" fill="#1b1f2a" stroke="#2c3346" stroke-width="1"/>
     <defs>
       <marker id="q-ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b93a7"/></marker>
       <style>
