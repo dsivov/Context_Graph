@@ -1316,6 +1316,12 @@ export interface ConnectivityReport {
 export const graphConnectivity = async (): Promise<ConnectivityReport> =>
   (await axiosInstance.get('/graph/connectivity?sample_isolates=8')).data
 
+// Recorded decisions (the (h,r,t,rc) quadruples) — filterable list for the dashboard/decisions view
+export const listDecisions = async (
+  params: Record<string, string | number> = {}
+): Promise<{ decisions: any[]; total_count?: number }> =>
+  (await axiosInstance.get('/graph/decisions', { params })).data
+
 // Deduplication
 export const dedupScan = async (apply: boolean): Promise<any> =>
   (await axiosInstance.post(`/graph/dedup/scan?apply=${apply}`)).data

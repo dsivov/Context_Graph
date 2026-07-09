@@ -1,0 +1,184 @@
+/* Context Graph — "next" UI shell. All rules scoped under .cgnext so the classic
+   UI is untouched. Theme keys off the app's .dark/.light class on <html>. */
+
+.cgnext {
+  /* light (default) — neutrals with a slight blue bias, brand palette from the docs */
+  --bg:#f6f8fb; --surface:#ffffff; --surface2:#eef1f6; --raise:#ffffff;
+  --line:#e2e6ee; --line2:#d3d9e5;
+  --text:#161c28; --text2:#43506a; --muted:#6b7688;
+  --accent:#3f66e0; --accent-ink:#12224e; --accent-dim:rgba(63,102,224,.10);
+  --good:#0e9d84; --good-dim:rgba(14,157,132,.12);
+  --warn:#c67c12; --warn-dim:rgba(198,124,18,.12);
+  --crit:#d23e6a; --crit-dim:rgba(210,62,106,.10);
+  --comm:#8a52d8; --comm-dim:rgba(138,82,216,.10);
+  --shadow:0 1px 2px rgba(16,24,40,.06), 0 12px 28px -16px rgba(16,24,40,.22);
+  --r:12px; --r-sm:8px;
+  --sans:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+
+  color:var(--text); font-family:var(--sans); font-size:14px; line-height:1.5;
+  height:100vh; width:100%; overflow:hidden;
+}
+.dark .cgnext {
+  --bg:#0e1117; --surface:#161b24; --surface2:#1b212c; --raise:#222a38;
+  --line:#28303f; --line2:#333d4f;
+  --text:#e7ebf3; --text2:#aeb8c9; --muted:#8791a3;
+  --accent:#5b8def; --accent-ink:#dbe6ff; --accent-dim:rgba(91,141,239,.14);
+  --good:#22c3a6; --good-dim:rgba(34,195,166,.14);
+  --warn:#f0a73c; --warn-dim:rgba(240,167,60,.14);
+  --crit:#e5678a; --crit-dim:rgba(229,103,138,.14);
+  --comm:#a974f0; --comm-dim:rgba(169,116,240,.14);
+  --shadow:0 1px 0 rgba(255,255,255,.02), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+.cgnext, .cgnext *{box-sizing:border-box}
+.cgnext .num{font-variant-numeric:tabular-nums}
+.cgnext .mono{font-family:var(--mono)}
+.cgnext button{font-family:inherit;cursor:pointer}
+@media (prefers-reduced-motion:reduce){.cgnext *{animation:none!important;transition:none!important}}
+
+/* shell */
+.cgnext .app{display:grid;grid-template-columns:232px 1fr;height:100vh;overflow:hidden;background:var(--bg)}
+
+/* sidebar */
+.cgnext .side{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.cgnext .brand{display:flex;align-items:center;gap:10px;padding:16px 18px 14px}
+.cgnext .brand .mark{width:26px;height:26px;flex:0 0 26px}
+.cgnext .brand .name{font-weight:700;letter-spacing:-.2px;font-size:15px}
+.cgnext .brand .name small{display:block;font-weight:500;font-size:10.5px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-top:1px}
+.cgnext .nav{padding:6px 10px;overflow-y:auto;flex:1;min-height:0}
+.cgnext .nav .grp{margin:14px 8px 6px;font-size:10.5px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+.cgnext .nav button.navitem{width:100%;text-align:left;display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:var(--r-sm);color:var(--text2);border:0;background:transparent;font-weight:500;font-size:13.5px;position:relative;transition:background .12s,color .12s}
+.cgnext .nav button.navitem svg{width:17px;height:17px;flex:0 0 17px;opacity:.85}
+.cgnext .nav button.navitem .badge{margin-left:auto;font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:999px;background:var(--surface2);color:var(--text2)}
+.cgnext .nav button.navitem .badge.warn{background:var(--warn-dim);color:var(--warn)}
+.cgnext .nav button.navitem:hover{background:var(--surface2);color:var(--text)}
+.cgnext .nav button.navitem.active{background:var(--accent-dim);color:var(--text)}
+.cgnext .nav button.navitem.active svg{opacity:1;color:var(--accent)}
+.cgnext .nav button.navitem.active::before{content:"";position:absolute;left:-10px;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+.cgnext .side .foot{border-top:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px}
+.cgnext .avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--comm));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;flex:0 0 28px}
+.cgnext .side .foot .who{font-size:12.5px;font-weight:600;line-height:1.2;min-width:0}
+.cgnext .side .foot .who small{display:block;color:var(--muted);font-weight:500;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* main */
+.cgnext .cgmain{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
+.cgnext .topbar{height:52px;flex:0 0 52px;border-bottom:1px solid var(--line);background:var(--surface);display:flex;align-items:center;gap:14px;padding:0 20px}
+.cgnext .ws{display:flex;align-items:center;gap:9px;padding:5px 10px 5px 8px;border:1px solid var(--line2);border-radius:999px;background:var(--surface2);font-weight:600;font-size:13px;color:var(--text)}
+.cgnext .ws .dot{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 3px var(--good-dim)}
+.cgnext .ws svg{width:14px;height:14px;color:var(--muted)}
+.cgnext .search{flex:1;max-width:420px;display:flex;align-items:center;gap:9px;padding:7px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg);color:var(--muted)}
+.cgnext .search svg{width:15px;height:15px}
+.cgnext .search kbd{margin-left:auto;font-family:var(--mono);font-size:11px;border:1px solid var(--line2);border-radius:5px;padding:1px 5px;color:var(--muted)}
+.cgnext .searchinput{flex:1;min-width:0;border:0;background:transparent;color:var(--text);font:inherit;outline:none}
+.cgnext .searchinput::placeholder{color:var(--muted)}
+/* keep the classic WorkspaceSelector compact in the topbar */
+.cgnext .wswrap{display:flex;align-items:center}
+.cgnext .wswrap :where(button,[role="combobox"]){height:34px}
+.cgnext .top-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.cgnext .iconbtn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);color:var(--text2)}
+.cgnext .iconbtn:hover{background:var(--surface2);color:var(--text)}
+.cgnext .iconbtn svg{width:16px;height:16px}
+
+.cgnext .content{flex:1;overflow-y:auto;min-height:0}
+.cgnext .content.flush{overflow:hidden;display:flex}          /* for embedded full-bleed features */
+.cgnext .content.flush > *{flex:1;min-width:0;min-height:0}
+.cgnext .view{padding:22px 24px 40px;max-width:1180px;margin:0 auto}
+
+/* page header */
+.cgnext .phead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
+.cgnext .phead .eyebrow{font-size:11px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--accent)}
+.cgnext .phead h1{margin:2px 0 3px;font-size:23px;letter-spacing:-.4px;text-wrap:balance;color:var(--text)}
+.cgnext .phead p{margin:0;color:var(--muted);font-size:13px}
+.cgnext .phead .actions{display:flex;gap:8px}
+
+.cgnext .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:var(--r-sm);border:1px solid var(--line2);background:var(--surface);color:var(--text);font-weight:600;font-size:13px;transition:background .12s,border-color .12s}
+.cgnext .btn:hover{background:var(--surface2)}
+.cgnext .btn svg{width:15px;height:15px}
+.cgnext .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.cgnext .btn.primary:hover{filter:brightness(1.07)}
+.cgnext .btn.ghost{border-color:transparent;background:transparent;color:var(--text2)}
+.cgnext .btn.ghost:hover{background:var(--surface2);color:var(--text)}
+.cgnext .btn.sm{padding:5px 10px;font-size:12px}
+.cgnext .btn.warn{color:var(--warn);border-color:var(--warn)}
+.cgnext .btn:disabled{opacity:.55;cursor:default}
+.cgnext .btn:focus-visible,.cgnext .iconbtn:focus-visible,.cgnext .navitem:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* grids */
+.cgnext .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.cgnext .grid2{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
+.cgnext .grid-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+@media(max-width:920px){.cgnext .kpis{grid-template-columns:repeat(2,1fr)}.cgnext .grid2,.cgnext .grid-cards{grid-template-columns:1fr}}
+
+.cgnext .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);position:relative;overflow:hidden}
+.cgnext .card .cbody{padding:16px 17px}
+.cgnext .card .chead{display:flex;align-items:center;gap:10px;padding:14px 17px 0}
+.cgnext .card .chead h3{margin:0;font-size:14px;font-weight:650;letter-spacing:-.1px;color:var(--text)}
+.cgnext .card .chead .sub{color:var(--muted);font-size:12px;margin-left:auto}
+.cgnext .stripe{position:absolute;left:0;top:0;bottom:0;width:3px}
+.cgnext .stripe.good{background:var(--good)} .cgnext .stripe.warn{background:var(--warn)}
+.cgnext .stripe.crit{background:var(--crit)} .cgnext .stripe.accent{background:var(--accent)} .cgnext .stripe.comm{background:var(--comm)}
+
+/* kpi */
+.cgnext .kpi{padding:15px 16px}
+.cgnext .kpi .k-top{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;font-weight:600}
+.cgnext .kpi .k-top svg{width:15px;height:15px}
+.cgnext .kpi .k-val{font-size:29px;font-weight:700;letter-spacing:-1px;margin:8px 0 2px;line-height:1;color:var(--text)}
+.cgnext .kpi .k-val small{font-size:14px;font-weight:600;color:var(--muted);letter-spacing:0}
+.cgnext .kpi .k-sub{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.cgnext .delta{font-weight:600;font-size:11.5px;padding:1px 6px;border-radius:999px}
+.cgnext .delta.up{color:var(--good);background:var(--good-dim)} .cgnext .delta.down{color:var(--crit);background:var(--crit-dim)}
+
+/* chips */
+.cgnext .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface2);color:var(--text2);white-space:nowrap}
+.cgnext .chip.good{background:var(--good-dim);color:var(--good)} .cgnext .chip.warn{background:var(--warn-dim);color:var(--warn)}
+.cgnext .chip.crit{background:var(--crit-dim);color:var(--crit)} .cgnext .chip.accent{background:var(--accent-dim);color:var(--accent)}
+.cgnext .chip.comm{background:var(--comm-dim);color:var(--comm)}
+.cgnext .chip .cd{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+/* feed */
+.cgnext .feed{display:flex;flex-direction:column}
+.cgnext .feed .row{display:flex;gap:12px;padding:12px 17px;border-top:1px solid var(--line)}
+.cgnext .feed .row:first-child{border-top:0}
+.cgnext .feed .ic{width:30px;height:30px;flex:0 0 30px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.cgnext .feed .ic svg{width:15px;height:15px}
+.cgnext .feed .main-t{font-size:13px;font-weight:600;line-height:1.35;color:var(--text)}
+.cgnext .feed .main-t b{color:var(--accent)}
+.cgnext .feed .meta{margin-top:5px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cgnext .feed .when{margin-left:auto;color:var(--muted);font-size:11.5px;white-space:nowrap}
+
+/* health */
+.cgnext .health{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;padding:4px 2px 2px}
+.cgnext .stat .lab{font-size:11.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.cgnext .stat .v{font-size:20px;font-weight:700;letter-spacing:-.5px;margin-top:3px;color:var(--text)}
+.cgnext .bar{height:8px;border-radius:999px;background:var(--surface2);overflow:hidden;display:flex;margin-top:9px}
+.cgnext .bar span{height:100%}
+.cgnext .legend{display:flex;gap:14px;margin-top:9px;flex-wrap:wrap}
+.cgnext .legend span{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)}
+.cgnext .legend i{width:9px;height:9px;border-radius:3px;display:inline-block}
+
+/* operator rows + tiles (graph quality) */
+.cgnext .oprow{display:flex;align-items:center;gap:12px;padding:13px 17px;border-top:1px solid var(--line)}
+.cgnext .oprow:first-child{border-top:0}
+.cgnext .oprow .desc{font-size:13px}
+.cgnext .oprow .desc .t{font-weight:650;color:var(--text)}
+.cgnext .oprow .desc .d{color:var(--muted);font-size:12px;margin-top:1px}
+.cgnext .oprow .btns{margin-left:auto;display:flex;gap:7px;flex-shrink:0}
+.cgnext .tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:16px}
+@media(max-width:920px){.cgnext .tiles{grid-template-columns:repeat(3,1fr)}}
+.cgnext .tile{background:var(--surface);padding:14px 15px}
+.cgnext .tile .tl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.cgnext .tile .tv{font-size:22px;font-weight:700;letter-spacing:-.6px;margin-top:5px;color:var(--text)}
+.cgnext .tile .tv small{font-size:12px;color:var(--muted);font-weight:600}
+
+/* boxes / empty / loading */
+.cgnext .box{padding:12px;border:1px solid var(--line);border-radius:var(--r-sm)}
+.cgnext .empty{padding:26px;text-align:center;color:var(--muted);font-size:13px}
+.cgnext .spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line2);border-top-color:var(--accent);animation:cgspin .7s linear infinite;margin:24px auto}
+@keyframes cgspin{to{transform:rotate(360deg)}}
+
+/* text input (community query, filters) */
+.cgnext .cgqinput{flex:1;min-width:0;padding:7px 11px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--bg);color:var(--text);font:inherit;outline:none}
+.cgnext .cgqinput::placeholder{color:var(--muted)}
+.cgnext .cgqinput:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px}
