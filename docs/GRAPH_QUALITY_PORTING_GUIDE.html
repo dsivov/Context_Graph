@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graph‑Quality Porting Guide — Context Graph → knowledge_rag</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#1b1f2a; --panel2:#161a23; --line:#2c3346;
+    --text:#e7ebf3; --muted:#aab3c5; --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+    --blue:#5b8def; --green:#19b89a; --amber:#f0a73c; --violet:#a974f0; --red:#e5678a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.6 "Segoe UI",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 24px 80px}
+  header.hero{border:1px solid var(--line);border-radius:16px;padding:32px;
+    background:linear-gradient(150deg,#1a2233,#141821);margin-bottom:28px}
+  h1{font-size:30px;margin:0 0 8px;letter-spacing:-.4px}
+  .sub{color:var(--muted);font-size:16px;margin:0}
+  .tag{display:inline-block;font:600 11px var(--mono);letter-spacing:.5px;
+    padding:3px 9px;border-radius:999px;border:1px solid var(--line);
+    color:var(--muted);background:var(--panel2);margin:2px 4px 2px 0;text-transform:uppercase}
+  h2{font-size:21px;margin:38px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:22px 0 8px;color:#cfe0ff}
+  p{color:#d5dbe7} .muted{color:var(--muted)}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  code{font:12.5px var(--mono);background:var(--panel2);border:1px solid var(--line);
+    border-radius:5px;padding:1px 5px;color:#cfe0ff}
+  .card{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:18px 20px;margin:14px 0}
+  .grid{display:grid;gap:14px}
+  .grid.two{grid-template-columns:1fr 1fr}
+  @media(max-width:720px){.grid.two{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+  td code{font-size:12px}
+  .callout{border-left:3px solid var(--blue);background:var(--panel2);border-radius:0 10px 10px 0;
+    padding:12px 16px;margin:14px 0}
+  .callout.green{border-color:var(--green)} .callout.amber{border-color:var(--amber)}
+  .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin:18px 0;overflow-x:auto}
+  .step{display:flex;gap:14px;align-items:flex-start;margin:10px 0}
+  .num{flex:0 0 30px;height:30px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font:700 13px var(--mono);color:var(--blue)}
+  .step .body{flex:1}
+  .step .body b{color:var(--text)}
+  ul{margin:8px 0;padding-left:20px} li{margin:4px 0;color:#d5dbe7}
+  .pill{font:600 10.5px var(--mono);padding:2px 7px;border-radius:6px;border:1px solid var(--line)}
+  .pill.copy{color:var(--green)} .pill.write{color:var(--amber)} .pill.opt{color:var(--violet)}
+  footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div><span class="tag">Cross‑team handoff</span><span class="tag">Overview</span></div>
+  <h1>Porting Graph‑Quality into <code>knowledge_rag</code></h1>
+  <p class="sub">Lift entity <b>deduplication</b>, <b>garbage‑node filtering</b>, <b>connectivity repair</b>,
+  and the <b>ontology</b> dependency out of the Context Graph fork — without taking the rest of it.</p>
+  <p class="muted" style="margin-top:12px;font-size:14px">This page is the map. The
+  <a href="GRAPH_QUALITY_PORTING_GUIDE.md">full step‑by‑step guide (Markdown)</a> has the code,
+  copy commands, migration SQL, endpoint reference, and rollout checklist.</p>
+</header>
+
+<div class="callout green">
+  <b>Why this is a clean lift.</b> None of the four packages import the Context Graph engine class —
+  they reach the graph, vector DB, and LLM <em>only through injected arguments</em>. Your Postgres
+  backend already implements every graph method they call, and each store is a template‑method base
+  class whose only backend surface is a JSONB blob. No changes to your LightRAG fork.
+</div>
+
+<h2>What you take (and what you leave)</h2>
+<table>
+  <tr><th>Take</th><th>Files</th><th>Note</th></tr>
+  <tr><td><code>dedup/</code></td><td>canonical · store · resolver · sweep</td><td>Self‑contained; needs only <code>jsonio.py</code></td></tr>
+  <tr><td><code>quality/</code></td><td>gate · filter · store</td><td>Garbage filter; <code>filter.py</code> uses <code>ontology</code></td></tr>
+  <tr><td><code>connectivity/</code></td><td>rescue</td><td>Isolate rescue; independent of community</td></tr>
+  <tr><td><code>ontology/</code></td><td>schema · store · validate · service · agent</td><td>The shared dependency of the garbage filter</td></tr>
+  <tr><td><code>jsonio.py</code></td><td>1 file</td><td>Dependency‑free LLM‑JSON parser</td></tr>
+  <tr><td><code>community/</code> <span class="pill opt">optional</span></td><td>detect · summarize · store</td><td>Thematic global query; defer for v1</td></tr>
+</table>
+<p class="muted">Leave behind: RelationContext/CGR3, decision traces, the rules engine, RBAC,
+lifecycle, actions, and web ingestion — none are dependencies of the four target packages.</p>
+
+<h2>How it maps onto your stack</h2>
+<div class="fig">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 430" role="img" aria-label="Integration architecture">
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b93a7"/></marker>
+    <style>
+      .b{font:600 13px "Segoe UI",sans-serif;fill:#e7ebf3}
+      .s{font:500 11px "Segoe UI",sans-serif;fill:#aab3c5}
+      .h{font:700 11px "SFMono-Regular",monospace;fill:#cfe0ff;letter-spacing:.5px}
+      .ln{stroke:#8b93a7;stroke-width:1.6;fill:none;marker-end:url(#ar)}
+    </style>
+  </defs>
+
+  <!-- copied packages -->
+  <rect x="20" y="60" width="230" height="150" rx="12" fill="rgba(25,184,154,.10)" stroke="#19b89a"/>
+  <text x="36" y="50" class="h">COPIED PACKAGES</text>
+  <text x="36" y="86" class="b">graph_quality/</text>
+  <text x="36" y="108" class="s">dedup · quality · connectivity</text>
+  <text x="36" y="126" class="s">ontology · jsonio · community*</text>
+  <text x="36" y="152" class="s">inject graph/vdb/llm via args</text>
+  <text x="36" y="170" class="s">— no engine coupling</text>
+  <text x="36" y="194" class="s">+ projection_min.py (sever rules)</text>
+
+  <!-- subclass -->
+  <rect x="355" y="45" width="230" height="90" rx="12" fill="rgba(91,141,239,.13)" stroke="#5b8def"/>
+  <text x="371" y="35" class="h">THE GLUE</text>
+  <text x="371" y="72" class="b">QualityLightRAG(LightRAG)</text>
+  <text x="371" y="94" class="s">on‑demand ops + on‑ingest filter</text>
+  <text x="371" y="112" class="s">copies method bodies from core.py</text>
+
+  <!-- factory -->
+  <rect x="355" y="165" width="230" height="70" rx="12" fill="rgba(169,116,240,.14)" stroke="#a974f0"/>
+  <text x="371" y="192" class="b">make_lightrag(lightrag_cls=…)</text>
+  <text x="371" y="212" class="s">one backward‑compatible kwarg</text>
+
+  <!-- PG stores -->
+  <rect x="355" y="270" width="230" height="90" rx="12" fill="rgba(240,167,60,.12)" stroke="#f0a73c"/>
+  <text x="371" y="260" class="h">POSTGRES STORES</text>
+  <text x="371" y="298" class="b">stores_pg.py + migration 007</text>
+  <text x="371" y="318" class="s">JSONB blob per (kind, workspace)</text>
+  <text x="371" y="336" class="s">~20‑line mixin; logic inherited</text>
+
+  <!-- their services -->
+  <rect x="690" y="45" width="230" height="90" rx="12" fill="rgba(91,141,239,.10)" stroke="#5b8def"/>
+  <text x="706" y="35" class="h">INGESTION_SERVER</text>
+  <text x="706" y="72" class="b">@app.* /api/graph/*</text>
+  <text x="706" y="92" class="s">reads _rag/_pool/_workspace</text>
+  <text x="706" y="110" class="s">admin‑gated in the UI</text>
+
+  <rect x="690" y="165" width="230" height="70" rx="12" fill="rgba(25,184,154,.10)" stroke="#19b89a"/>
+  <text x="706" y="192" class="b">worker.ainsert()</text>
+  <text x="706" y="212" class="s">auto garbage filter on ingest</text>
+
+  <rect x="690" y="270" width="230" height="90" rx="12" fill="rgba(169,116,240,.12)" stroke="#a974f0"/>
+  <text x="706" y="260" class="h">DEBUG_WEBUI (NiceGUI)</text>
+  <text x="706" y="298" class="b">pages/graph_quality.py</text>
+  <text x="706" y="318" class="s">api_client → INGESTION_URL</text>
+  <text x="706" y="336" class="s">+ 3 edits in app.py</text>
+
+  <!-- arrows -->
+  <path class="ln" d="M250 120 H353"/>
+  <path class="ln" d="M470 135 V163"/>
+  <path class="ln" d="M470 235 V268"/>
+  <path class="ln" d="M585 90 H688"/>
+  <path class="ln" d="M585 200 H688"/>
+  <path class="ln" d="M585 315 H688"/>
+</svg>
+</div>
+
+<div class="grid two">
+  <div class="card">
+    <h3>Two facts that make it clean</h3>
+    <ul>
+      <li><b>Your LightRAG fork is effectively vanilla</b> — no extraction‑format mismatch; these features act on the resulting graph.</li>
+      <li><b>You're single‑tenant</b> (<code>kdefault_v1</code>) — endpoints resolve the workspace server‑side; <b>no workspace param/selector anywhere</b>.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Decisions we made for you</h3>
+    <ul>
+      <li>Endpoints live in <code>ingestion_server/main.py</code> (it owns the write‑authority <code>_rag</code>).</li>
+      <li>Side‑stores become <b>Postgres</b>, not JSON files — matches your all‑PG model & read‑only UI mount.</li>
+      <li>Maintenance is an <b>operator</b> action → admin‑gated UI, <b>not</b> agent MCP tools.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>The ten steps</h2>
+<div class="card">
+  <div class="step"><div class="num">1</div><div class="body"><b>Vendor the packages</b> <span class="pill copy">copy</span> into <code>pt-knowledge-rag-core/knowledge_rag/graph_quality/</code>; one find‑replace of <code>context_graph.</code> → <code>knowledge_rag.graph_quality.</code>.</div></div>
+  <div class="step"><div class="num">2</div><div class="body"><b>Sever the ontology → rules edge</b> <span class="pill write">write</span> — copy two pure‑regex parsers into <code>projection_min.py</code>; change one import in <code>ontology/schema.py</code>. Bundle is now closed.</div></div>
+  <div class="step"><div class="num">3</div><div class="body"><b>Postgres stores</b> <span class="pill write">write</span> — <code>migrations/007</code> (one JSONB table) + a ~20‑line <code>_PgBlob</code> mixin implementing <code>_read_raw/_write_raw</code>. All store logic is inherited.</div></div>
+  <div class="step"><div class="num">4</div><div class="body"><b>The <code>QualityLightRAG</code> subclass</b> <span class="pill write">write</span> — copy the on‑demand method bodies verbatim from <code>core.py</code>; inject via <code>make_lightrag(lightrag_cls=…)</code> + <code>attach_quality(pool)</code>.</div></div>
+  <div class="step"><div class="num">5</div><div class="body"><b>On‑ingest garbage filter</b> — the subclass's <code>_process_extract_entities</code> override runs inside your existing <code>ainsert</code>; <b>no <code>worker.py</code> change</b>.</div></div>
+  <div class="step"><div class="num">6</div><div class="body"><b>Config knobs</b> — <code>DEDUP_*</code>/<code>GARBAGE_*</code> into the <code>Config</code> dataclass + compose env; optional <code>app_settings</code> live override (your <code>recycle_days</code> precedent).</div></div>
+  <div class="step"><div class="num">7</div><div class="body"><b>HTTP endpoints</b> <span class="pill write">write</span> — plain <code>@app.*</code> handlers under <code>/api/graph/*</code>, mirroring <code>_delete_one_with_lightrag</code>. Start read‑only + previews.</div></div>
+  <div class="step"><div class="num">8</div><div class="body"><b>Background sweep</b> <span class="pill opt">optional</span> — drain the gray‑band review queue on an interval, mirroring your recycle sweep. Off by default.</div></div>
+  <div class="step"><div class="num">9</div><div class="body"><b>NiceGUI page</b> <span class="pill write">write</span> — one <code>pages/graph_quality.py</code> + a few <code>api_client</code> methods + 3 edits in <code>app.py</code>. No workspace selector needed.</div></div>
+  <div class="step"><div class="num">10</div><div class="body"><b>MCP diagnostics</b> <span class="pill opt">optional</span> — expose only read‑only reports as agent tools; keep mutations operator‑only.</div></div>
+</div>
+
+<div class="callout amber">
+  <b>Operator caveats to surface in the UI.</b> <code>unmerge</code> restores the alias/audit but
+  does not re‑split folded edges (preview merges carefully). Garbage removal & isolate prune move
+  nodes to <b>quarantine</b> (restorable), not hard delete. Only <b>degree‑0</b> isolates are pruned.
+</div>
+
+<h2>Effort at a glance</h2>
+<table>
+  <tr><th>Copied</th><th>New</th><th>Edited</th></tr>
+  <tr>
+    <td>~16 files + tests<br><span class="muted">jsonio, dedup, quality, connectivity, ontology, community*</span></td>
+    <td>5 files<br><span class="muted">projection_min · stores_pg · quality_lightrag · migration 007 · ensure‑schema</span></td>
+    <td>4 files<br><span class="muted">lightrag_init · main.py · config.py · app.py + api_client</span></td>
+  </tr>
+</table>
+<p class="muted">No changes to the LightRAG fork itself. The backend‑agnostic proof (every method
+mapped to a line in your <code>postgres_impl.py</code> / <code>lightrag.py</code>) is in
+Appendix&nbsp;C of the <a href="GRAPH_QUALITY_PORTING_GUIDE.md">full guide</a>.</p>
+
+<footer>
+  Full guide with code, migration SQL, endpoint reference & rollout checklist →
+  <a href="GRAPH_QUALITY_PORTING_GUIDE.md">GRAPH_QUALITY_PORTING_GUIDE.md</a>.
+  Source packages: <a href="https://github.com/dsivov/Context_Graph">dsivov/Context_Graph</a> · <code>context_graph/</code>.
+</footer>
+
+</div>
+</body>
+</html>
