@@ -112,7 +112,7 @@ lifecycle, actions, and web ingestion — none are dependencies of the four targ
   <text x="371" y="35" class="h">THE GLUE</text>
   <text x="371" y="72" class="b">QualityLightRAG(LightRAG)</text>
   <text x="371" y="94" class="s">on‑demand ops + on‑ingest filter</text>
-  <text x="371" y="112" class="s">copies method bodies from core.py</text>
+  <text x="371" y="112" class="s">full method bodies inlined in the guide</text>
 
   <!-- factory -->
   <rect x="355" y="165" width="230" height="70" rx="12" fill="rgba(169,116,240,.14)" stroke="#a974f0"/>
@@ -176,7 +176,7 @@ lifecycle, actions, and web ingestion — none are dependencies of the four targ
   <div class="step"><div class="num">1</div><div class="body"><b>Vendor the packages</b> <span class="pill copy">copy</span> into <code>pt-knowledge-rag-core/knowledge_rag/graph_quality/</code>; one find‑replace of <code>context_graph.</code> → <code>knowledge_rag.graph_quality.</code>.</div></div>
   <div class="step"><div class="num">2</div><div class="body"><b>Sever the ontology → rules edge</b> <span class="pill write">write</span> — copy two pure‑regex parsers into <code>projection_min.py</code>; change one import in <code>ontology/schema.py</code>. Bundle is now closed.</div></div>
   <div class="step"><div class="num">3</div><div class="body"><b>Postgres stores</b> <span class="pill write">write</span> — <code>migrations/007</code> (one JSONB table) + a ~20‑line <code>_PgBlob</code> mixin implementing <code>_read_raw/_write_raw</code>. All store logic is inherited.</div></div>
-  <div class="step"><div class="num">4</div><div class="body"><b>The <code>QualityLightRAG</code> subclass</b> <span class="pill write">write</span> — copy the on‑demand method bodies verbatim from <code>core.py</code>; inject via <code>make_lightrag(lightrag_cls=…)</code> + <code>attach_quality(pool)</code>.</div></div>
+  <div class="step"><div class="num">4</div><div class="body"><b>The <code>QualityLightRAG</code> subclass</b> <span class="pill write">write</span> — the complete file is inlined in the guide (all 22 methods); inject via <code>make_lightrag(lightrag_cls=…)</code> + <code>attach_quality(pool)</code>.</div></div>
   <div class="step"><div class="num">5</div><div class="body"><b>On‑ingest garbage filter</b> — the subclass's <code>_process_extract_entities</code> override runs inside your existing <code>ainsert</code>; <b>no <code>worker.py</code> change</b>.</div></div>
   <div class="step"><div class="num">6</div><div class="body"><b>Config knobs</b> — <code>DEDUP_*</code>/<code>GARBAGE_*</code> into the <code>Config</code> dataclass + compose env; optional <code>app_settings</code> live override (your <code>recycle_days</code> precedent).</div></div>
   <div class="step"><div class="num">7</div><div class="body"><b>HTTP endpoints</b> <span class="pill write">write</span> — plain <code>@app.*</code> handlers under <code>/api/graph/*</code>, mirroring <code>_delete_one_with_lightrag</code>. Start read‑only + previews.</div></div>
