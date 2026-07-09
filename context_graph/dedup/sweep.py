@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from typing import Any, Awaitable, Callable, List, Optional
 
-from lightrag.context_graph import _extract_json_object
+from context_graph.jsonio import _extract_json_object
 from lightrag.utils import logger
 
 from context_graph.dedup.canonical import canonicalize, prefer_canonical_name

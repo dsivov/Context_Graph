@@ -182,7 +182,7 @@ class TestContextEdge:
 @pytest.mark.asyncio
 async def test_cg_relation_5_fields_no_context():
     """5-field relation (standard format) should parse without relation_context."""
-    from lightrag.context_graph import _handle_single_cg_relationship_extraction
+    from context_graph.core import _handle_single_cg_relationship_extraction
 
     attrs = [
         "relation",
@@ -204,7 +204,7 @@ async def test_cg_relation_5_fields_no_context():
 @pytest.mark.asyncio
 async def test_cg_relation_6_fields_with_valid_context():
     """6-field relation should parse and include a valid relation_context JSON."""
-    from lightrag.context_graph import _handle_single_cg_relationship_extraction
+    from context_graph.core import _handle_single_cg_relationship_extraction
 
     rc_dict = {
         "supporting_sentences": ["Alice and Bob collaborated closely"],
@@ -237,7 +237,7 @@ async def test_cg_relation_6_fields_with_valid_context():
 @pytest.mark.asyncio
 async def test_cg_relation_6_fields_invalid_json_context():
     """Malformed JSON in 6th field should be silently dropped (no relation_context key)."""
-    from lightrag.context_graph import _handle_single_cg_relationship_extraction
+    from context_graph.core import _handle_single_cg_relationship_extraction
 
     attrs = [
         "relation",
@@ -257,7 +257,7 @@ async def test_cg_relation_6_fields_invalid_json_context():
 @pytest.mark.offline
 @pytest.mark.asyncio
 async def test_cg_relation_self_loop_returns_none():
-    from lightrag.context_graph import _handle_single_cg_relationship_extraction
+    from context_graph.core import _handle_single_cg_relationship_extraction
 
     attrs = ["relation", "Alice", "Alice", "self-ref", "Alice refers to herself."]
     result = await _handle_single_cg_relationship_extraction(
@@ -270,7 +270,7 @@ async def test_cg_relation_self_loop_returns_none():
 @pytest.mark.asyncio
 async def test_process_cg_extraction_result_entities_and_relations():
     """_process_cg_extraction_result should parse both entities and 6-field relations."""
-    from lightrag.context_graph import _process_cg_extraction_result
+    from context_graph.core import _process_cg_extraction_result
 
     rc_json = json.dumps(
         {
@@ -387,7 +387,7 @@ class TestContextGraphClass:
     @pytest.mark.asyncio
     async def test_extract_entities_with_context_uses_cg_prompts(self, tmp_path):
         """extract_entities_with_context should call LLM with CG system prompt."""
-        from lightrag.context_graph import extract_entities_with_context
+        from context_graph.core import extract_entities_with_context
         from lightrag.utils import Tokenizer
 
         class DummyTokenizer:
@@ -552,7 +552,7 @@ class TestContextGraphNewMethods:
         # emit_decision_trace also projects into the retrieval fabric (_index_decision)
         cg.relationships_vdb = AsyncMock()
         # Bind real method implementations to the mock
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
 
         cg.emit_decision_trace = ContextGraph.emit_decision_trace.__get__(cg, type(cg))
         cg._index_decision = ContextGraph._index_decision.__get__(cg, type(cg))
@@ -848,7 +848,7 @@ class TestContextGraphNewMethods:
     # ── Graph-quality v-next · Phase 0: connectivity report ─────────────────
 
     async def test_connectivity_report(self):
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
 
         # A→B→C is one component (3 nodes, 2 edges); D and E are isolates.
         labels = ["A", "B", "C", "D", "E"]
@@ -875,7 +875,7 @@ class TestContextGraphNewMethods:
         assert set(r["isolate_sample"]) == {"D", "E"}
 
     async def test_connectivity_report_empty(self):
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
 
         graph = AsyncMock()
         graph.get_all_labels = AsyncMock(return_value=[])
@@ -891,7 +891,7 @@ class TestDedupWiring:
 
     def _cg(self, labels, query_fn, node_type="Organization"):
         from unittest.mock import AsyncMock
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
         from context_graph.dedup import InMemoryDedupStore
 
         cg = ContextGraph.__new__(ContextGraph)
@@ -949,7 +949,7 @@ class TestDedupWiring:
             "International Business Machines"
 
     def test_master_switch(self, monkeypatch):
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
         cg = ContextGraph.__new__(ContextGraph)
         monkeypatch.delenv("DEDUP_ENABLED", raising=False)
         assert cg.dedup_enabled is True                 # default on
@@ -959,7 +959,7 @@ class TestDedupWiring:
         assert cg.dedup_enabled is True
 
     def test_sweep_batch_config(self, monkeypatch):
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
         cg = ContextGraph.__new__(ContextGraph)
         monkeypatch.setenv("DEDUP_SWEEP_BATCH", "25")
         assert cg._dedup_sweep_batch() == 25
@@ -971,7 +971,7 @@ class TestGarbageFilterWiring:
     """ContextGraph._filter_extracted quarantines garbage nodes + drops their edges."""
 
     def _cg(self):
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
         from context_graph.quality import NodeFilter, InMemoryQuarantineStore
         cg = ContextGraph.__new__(ContextGraph)
         cg.workspace = "ws"
@@ -1012,7 +1012,7 @@ class TestGarbageFilterWiring:
 
     async def test_scan_garbage_preview_does_not_mutate(self, monkeypatch):
         from unittest.mock import AsyncMock
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
         monkeypatch.delenv("GARBAGE_FILTER_ENABLED", raising=False)
         cg = self._cg()
         graph = AsyncMock()
@@ -1040,7 +1040,7 @@ class TestConnectivityRescueWiring:
 
     def _cg(self, labels, edges):
         from unittest.mock import AsyncMock
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
         cg = ContextGraph.__new__(ContextGraph)
         cg.workspace = "ws"
         graph = AsyncMock()
@@ -1069,7 +1069,7 @@ class TestConnectivityRescueWiring:
 
     async def test_prune_isolates_preview_and_apply(self):
         from unittest.mock import AsyncMock
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
         from context_graph.quality import InMemoryQuarantineStore
         # C is a degree-0 isolate; A,B are connected (degree-1) and must be untouched.
         cg = self._cg(["A", "B", "C"], [{"source": "A", "target": "B"}])
@@ -1096,7 +1096,7 @@ class TestCommunityWiring:
 
     def _cg(self, labels, edges):
         from unittest.mock import AsyncMock
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
         from context_graph.community import InMemoryCommunityStore
         cg = ContextGraph.__new__(ContextGraph)
         cg.workspace = "ws"
@@ -1157,7 +1157,7 @@ class TestQueryBlend:
 
     def _cg(self, precedents, named_nodes):
         from unittest.mock import AsyncMock
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
 
         cg = ContextGraph.__new__(ContextGraph)
         cg.decisions_vdb = AsyncMock()
@@ -1169,7 +1169,7 @@ class TestQueryBlend:
         """Invoke ContextGraph.aquery_llm with LightRAG.aquery_llm patched to capture
         what the base receives and to return a controllable result."""
         from unittest.mock import patch
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
         from lightrag.lightrag import LightRAG
 
         captured = {}
@@ -1286,7 +1286,7 @@ class TestQueryBlend:
         cg.llm_model_func.assert_not_awaited()  # no extra LLM call for prompt-only
 
     def test_build_blend_block_respects_char_budget(self):
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
 
         cg = ContextGraph.__new__(ContextGraph)
         precedents = [{
@@ -1299,7 +1299,7 @@ class TestQueryBlend:
 
     async def test_collect_blend_caps_graph_probes(self):
         from unittest.mock import AsyncMock
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
 
         cg = ContextGraph.__new__(ContextGraph)
         cg.decisions_vdb = AsyncMock()

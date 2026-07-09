@@ -9,7 +9,7 @@ iterative, context-aware question answering over the enriched graph.
 
 Usage::
 
-    from lightrag.context_graph import ContextGraph
+    from context_graph.core import ContextGraph
     from lightrag.llm.openai import gpt_4o_mini_complete, openai_embed
     from lightrag import QueryParam
 
@@ -44,6 +44,7 @@ from typing import Any, Optional
 
 from lightrag.base import BaseKVStorage, BaseVectorStorage, TextChunkSchema
 from context_graph.types import RelationContext
+from context_graph.jsonio import _extract_json_object
 from lightrag.exceptions import PipelineCancelledException
 from lightrag.lightrag import LightRAG
 from lightrag.namespace import NameSpace
@@ -75,39 +76,6 @@ from lightrag.kg.shared_storage import get_storage_keyed_lock
 # ─────────────────────────────────────────────────────────────────────────────
 # Low-level extraction helpers
 # ─────────────────────────────────────────────────────────────────────────────
-
-
-def _extract_json_object(text: str) -> dict | None:
-    """Best-effort extraction of a JSON object from an LLM response.
-
-    LLMs frequently wrap JSON in a ``` or ```json code fence, or surround it
-    with prose. This recovers the object in those cases and returns it as a
-    dict, or ``None`` if no JSON object can be parsed (callers treat ``None``
-    as 'unparseable' and fall back). Returning ``None`` for a non-object
-    (scalar/array) avoids ``AttributeError`` on a later ``.get(...)``.
-    """
-    if not text:
-        return None
-    s = text.strip()
-    # Strip a leading code fence + optional language tag, then drop the
-    # trailing fence (and anything after it).
-    if s.startswith("```"):
-        s = s[3:]
-        if s[:4].lower() == "json":
-            s = s[4:]
-        s = s.split("```", 1)[0].strip()
-    try:
-        obj = json.loads(s)
-    except (json.JSONDecodeError, TypeError):
-        # Fall back to the outermost {...} span.
-        start, end = s.find("{"), s.rfind("}")
-        if start == -1 or end <= start:
-            return None
-        try:
-            obj = json.loads(s[start : end + 1])
-        except (json.JSONDecodeError, TypeError):
-            return None
-    return obj if isinstance(obj, dict) else None
 
 
 async def _handle_single_cg_relationship_extraction(

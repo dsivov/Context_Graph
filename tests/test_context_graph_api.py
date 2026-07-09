@@ -169,7 +169,7 @@ def _make_context_graph_mock(
     edge_exists: bool = True,
 ):
     """Return a mock that IS-A ContextGraph, with configurable behaviour."""
-    from lightrag.context_graph import ContextGraph
+    from context_graph.core import ContextGraph
 
     mock = MagicMock(spec=ContextGraph)
 
@@ -403,7 +403,7 @@ def _make_cg_mock_with_decisions(
     get_all_decisions_result=None,
 ):
     """Extend the base CG mock with Phase 5 methods."""
-    from lightrag.context_graph import ContextGraph
+    from context_graph.core import ContextGraph
 
     mock = MagicMock(spec=ContextGraph)
     mock.__class__ = ContextGraph

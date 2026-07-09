@@ -36,7 +36,7 @@ from .config import (
 )
 from lightrag.utils import get_env_value
 from lightrag import LightRAG, __version__ as core_version
-from lightrag.context_graph import ContextGraph
+from context_graph.core import ContextGraph
 from lightrag.api import __api_version__
 from lightrag.types import GPTKeywordExtractionFormat
 from lightrag.utils import EmbeddingFunc

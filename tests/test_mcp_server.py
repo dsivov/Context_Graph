@@ -43,7 +43,7 @@ def _make_mock_rag(is_context_graph=True):
     mock_rag = MagicMock()
 
     if is_context_graph:
-        from lightrag.context_graph import ContextGraph
+        from context_graph.core import ContextGraph
 
         mock_inner = MagicMock(spec=ContextGraph)
         mock_rag._get_current_rag = MagicMock(return_value=mock_inner)

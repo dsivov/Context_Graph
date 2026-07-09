@@ -17,7 +17,7 @@ import json
 import re
 from typing import Any, List
 
-from lightrag.context_graph import _extract_json_object
+from context_graph.jsonio import _extract_json_object
 from lightrag.utils import logger
 
 from context_graph.webingest.connectors.base import Connector

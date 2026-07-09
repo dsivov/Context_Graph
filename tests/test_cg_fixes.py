@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from lightrag.context_graph import _extract_json_object
+from context_graph.jsonio import _extract_json_object
 from context_graph.types import RelationContext
 from lightrag.operate import _handle_single_relationship_extraction
 

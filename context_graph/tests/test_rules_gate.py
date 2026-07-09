@@ -108,7 +108,7 @@ def test_gate_reject():
 def _make_cg(graph, vdb, gate):
     """ContextGraph-like mock with the real emit_decision_trace bound (mirrors
     tests/test_context_graph.py)."""
-    from lightrag.context_graph import ContextGraph
+    from context_graph.core import ContextGraph
 
     cg = MagicMock()
     cg.chunk_entity_relation_graph = graph

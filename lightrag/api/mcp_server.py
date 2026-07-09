@@ -76,7 +76,7 @@ def _validate_entity_name(name: str, field: str) -> None:
 
 def _require_context_graph(rag) -> None:
     """Raise ToolError if the underlying rag is not a ContextGraph instance."""
-    from lightrag.context_graph import ContextGraph
+    from context_graph.core import ContextGraph
 
     actual = rag._get_current_rag() if hasattr(rag, "_get_current_rag") else rag
     if not isinstance(actual, ContextGraph):

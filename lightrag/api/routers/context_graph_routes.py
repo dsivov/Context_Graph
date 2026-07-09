@@ -334,7 +334,7 @@ def _pydantic_to_rc(data: RelationContextData):
 
 def _require_context_graph(rag):
     """Raise HTTP 503 if rag is not a ContextGraph instance."""
-    from lightrag.context_graph import ContextGraph
+    from context_graph.core import ContextGraph
 
     if not isinstance(rag, ContextGraph):
         raise HTTPException(

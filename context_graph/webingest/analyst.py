@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List
 
-from lightrag.context_graph import _extract_json_object
+from context_graph.jsonio import _extract_json_object
 from lightrag.utils import logger
 
 LLMFunc = Callable[..., Awaitable[str]]
