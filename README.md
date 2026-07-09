@@ -12,6 +12,11 @@ Context Graph extends the standard triple-based knowledge graph `(head, relation
 
 The result is a *system of decision*, not just a system of record: a living, queryable archive of organizational knowledge that knows not only what relationships exist, but the operational reality behind them.
 
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="Context Graph dashboard — graph health, quality metrics, and the decision ledger" width="900">
+</p>
+<p align="center"><em>The dashboard: graph health, quality, and the decision ledger — every edge backed by its <code>(h, r, t, rc)</code> quadruple.</em></p>
+
 ---
 
 ## Table of Contents
