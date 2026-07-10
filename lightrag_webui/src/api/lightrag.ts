@@ -518,6 +518,30 @@ export const queryText = async (request: QueryRequest): Promise<QueryResponse> =
   return response.data
 }
 
+// Raw retrieval data incl. actual chunk text — for the Chunk Inspector.
+export type RetrievedChunk = { chunk_id: string; content: string; file_path?: string; reference_id?: string }
+export type QueryDataResult = {
+  entities: any[]
+  relationships: any[]
+  chunks: RetrievedChunk[]
+  references: { reference_id: string; file_path?: string }[]
+}
+export const queryDataChunks = async (
+  query: string,
+  mode: string = 'mix',
+  opts: { top_k?: number; chunk_top_k?: number } = {}
+): Promise<QueryDataResult> => {
+  const res = await axiosInstance.post('/query/data', {
+    query,
+    mode,
+    top_k: opts.top_k ?? 20,
+    chunk_top_k: opts.chunk_top_k ?? 10,
+    include_references: true,
+    include_chunk_content: true
+  })
+  return (res.data?.data ?? res.data) as QueryDataResult
+}
+
 export const queryTextStream = async (
   request: QueryRequest,
   onChunk: (chunk: string) => void,

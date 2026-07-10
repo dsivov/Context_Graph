@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import {
   LayoutDashboardIcon, ScaleIcon, FilesIcon, NetworkIcon, SearchIcon,
   GavelIcon, BoxesIcon, SparklesIcon, Code2Icon, RocketIcon,
-  BellIcon, SunIcon, MoonIcon, PanelLeftIcon
+  BellIcon, SunIcon, MoonIcon, PanelLeftIcon, LayersIcon
 } from 'lucide-react'
 import { useSettingsStore } from '@/stores/settings'
 import { setUiMode } from '@/lib/uiMode'
@@ -15,13 +15,14 @@ import GraphQualityNext from '@/features/next/pages/GraphQualityNext'
 import OntologyNext from '@/features/next/pages/OntologyNext'
 import RulesNext from '@/features/next/pages/RulesNext'
 import DocumentsNext from '@/features/next/pages/DocumentsNext'
+import ChunkInspector from '@/features/next/pages/ChunkInspector'
 import GraphViewer from '@/features/GraphViewer'
 import RetrievalTesting from '@/features/RetrievalTesting'
 import GetStarted from '@/features/GetStarted'
 import ApiSite from '@/features/ApiSite'
 
 type ViewId =
-  | 'dashboard' | 'decisions' | 'documents' | 'graph' | 'retrieval'
+  | 'dashboard' | 'decisions' | 'documents' | 'graph' | 'retrieval' | 'chunks'
   | 'rules' | 'ontology' | 'quality' | 'getstarted' | 'api'
 
 type NavItem = {
@@ -39,6 +40,7 @@ const NAV: NavItem[] = [
   { id: 'documents', label: 'Documents', icon: FilesIcon, group: 'Knowledge', flush: true },
   { id: 'graph', label: 'Knowledge Graph', icon: NetworkIcon, group: 'Knowledge', flush: true },
   { id: 'retrieval', label: 'Retrieval', icon: SearchIcon, group: 'Knowledge', flush: true },
+  { id: 'chunks', label: 'Chunks', icon: LayersIcon, group: 'Knowledge' },
   { id: 'rules', label: 'Rules', icon: GavelIcon, group: 'Governance' },
   { id: 'ontology', label: 'Ontology', icon: BoxesIcon, group: 'Governance' },
   { id: 'quality', label: 'Graph Quality', icon: SparklesIcon, group: 'Governance' },
@@ -98,6 +100,7 @@ export default function AppShell() {
       case 'documents': return <DocumentsNext />
       case 'graph': return <GraphViewer />
       case 'retrieval': return <RetrievalTesting />
+      case 'chunks': return <ChunkInspector />
       case 'rules': return <RulesNext />
       case 'ontology': return <OntologyNext />
       case 'quality': return <GraphQualityNext />
