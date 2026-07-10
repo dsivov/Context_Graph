@@ -36,7 +36,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboardIcon, group: 'Overview' },
   { id: 'decisions', label: 'Decisions', icon: ScaleIcon, group: 'Overview' },
-  { id: 'documents', label: 'Documents', icon: FilesIcon, group: 'Knowledge' },
+  { id: 'documents', label: 'Documents', icon: FilesIcon, group: 'Knowledge', flush: true },
   { id: 'graph', label: 'Knowledge Graph', icon: NetworkIcon, group: 'Knowledge', flush: true },
   { id: 'retrieval', label: 'Retrieval', icon: SearchIcon, group: 'Knowledge', flush: true },
   { id: 'rules', label: 'Rules', icon: GavelIcon, group: 'Governance' },
