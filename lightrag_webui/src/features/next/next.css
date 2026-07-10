@@ -175,6 +175,7 @@
 .cgnext .box{padding:12px;border:1px solid var(--line);border-radius:var(--r-sm)}
 .cgnext .empty{padding:26px;text-align:center;color:var(--muted);font-size:13px}
 .cgnext .spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line2);border-top-color:var(--accent);animation:cgspin .7s linear infinite;margin:24px auto}
+.cgnext .cgspin{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid currentColor;border-top-color:transparent;animation:cgspin .6s linear infinite;vertical-align:-1px}
 @keyframes cgspin{to{transform:rotate(360deg)}}
 
 /* text input (community query, filters) */

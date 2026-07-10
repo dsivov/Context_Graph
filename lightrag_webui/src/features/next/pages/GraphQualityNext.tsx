@@ -40,14 +40,15 @@ export default function GraphQualityNext() {
   const run = useCallback(
     async (key: string, fn: () => Promise<any>, ok?: (r: any) => string, after?: () => void) => {
       setBusy(key)
+      const tid = toast.loading('Processing…')   // spinning indicator until the op resolves
       try {
         const r = await fn()
-        toast.success(ok ? ok(r) : 'Done.')
+        toast.success(ok ? ok(r) : 'Done.', { id: tid })
         after?.()
         refreshConn()
         return r
       } catch (e) {
-        toast.error(errMsg(e))
+        toast.error(errMsg(e), { id: tid })
       } finally {
         setBusy(null)
       }
@@ -55,7 +56,9 @@ export default function GraphQualityNext() {
     [refreshConn]
   )
 
-  const off = (k: string) => busy !== null && busy !== k
+  // Lock every action while one runs — a "Working…" header chip + a spinning
+  // loading toast signal progress, so no button fires twice or looks idle.
+  const off = (_k?: string) => busy !== null
   const isolatedHigh = (conn?.isolated_pct ?? 0) > 10
 
   return (
@@ -67,7 +70,14 @@ export default function GraphQualityNext() {
           <p>Preview any action first — removals move to a restorable quarantine, never hard-deleted.</p>
         </div>
         <div className="actions">
-          <button className="btn ghost" onClick={refreshConn}><RefreshCwIcon className="" />Refresh</button>
+          {busy && (
+            <span className="chip accent" style={{ alignSelf: 'center' }}>
+              <span className="cgspin" />Working…
+            </span>
+          )}
+          <button className="btn ghost" onClick={refreshConn} disabled={busy !== null}>
+            <RefreshCwIcon className="" />Refresh
+          </button>
         </div>
       </div>
 
