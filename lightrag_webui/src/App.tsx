@@ -21,11 +21,14 @@ import GetStarted from '@/features/GetStarted'
 import ApiSite from '@/features/ApiSite'
 
 import { Tabs, TabsContent } from '@/components/ui/Tabs'
+import AppShell from '@/features/next/AppShell'
+import { getUiMode, setUiMode } from '@/lib/uiMode'
 
 function App() {
   const message = useBackendState.use.message()
   const enableHealthCheck = useSettingsStore.use.enableHealthCheck()
   const currentTab = useSettingsStore.use.currentTab()
+  const uiMode = getUiMode()
   const [apiKeyAlertOpen, setApiKeyAlertOpen] = useState(false)
   const [initializing, setInitializing] = useState(true) // Add initializing state
   const versionCheckRef = useRef(false); // Prevent duplicate calls in Vite dev mode
@@ -198,6 +201,13 @@ function App() {
               </div>
             </div>
           </div>
+        ) : uiMode === 'next' ? (
+          // New "next" shell (opt-in via ?ui=next); classic UI stays the default
+          <>
+            <AppShell />
+            {enableHealthCheck && <StatusIndicator />}
+            <ApiKeyAlert open={apiKeyAlertOpen} onOpenChange={handleApiKeyAlertOpenChange} />
+          </>
         ) : (
           // Main content after initialization
           <main className="flex h-screen w-screen overflow-hidden">
@@ -236,6 +246,13 @@ function App() {
             </Tabs>
             {enableHealthCheck && <StatusIndicator />}
             <ApiKeyAlert open={apiKeyAlertOpen} onOpenChange={handleApiKeyAlertOpenChange} />
+            <button
+              onClick={() => setUiMode('next')}
+              title="Preview the redesigned UI"
+              className="fixed bottom-4 left-4 z-50 flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-3 py-1.5 text-xs font-semibold shadow-md backdrop-blur hover:bg-accent"
+            >
+              <ZapIcon className="size-3.5 text-emerald-400" aria-hidden="true" /> New UI
+            </button>
           </main>
         )}
       </TabVisibilityProvider>

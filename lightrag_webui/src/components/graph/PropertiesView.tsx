@@ -4,9 +4,10 @@ import Text from '@/components/ui/Text'
 import Button from '@/components/ui/Button'
 import useLightragGraph from '@/hooks/useLightragGraph'
 import { useTranslation } from 'react-i18next'
-import { GitBranchPlus, Scissors } from 'lucide-react'
+import { GitBranchPlus, Scissors, FileTextIcon } from 'lucide-react'
 import EditablePropertyRow from './EditablePropertyRow'
-import { getEntityDecisions, type EntityDecision } from '@/api/lightrag'
+import { getEntityDecisions, getEntityChunks, type EntityDecision, type EntityChunk } from '@/api/lightrag'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/Dialog'
 
 /**
  * Component that view properties of elements in graph.
@@ -268,6 +269,22 @@ const PropertyRow = ({
 const NodePropertiesView = ({ node }: { node: NodeType }) => {
   const { t } = useTranslation()
   const [decisions, setDecisions] = useState<EntityDecision[]>([])
+  const entityName = node.properties['entity_id'] || String(node.id)
+  const [chunksOpen, setChunksOpen] = useState(false)
+  const [chunks, setChunks] = useState<EntityChunk[] | null>(null)
+  const [chunksLoading, setChunksLoading] = useState(false)
+
+  const openChunks = async () => {
+    setChunksOpen(true)
+    setChunksLoading(true)
+    try {
+      setChunks(await getEntityChunks(entityName, 20))
+    } catch {
+      setChunks([])
+    } finally {
+      setChunksLoading(false)
+    }
+  }
 
   // Fetch the decision-bearing edges (the "why") attached to this node.
   useEffect(() => {
@@ -312,8 +329,45 @@ const NodePropertiesView = ({ node }: { node: NodeType }) => {
           >
             <Scissors className="h-4 w-4 text-gray-900 dark:text-gray-300" />
           </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 border border-gray-400 hover:bg-gray-200 dark:border-gray-600 dark:hover:bg-gray-700"
+            onClick={openChunks}
+            tooltip="View source chunks"
+          >
+            <FileTextIcon className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+          </Button>
         </div>
       </div>
+
+      <Dialog open={chunksOpen} onOpenChange={setChunksOpen}>
+        <DialogContent className="flex max-h-[80vh] max-w-2xl flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="truncate">Source chunks — {entityName}</DialogTitle>
+            <DialogDescription>The text chunks this entity was extracted from.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 overflow-auto pr-1">
+            {chunksLoading && (
+              <div className="p-6 text-center text-sm text-muted-foreground">Loading chunks…</div>
+            )}
+            {!chunksLoading && chunks && chunks.length === 0 && (
+              <div className="p-6 text-center text-sm text-muted-foreground">No source chunks found for this entity.</div>
+            )}
+            {!chunksLoading &&
+              chunks &&
+              chunks.map((c) => (
+                <div key={c.chunk_id} className="rounded-md border p-3 text-sm">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="truncate font-medium">{c.file_path || 'chunk'}</span>
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">{c.chunk_id.slice(0, 16)}</span>
+                  </div>
+                  <div className="whitespace-pre-wrap leading-relaxed text-muted-foreground">{c.content}</div>
+                </div>
+              ))}
+          </div>
+        </DialogContent>
+      </Dialog>
       <div className="bg-primary/5 max-h-96 overflow-auto rounded p-1">
         <PropertyRow name={t('graphPanel.propertiesView.node.id')} value={String(node.id)} />
         <PropertyRow

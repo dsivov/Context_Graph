@@ -518,6 +518,30 @@ export const queryText = async (request: QueryRequest): Promise<QueryResponse> =
   return response.data
 }
 
+// Raw retrieval data incl. actual chunk text — for the Chunk Inspector.
+export type RetrievedChunk = { chunk_id: string; content: string; file_path?: string; reference_id?: string }
+export type QueryDataResult = {
+  entities: any[]
+  relationships: any[]
+  chunks: RetrievedChunk[]
+  references: { reference_id: string; file_path?: string }[]
+}
+export const queryDataChunks = async (
+  query: string,
+  mode: string = 'mix',
+  opts: { top_k?: number; chunk_top_k?: number } = {}
+): Promise<QueryDataResult> => {
+  const res = await axiosInstance.post('/query/data', {
+    query,
+    mode,
+    top_k: opts.top_k ?? 20,
+    chunk_top_k: opts.chunk_top_k ?? 10,
+    include_references: true,
+    include_chunk_content: true
+  })
+  return (res.data?.data ?? res.data) as QueryDataResult
+}
+
 export const queryTextStream = async (
   request: QueryRequest,
   onChunk: (chunk: string) => void,
@@ -1029,6 +1053,13 @@ export const getEntityDecisions = async (entityName: string): Promise<EntityDeci
   }
 }
 
+// Source text chunks an entity was extracted from (graph node → chunks viewer)
+export type EntityChunk = { chunk_id: string; content: string; file_path?: string; chunk_order_index?: number }
+export const getEntityChunks = async (name: string, limit = 20): Promise<EntityChunk[]> => {
+  const res = await axiosInstance.get('/graph/entity/chunks', { params: { name, limit } })
+  return (res.data?.chunks ?? []) as EntityChunk[]
+}
+
 /**
  * Get the processing status of documents by tracking ID
  * @param trackId The tracking ID returned from upload, text, or texts endpoints
@@ -1315,6 +1346,12 @@ export interface ConnectivityReport {
 
 export const graphConnectivity = async (): Promise<ConnectivityReport> =>
   (await axiosInstance.get('/graph/connectivity?sample_isolates=8')).data
+
+// Recorded decisions (the (h,r,t,rc) quadruples) — filterable list for the dashboard/decisions view
+export const listDecisions = async (
+  params: Record<string, string | number> = {}
+): Promise<{ decisions: any[]; total_count?: number }> =>
+  (await axiosInstance.get('/graph/decisions', { params })).data
 
 // Deduplication
 export const dedupScan = async (apply: boolean): Promise<any> =>

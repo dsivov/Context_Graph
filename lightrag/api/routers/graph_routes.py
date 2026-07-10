@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
 
 from lightrag.utils import logger
+from lightrag.constants import GRAPH_FIELD_SEP
 from ..utils_api import get_combined_auth_dependency
 
 router = APIRouter(tags=["graph"])
@@ -215,6 +216,48 @@ def create_graph_routes(rag, api_key: Optional[str] = None):
             logger.error(traceback.format_exc())
             raise HTTPException(
                 status_code=500, detail=f"Error checking entity existence: {str(e)}"
+            )
+
+    @router.get("/graph/entity/chunks", dependencies=[Depends(combined_auth)])
+    async def get_entity_chunks(
+        name: str = Query(..., description="Entity name whose source chunks to fetch"),
+        limit: int = Query(20, ge=1, le=200, description="Max chunks to return"),
+    ):
+        """Return the source text chunks an entity was extracted from.
+
+        Reads the node's ``source_id`` (chunk ids joined by ``GRAPH_FIELD_SEP``) and
+        fetches each chunk's content from the text-chunks store. Powers the graph
+        node → source-chunks viewer in the WebUI.
+        """
+        try:
+            node = await rag.chunk_entity_relation_graph.get_node(name)
+            if node is None:
+                raise HTTPException(status_code=404, detail=f"Entity '{name}' not found")
+            source_id = node.get("source_id") or ""
+            chunk_ids = [c for c in source_id.split(GRAPH_FIELD_SEP) if c][:limit]
+            if not chunk_ids:
+                return {"entity_name": name, "chunks": []}
+            rows = await rag.text_chunks.get_by_ids(chunk_ids)
+            chunks = []
+            for cid, row in zip(chunk_ids, rows or []):
+                if not row:
+                    continue
+                chunks.append(
+                    {
+                        "chunk_id": cid,
+                        "content": row.get("content", ""),
+                        "file_path": row.get("file_path"),
+                        "chunk_order_index": row.get("chunk_order_index"),
+                    }
+                )
+            return {"entity_name": name, "chunks": chunks}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error fetching chunks for entity '{name}': {str(e)}")
+            logger.error(traceback.format_exc())
+            raise HTTPException(
+                status_code=500, detail=f"Error fetching entity chunks: {str(e)}"
             )
 
     @router.post("/graph/entity/edit", dependencies=[Depends(combined_auth)])
