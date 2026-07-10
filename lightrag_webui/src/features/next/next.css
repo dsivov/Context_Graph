@@ -191,3 +191,41 @@
 .cgnext .cgarea.mono{font-family:var(--mono);font-size:12.5px;line-height:1.55}
 .cgnext .checkrow{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);cursor:pointer}
 .cgnext .checkrow input{accent-color:var(--accent);width:15px;height:15px}
+
+/* Documents — full-height data surface */
+.cgnext .cgdocs{display:flex;flex-direction:column;height:100%;min-height:0;padding:18px 22px 16px;gap:12px}
+.cgnext .cgdocs-top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.cgnext .cgdocs-top h1{margin:2px 0 0;font-size:20px;letter-spacing:-.3px}
+.cgnext .cgdocs-top .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.cgnext .cgdocs-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cgnext .filterchips{display:flex;gap:6px;flex-wrap:wrap}
+.cgnext .fchip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;
+  border:1px solid var(--line);background:var(--surface);color:var(--text2);font-size:12.5px;font-weight:600}
+.cgnext .fchip .n{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.cgnext .fchip:hover{background:var(--surface2);color:var(--text)}
+.cgnext .fchip.active{border-color:currentColor}
+.cgnext .fchip.active .n{color:inherit;opacity:.8}
+.cgnext .fchip[data-tone="good"].active{color:var(--good);background:var(--good-dim)}
+.cgnext .fchip[data-tone="comm"].active{color:var(--comm);background:var(--comm-dim)}
+.cgnext .fchip[data-tone="accent"].active{color:var(--accent);background:var(--accent-dim)}
+.cgnext .fchip[data-tone="warn"].active{color:var(--warn);background:var(--warn-dim)}
+.cgnext .fchip[data-tone="crit"].active{color:var(--crit);background:var(--crit-dim)}
+.cgnext .fchip[data-tone="all"].active{color:var(--text);background:var(--surface2);border-color:var(--line2)}
+.cgnext .cgdocs-table{flex:1;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.cgnext .cgtable{width:100%;border-collapse:collapse;font-size:13px}
+.cgnext .cgtable thead th{position:sticky;top:0;background:var(--surface2);color:var(--muted);font-weight:600;
+  font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:10px 12px;
+  border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
+.cgnext .cgtable thead th.sortable{cursor:pointer;user-select:none}
+.cgnext .cgtable thead th.sortable:hover{color:var(--text2)}
+.cgnext .cgtable tbody td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--text)}
+.cgnext .cgtable tbody tr:last-child td{border-bottom:0}
+.cgnext .cgtable tbody tr:hover{background:var(--surface2)}
+.cgnext .cgtable .fp{font-family:var(--mono);font-size:12px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cgnext .cgtable .subid{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:2px}
+.cgnext .cgtable .sum{max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)}
+.cgnext .cgtable .when{white-space:nowrap;color:var(--text2);font-size:12px}
+.cgnext .st{font-weight:600;font-size:12.5px;display:inline-flex;align-items:center;gap:5px}
+.cgnext .st.good{color:var(--good)} .cgnext .st.comm{color:var(--comm)} .cgnext .st.accent{color:var(--accent)}
+.cgnext .st.warn{color:var(--warn)} .cgnext .st.crit{color:var(--crit)}
+.cgnext .st .dot{width:6px;height:6px;border-radius:50%;background:currentColor}

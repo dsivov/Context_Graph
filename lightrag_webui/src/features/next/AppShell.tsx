@@ -14,7 +14,7 @@ import Decisions from '@/features/next/pages/Decisions'
 import GraphQualityNext from '@/features/next/pages/GraphQualityNext'
 import OntologyNext from '@/features/next/pages/OntologyNext'
 import RulesNext from '@/features/next/pages/RulesNext'
-import DocumentManager from '@/features/DocumentManager'
+import DocumentsNext from '@/features/next/pages/DocumentsNext'
 import GraphViewer from '@/features/GraphViewer'
 import RetrievalTesting from '@/features/RetrievalTesting'
 import GetStarted from '@/features/GetStarted'
@@ -95,7 +95,7 @@ export default function AppShell() {
     switch (view) {
       case 'dashboard': return <Dashboard onNavigate={go} />
       case 'decisions': return <Decisions />
-      case 'documents': return <DocumentManager />
+      case 'documents': return <DocumentsNext />
       case 'graph': return <GraphViewer />
       case 'retrieval': return <RetrievalTesting />
       case 'rules': return <RulesNext />
