@@ -182,3 +182,12 @@
   background:var(--bg);color:var(--text);font:inherit;outline:none}
 .cgnext .cgqinput::placeholder{color:var(--muted)}
 .cgnext .cgqinput:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px}
+
+/* textareas (ontology editor, rule DSL, generate prompts) */
+.cgnext .cgarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--bg);color:var(--text);font:inherit;outline:none;resize:vertical}
+.cgnext .cgarea::placeholder{color:var(--muted)}
+.cgnext .cgarea:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px}
+.cgnext .cgarea.mono{font-family:var(--mono);font-size:12.5px;line-height:1.55}
+.cgnext .checkrow{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);cursor:pointer}
+.cgnext .checkrow input{accent-color:var(--accent);width:15px;height:15px}

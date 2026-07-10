@@ -12,11 +12,11 @@ import './next.css'
 import Dashboard from '@/features/next/pages/Dashboard'
 import Decisions from '@/features/next/pages/Decisions'
 import GraphQualityNext from '@/features/next/pages/GraphQualityNext'
+import OntologyNext from '@/features/next/pages/OntologyNext'
+import RulesNext from '@/features/next/pages/RulesNext'
 import DocumentManager from '@/features/DocumentManager'
 import GraphViewer from '@/features/GraphViewer'
 import RetrievalTesting from '@/features/RetrievalTesting'
-import RulesManager from '@/features/RulesManager'
-import OntologyManager from '@/features/OntologyManager'
 import GetStarted from '@/features/GetStarted'
 import ApiSite from '@/features/ApiSite'
 
@@ -98,8 +98,8 @@ export default function AppShell() {
       case 'documents': return <DocumentManager />
       case 'graph': return <GraphViewer />
       case 'retrieval': return <RetrievalTesting />
-      case 'rules': return <RulesManager />
-      case 'ontology': return <OntologyManager />
+      case 'rules': return <RulesNext />
+      case 'ontology': return <OntologyNext />
       case 'quality': return <GraphQualityNext />
       case 'getstarted': return <GetStarted />
       case 'api': return <ApiSite />
