@@ -1053,6 +1053,13 @@ export const getEntityDecisions = async (entityName: string): Promise<EntityDeci
   }
 }
 
+// Source text chunks an entity was extracted from (graph node → chunks viewer)
+export type EntityChunk = { chunk_id: string; content: string; file_path?: string; chunk_order_index?: number }
+export const getEntityChunks = async (name: string, limit = 20): Promise<EntityChunk[]> => {
+  const res = await axiosInstance.get('/graph/entity/chunks', { params: { name, limit } })
+  return (res.data?.chunks ?? []) as EntityChunk[]
+}
+
 /**
  * Get the processing status of documents by tracking ID
  * @param trackId The tracking ID returned from upload, text, or texts endpoints
