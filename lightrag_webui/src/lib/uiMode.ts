@@ -1,6 +1,6 @@
 // UI mode flag — lets the new "next" shell run alongside the classic UI.
-// Opt in with ?ui=next (persisted); back to classic with ?ui=classic.
-// Default stays 'classic' so nothing changes for existing users.
+// The redesigned shell is now the DEFAULT; the classic UI is the escape hatch
+// at ?ui=classic (persisted). A stored preference always wins over the default.
 
 export type UiMode = 'classic' | 'next'
 
@@ -18,7 +18,7 @@ export function getUiMode(): UiMode {
   } catch {
     /* localStorage unavailable — fall through */
   }
-  return 'classic'
+  return 'next'
 }
 
 export function setUiMode(mode: UiMode): void {
