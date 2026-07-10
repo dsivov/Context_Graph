@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { RefreshCwIcon } from 'lucide-react'
 import { useSettingsStore } from '@/stores/settings'
+import Modal from '@/features/next/Modal'
 import {
   graphConnectivity, dedupScan, dedupSweep, dedupReview, entityMerges, entityUnmerge,
   garbageScan, quarantineList, quarantineRestore, quarantineDiscard,
@@ -230,12 +231,13 @@ export default function GraphQualityNext() {
                 onClick={() => run('cq', () => communityQuery(cq), () => 'Answered').then((r) => r && setCqAnswer(r))}>Ask</button>
             </div>
             {cqAnswer && (
-              <div className="box" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                  Themes: {cqAnswer.communities.map((c) => c.title).join(' · ') || '—'}
-                </div>
-                <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{cqAnswer.response}</div>
-              </div>
+              <Modal
+                title="Thematic answer"
+                subtitle={`Themes: ${cqAnswer.communities.map((c) => c.title).join(' · ') || '—'}`}
+                onClose={() => setCqAnswer(null)}
+              >
+                <div style={{ whiteSpace: 'pre-wrap', fontSize: 14, lineHeight: 1.65 }}>{cqAnswer.response}</div>
+              </Modal>
             )}
           </div>
         </div>
