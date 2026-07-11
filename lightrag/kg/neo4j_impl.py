@@ -1,7 +1,7 @@
 import os
 import re
 from dataclasses import dataclass
-from typing import final
+from typing import final, ClassVar
 import configparser
 
 
@@ -64,6 +64,20 @@ READ_RETRY = retry(
 @final
 @dataclass
 class Neo4JStorage(BaseGraphStorage):
+    # Lucene query-syntax reserved characters. The full-text parser interprets
+    # these (e.g. '-' as NOT) before the analyzer runs, so a raw 'tb-' becomes a
+    # NOT clause and silently matches nothing. Replace them with spaces so the
+    # parser sees plain terms. ClassVar so @dataclass doesn't treat it as a field.
+    _LUCENE_RESERVED: ClassVar[re.Pattern[str]] = re.compile(r'[+\-&|!(){}\[\]^"~*?:\\/]')
+
+    @classmethod
+    def _sanitize_fulltext_query(cls, text: str) -> str:
+        """Replace Lucene reserved characters with spaces and collapse whitespace,
+        so the full-text parser reads plain terms instead of misreading reserved
+        characters as operators. Returns "" when the input is all reserved chars."""
+        cleaned = cls._LUCENE_RESERVED.sub(" ", text)
+        return " ".join(cleaned.split())
+
     def __init__(self, namespace, global_config, embedding_func, workspace=None):
         # Read env and override the arg if present
         neo4j_workspace = os.environ.get("NEO4J_WORKSPACE")
@@ -1780,7 +1794,7 @@ class Neo4JStorage(BaseGraphStorage):
                     LIMIT $limit
                     """
                     # For Chinese, don't add wildcard as it may not work properly with CJK analyzer
-                    search_query = query_strip
+                    search_query = self._sanitize_fulltext_query(query_strip)
                 else:
                     # For non-Chinese text, use the original logic with wildcard
                     cypher_query = f"""
@@ -1799,7 +1813,7 @@ class Neo4JStorage(BaseGraphStorage):
                     ORDER BY final_score DESC, label ASC
                     LIMIT $limit
                     """
-                    search_query = f"{query_strip}*"
+                    search_query = f"{self._sanitize_fulltext_query(query_strip)}*"
 
                 result = await session.run(
                     cypher_query,
