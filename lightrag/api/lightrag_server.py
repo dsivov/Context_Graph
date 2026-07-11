@@ -1243,8 +1243,51 @@ def create_app(args):
         ollama_server_infos=ollama_server_infos,
     )
 
+    # Per-task LLM roles (upstream 1.5.x alignment): build role-bound LLM callables
+    # from EXTRACT_/QUERY_ config and attach them to each ContextGraph the pool
+    # creates. Each role reuses the default func unless it's explicitly reconfigured.
+    from types import SimpleNamespace
+
+    def _build_role_llm(role_cfg):
+        if not role_cfg:
+            return None
+        if (role_cfg["binding"] == args.llm_binding
+                and role_cfg["model"] == args.llm_model
+                and role_cfg["host"] == args.llm_binding_host
+                and role_cfg["api_key"] == args.llm_binding_api_key):
+            return None  # identical to the default → reuse it
+        shim = SimpleNamespace(
+            llm_model=role_cfg["model"],
+            llm_binding_host=role_cfg["host"],
+            llm_binding_api_key=role_cfg["api_key"],
+        )
+        b = role_cfg["binding"]
+        if b in ("openai", "openai-ollama"):
+            return create_optimized_openai_llm_func(config_cache, shim, llm_timeout)
+        if b == "azure_openai":
+            return create_optimized_azure_openai_llm_func(config_cache, shim, llm_timeout)
+        if b == "gemini":
+            return create_optimized_gemini_llm_func(config_cache, shim, llm_timeout)
+        logger.warning(
+            "Per-role LLM not supported for binding '%s'; role reuses the default model.", b
+        )
+        return None
+
+    _post_create = None
+    if use_context_graph:
+        _role_extract = _build_role_llm(getattr(args, "llm_role_extract", None))
+        _role_query = _build_role_llm(getattr(args, "llm_role_query", None))
+        if _role_extract is not None or _role_query is not None:
+            def _post_create(rag_instance):
+                if hasattr(rag_instance, "attach_llm_roles"):
+                    rag_instance.attach_llm_roles(extract=_role_extract, query=_role_query)
+            logger.info(
+                "CG per-task LLM roles active — extract=%s, query=%s",
+                args.llm_role_extract["model"], args.llm_role_query["model"],
+            )
+
     # Create workspace pool and proxy for multi-tenant support
-    workspace_pool = WorkspacePool(rag_cls=rag_cls, rag_kwargs=rag_kwargs)
+    workspace_pool = WorkspacePool(rag_cls=rag_cls, rag_kwargs=rag_kwargs, post_create=_post_create)
     default_workspace = args.workspace if args.workspace else "default"
 
     # Seed the default workspace synchronously so the proxy can resolve

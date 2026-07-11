@@ -570,6 +570,36 @@ class ContextGraph(LightRAG):
         # Garbage filtering (Topic 2): quarantine store + cached node filter.
         self._quarantine_store = None
         self._node_filter_cache = None
+        # Per-task LLM roles (upstream 1.5.x alignment). None → fall back to the
+        # single llm_model_func. The server attaches role-bound callables built
+        # from EXTRACT_/QUERY_ env config; see attach_llm_roles.
+        self._llm_role_extract = None
+        self._llm_role_query = None
+
+    # ------------------------------------------------------------------
+    # Per-task LLM roles
+    # ------------------------------------------------------------------
+
+    def attach_llm_roles(self, *, extract=None, query=None) -> None:
+        """Wire per-task LLM callables. Each is an async ``(prompt, system_prompt=…,
+        **kwargs) -> str`` with the same contract as ``llm_model_func``. Unset roles
+        keep falling back to ``llm_model_func``, so this is fully backward‑compatible."""
+        if extract is not None:
+            self._llm_role_extract = extract
+        if query is not None:
+            self._llm_role_query = query
+
+    @property
+    def _llm_extract(self):
+        """LLM for high‑volume extraction / verification (cheap, fast role).
+        getattr keeps this safe when built via __new__ (tests) — no attr → default."""
+        return getattr(self, "_llm_role_extract", None) or self.llm_model_func
+
+    @property
+    def _llm_query(self):
+        """LLM for reasoning / synthesis (strong role): CGR3, community & decision
+        synthesis, blended query."""
+        return getattr(self, "_llm_role_query", None) or self.llm_model_func
 
     async def initialize_storages(self) -> None:
         await super().initialize_storages()
@@ -631,9 +661,13 @@ class ContextGraph(LightRAG):
     ) -> list:
         """Override: use CG extraction (contextual quadruples) instead of triples."""
         try:
+            # Route extraction through the EXTRACT role (cheap/fast) when configured;
+            # extract_entities_with_context reads global_config["llm_model_func"].
+            gc = asdict(self)
+            gc["llm_model_func"] = self._llm_extract
             chunk_results = await extract_entities_with_context(
                 chunk,
-                global_config=asdict(self),
+                global_config=gc,
                 pipeline_status=pipeline_status,
                 pipeline_status_lock=pipeline_status_lock,
                 llm_response_cache=self.llm_response_cache,
@@ -861,7 +895,7 @@ class ContextGraph(LightRAG):
             })
 
         rescue = IsolateRescue(
-            self.llm_model_func, find_candidates=find_candidates,
+            self._llm_extract, find_candidates=find_candidates,
             add_edge=add_edge, max_candidates=max_candidates,
         )
         result = await rescue.rescue(isolates)
@@ -942,7 +976,7 @@ class ContextGraph(LightRAG):
         labels = list(await graph.get_all_labels() or [])
         edges = list(await graph.get_all_edges() or [])
         comms = detect_communities(labels, edges, min_size=min_size)[:max_communities]
-        summarizer = CommunitySummarizer(self.llm_model_func)
+        summarizer = CommunitySummarizer(self._llm_query)
         try:
             await self.communities_vdb.drop()
         except Exception:
@@ -998,7 +1032,7 @@ class ContextGraph(LightRAG):
             f"COMMUNITIES:\n{chr(10).join(blocks)}\n\n---\nQuestion: {query}"
         )
         try:
-            answer = await self.llm_model_func(prompt)
+            answer = await self._llm_query(prompt)
         except Exception as e:  # pragma: no cover
             answer = f"(LLM error: {e})"
         return {"response": answer, "communities": used}
@@ -1409,7 +1443,7 @@ class ContextGraph(LightRAG):
             return len([c for c in sid.split(GRAPH_FIELD_SEP) if c]) or 1
 
         sweep = DedupSweep(
-            self.dedup_store, self.workspace, self.llm_model_func,
+            self.dedup_store, self.workspace, self._llm_extract,
             apply_merge=apply, get_count=get_count,
             batch_size=self._dedup_sweep_batch(),
         )
@@ -1731,7 +1765,7 @@ class ContextGraph(LightRAG):
                 if precedents:
                     parts.append(self._format_decisions_context(precedents))
                 try:
-                    ans = await self.llm_model_func(
+                    ans = await self._llm_query(
                         "Answer the question using ONLY this project context (quote the "
                         "relevant entity or decision). If it doesn't apply, say so briefly.\n\n"
                         + "\n\n".join(parts)
@@ -1914,7 +1948,7 @@ class ContextGraph(LightRAG):
         """
         from lightrag.base import QueryParam
 
-        llm_func = self.llm_model_func
+        llm_func = self._llm_query   # CGR3 reasoning → strong QUERY role
         all_contexts: list[str] = []
         seen_context_hashes: set[int] = set()
         current_query = query

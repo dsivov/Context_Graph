@@ -28,13 +28,22 @@ _current_workspace: contextvars.ContextVar[str] = contextvars.ContextVar(
 class WorkspacePool:
     """Manages a pool of LightRAG/ContextGraph instances, one per workspace."""
 
-    def __init__(self, rag_cls: Type, rag_kwargs: dict):
+    def __init__(self, rag_cls: Type, rag_kwargs: dict, post_create=None):
         self._rag_cls = rag_cls
         self._rag_kwargs = rag_kwargs
+        # Optional hook run on every freshly-constructed instance (e.g. to attach
+        # per-task LLM roles). Called synchronously with the new rag instance.
+        self._post_create = post_create
         self._instances: dict[str, object] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._global_lock = asyncio.Lock()
         self._needs_init: set[str] = set()
+
+    def _make(self, workspace: str):
+        rag = self._rag_cls(workspace=workspace, **self._rag_kwargs)
+        if self._post_create is not None:
+            self._post_create(rag)
+        return rag
 
     def seed(self, workspace: str):
         """Synchronously create and register an instance (no storage init).
@@ -46,7 +55,7 @@ class WorkspacePool:
         if not workspace:
             workspace = "default"
         if workspace not in self._instances:
-            rag = self._rag_cls(workspace=workspace, **self._rag_kwargs)
+            rag = self._make(workspace)
             self._instances[workspace] = rag
             self._needs_init.add(workspace)
             logger.info(f"Seeded workspace: {workspace} (pending async init)")
@@ -90,7 +99,7 @@ class WorkspacePool:
                 return self._instances[workspace]
 
             logger.info(f"Initializing workspace: {workspace}")
-            rag = self._rag_cls(workspace=workspace, **self._rag_kwargs)
+            rag = self._make(workspace)
             await rag.initialize_storages()
             await rag.check_and_migrate_data()
             self._instances[workspace] = rag

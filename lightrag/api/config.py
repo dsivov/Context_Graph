@@ -357,6 +357,21 @@ def parse_args() -> argparse.Namespace:
 
     # Inject model configuration
     args.llm_model = get_env_value("LLM_MODEL", "mistral-nemo:latest")
+
+    # Per-task LLM roles (upstream 1.5.x alignment). Each role falls back to the
+    # global LLM_* settings when its own vars are unset — so this is fully optional
+    # and backward-compatible. Used by ContextGraph: a cheap/fast model for
+    # extraction & verification, a stronger model for CGR3 & synthesis.
+    def _role_llm(prefix):
+        return {
+            "binding": get_env_value(f"{prefix}_LLM_BINDING", args.llm_binding),
+            "model": get_env_value(f"{prefix}_LLM_MODEL", args.llm_model),
+            "host": get_env_value(f"{prefix}_LLM_BINDING_HOST", args.llm_binding_host),
+            "api_key": get_env_value(f"{prefix}_LLM_BINDING_API_KEY", args.llm_binding_api_key),
+        }
+
+    args.llm_role_extract = _role_llm("EXTRACT")
+    args.llm_role_query = _role_llm("QUERY")
     # EMBEDDING_MODEL defaults to None - each binding will use its own default model
     # e.g., OpenAI uses "text-embedding-3-small", Jina uses "jina-embeddings-v4"
     args.embedding_model = get_env_value("EMBEDDING_MODEL", None, special_none=True)
