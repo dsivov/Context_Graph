@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracking Upstream — LightRAG 1.5.x vs Context Graph</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#1b1f2a; --panel2:#161a23; --line:#2c3346;
+    --text:#e7ebf3; --muted:#aab3c5; --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+    --blue:#5b8def; --green:#19b89a; --amber:#f0a73c; --violet:#a974f0; --red:#e5678a;
+  }
+  @media (prefers-color-scheme: light){
+    :root{--bg:#f6f8fb;--panel:#fff;--panel2:#eef1f6;--line:#e2e6ee;--text:#161c28;--muted:#5c6678}
+  }
+  :root[data-theme="dark"]{--bg:#0f1117;--panel:#1b1f2a;--panel2:#161a23;--line:#2c3346;--text:#e7ebf3;--muted:#aab3c5}
+  :root[data-theme="light"]{--bg:#f6f8fb;--panel:#fff;--panel2:#eef1f6;--line:#e2e6ee;--text:#161c28;--muted:#5c6678}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.65 "Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 24px 80px}
+  header.hero{border:1px solid var(--line);border-radius:16px;padding:30px 32px;
+    background:linear-gradient(150deg,#1a2233,#141821);margin-bottom:26px}
+  @media (prefers-color-scheme: light){header.hero{background:linear-gradient(150deg,#eef2fb,#fff)}}
+  h1{font-size:28px;margin:0 0 6px;letter-spacing:-.4px}
+  .sub{color:var(--muted);font-size:16px;margin:0}
+  .tag{display:inline-block;font:600 11px var(--mono);letter-spacing:.5px;padding:3px 9px;border-radius:999px;
+    border:1px solid var(--line);color:var(--muted);background:var(--panel2);margin:0 4px 10px 0;text-transform:uppercase}
+  h2{font-size:20px;margin:36px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:15.5px;margin:20px 0 6px;color:#cfe0ff}
+  @media (prefers-color-scheme: light){h3{color:#22499c}}
+  p{color:var(--text)} .muted{color:var(--muted)}
+  code{font:12.5px var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+  .card{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:16px 20px;margin:14px 0}
+  .callout{border-left:3px solid var(--blue);background:var(--panel2);border-radius:0 10px 10px 0;padding:12px 16px;margin:14px 0}
+  .callout.green{border-color:var(--green)} .callout.amber{border-color:var(--amber)} .callout.red{border-color:var(--red)}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+  .pill{font:600 10.5px var(--mono);padding:2px 8px;border-radius:6px;border:1px solid var(--line);white-space:nowrap}
+  .adopt{color:var(--green);border-color:var(--green)}
+  .align{color:var(--amber);border-color:var(--amber)}
+  .defer{color:var(--muted)}
+  .diff{color:var(--violet);border-color:var(--violet)}
+  ul{margin:8px 0;padding-left:20px} li{margin:4px 0}
+  .step{display:flex;gap:14px;align-items:flex-start;margin:12px 0}
+  .num{flex:0 0 30px;height:30px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font:700 13px var(--mono);color:var(--blue)}
+  footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div><span class="tag">Upstream tracking</span><span class="tag">Decision brief</span><span class="tag">2026-07</span></div>
+  <h1>LightRAG 1.5.x vs Context Graph</h1>
+  <p class="sub">Upstream moved <code>1.4.10 → 1.5.4</code>. What to adopt, what will conflict with our fork, and how our own features line up.</p>
+</header>
+
+<div class="callout green">
+  <b>TL;DR.</b> Yes — some of it is worth pulling in, selectively, not as a blind rebase. The single highest‑ROI item
+  is upstream's <b>role‑specific LLM configuration</b> (EXTRACT / KEYWORD / QUERY / VLM) — it maps almost perfectly onto
+  our LLM‑heavy stack (13 call sites: extraction, CGR3, dedup sweep, rules/ontology authors, web‑ingest analyst,
+  community summaries) and lets us right‑size a cheap model for extraction and a strong one for reasoning.
+  The one real <b>conflict zone</b> is extraction: upstream rewrote the exact pipeline we forked and customized
+  (JSON‑structured output, few‑shot removal). Multimodal parsing (MinerU/Docling/VLM) is a big, optional module —
+  defer unless a customer needs PDF/image ingestion. <b>Our differentiators (RelationContext, CGR3, governance, graph
+  quality) have no upstream equivalent and are unaffected</b> — the job is to stay mergeable at the extraction seam.
+</div>
+
+<h2>Where we stand</h2>
+<table>
+  <tr><th>Context Graph (fork)</th><th>Upstream LightRAG</th></tr>
+  <tr>
+    <td>Based on <code>lightrag-hku 1.4.10</code>. We vendored the whole <code>lightrag/</code> package (74 files) and
+      added <code>context_graph/</code> (92 files). Single <code>llm_model_func</code> everywhere. No upstream git remote tracked.</td>
+    <td>Current <code>1.5.4</code> (6 minor releases ahead), headlined by <code>1.5.0</code> — multimodal + role‑specific
+      LLM config + a rewritten extraction pipeline.</td>
+  </tr>
+</table>
+
+<h2>Upstream feature inventory &amp; verdict</h2>
+<p class="muted">
+  <span class="pill adopt">ADOPT</span> clear win, low conflict &nbsp;
+  <span class="pill align">ALIGN</span> valuable but collides with our fork — needs a re‑base at that seam &nbsp;
+  <span class="pill defer">DEFER</span> optional / customer‑dependent &nbsp;
+  <span class="pill diff">OURS</span> we already have it / it's our differentiator
+</p>
+<table>
+  <tr><th>Upstream (release)</th><th>Verdict</th><th>Why</th></tr>
+  <tr>
+    <td><b>Role‑specific LLM config</b> — EXTRACT/KEYWORD/QUERY/VLM roles, each with binding/model/host/key/timeout/concurrency (1.5.0)</td>
+    <td><span class="pill adopt">ADOPT</span></td>
+    <td>The "LLM per task" feature. We have ~13 distinct LLM tasks on one model today; roles let us run a small/fast model
+      for extraction &amp; dedup‑verify and a strong reasoner for CGR3, community summaries, and the NL rule/ontology authors.
+      Directly reduces cost and latency.</td>
+  </tr>
+  <tr>
+    <td><b>JSON‑structured extraction output</b> + prompt refactor (few‑shot removal), <code>ENTITY_TYPE_PROMPT_FILE</code> (1.5.0/1.5.1)</td>
+    <td><span class="pill align">ALIGN</span></td>
+    <td>This rewrites the very pipeline we forked (<code>extract_entities_with_context</code> + CG <code>prompt.py</code>).
+      It's the biggest merge risk — <i>and</i> the biggest opportunity: our <code>RelationContext</code> is already JSON, so
+      aligning our rc extraction onto upstream's JSON output could <i>simplify</i> our 6‑field parsing. Must be re‑based deliberately.</td>
+  </tr>
+  <tr>
+    <td><b>Task‑aware embeddings</b> (voyage‑3, text‑embedding‑004, etc.) (1.4.16/1.5.0)</td>
+    <td><span class="pill adopt">ADOPT</span></td>
+    <td>Backward‑compatible embedding options. Note our constraint: <b>changing the embedding model after ingestion breaks
+      vector search</b>, so this is a "new‑workspace" knob, not a hot swap.</td>
+  </tr>
+  <tr>
+    <td><b>Four chunking strategies</b> — Fix / Recursive / Vector / Paragraph + parser selector (1.5.0)</td>
+    <td><span class="pill adopt">ADOPT</span></td>
+    <td>We don't customize chunking; low conflict. Useful for code/markdown‑heavy corpora (agentic‑dev preset). Additive config.</td>
+  </tr>
+  <tr>
+    <td><b>Multimodal</b> — MinerU/Docling parsers, native DOCX/Markdown, VLM image/table/formula (1.5.0/1.5.4)</td>
+    <td><span class="pill defer">DEFER</span></td>
+    <td>Large module; partial overlap with our <code>webingest</code>. Real value only if customers ingest PDFs/scans/images.
+      Adopt on demand, as its own workstream — not as part of a routine upgrade.</td>
+  </tr>
+  <tr>
+    <td><b>Infra</b> — offline VDB rebuild, cross‑worker concurrency, Milvus isolation, Neo4j Lucene sanitization,
+      AWS Bedrock, vector‑upsert batching, query cancellation ("Stop") (1.5.0–1.5.4)</td>
+    <td><span class="pill adopt">ADOPT</span></td>
+    <td>Low‑risk cherry‑picks. VDB rebuild echoes our own <code>reindex_decisions</code> philosophy; batching speeds ingest;
+      Neo4j sanitization &amp; Bedrock help production tenants. Take these à la carte.</td>
+  </tr>
+  <tr>
+    <td>Contextual quadruples <code>(h,r,t,rc)</code>, CGR3, decision traces/precedents, governance (rules/ontology/RBAC/lifecycle/actions),
+      graph quality (dedup/garbage/connectivity/community), MCP, branded WebUI</td>
+    <td><span class="pill diff">OURS</span></td>
+    <td>No upstream equivalent — this is the fork's reason to exist. Upstream's forward motion doesn't threaten these; it only
+      raises the bar on the shared engine underneath them.</td>
+  </tr>
+</table>
+
+<h2>Deep‑dive 1 — Role‑specific LLM (the recommended first move)</h2>
+<div class="card">
+  <p>Upstream exposes per‑role env: <code>EXTRACT_LLM_MODEL/BINDING/HOST/API_KEY/TIMEOUT/MAX_ASYNC</code> and the same for
+  <code>KEYWORD</code>, <code>QUERY</code>, <code>VLM</code>. Adoption for us means resolving a small set of role‑bound LLM
+  callables at server start and threading the right one into each CG task instead of the single <code>llm_model_func</code>:</p>
+  <table>
+    <tr><th>CG task</th><th>Suggested role</th></tr>
+    <tr><td>Entity/relation + <code>rc</code> extraction (<code>extract_entities_with_context</code>)</td><td>EXTRACT (cheap/fast)</td></tr>
+    <tr><td>CGR3 reasoning, community summaries, decision synthesis</td><td>QUERY (strong reasoner)</td></tr>
+    <tr><td>Dedup LLM sweep (same/not verdict), isolate‑rescue edge check</td><td>EXTRACT/KEYWORD (cheap, high‑volume)</td></tr>
+    <tr><td>NL rule author, NL ontology author, web‑ingest analyst</td><td>QUERY (quality‑sensitive)</td></tr>
+  </table>
+  <p class="muted">Effort: moderate and <b>localized</b> — a role resolver in <code>config.py</code>/server wiring plus passing
+  the chosen callable into ~13 call sites (which already take an injected <code>llm</code>). No change to our differentiators.
+  This is safe to do <i>without</i> a full engine rebase.</p>
+</div>
+
+<h2>Deep‑dive 2 — The extraction seam (the thing to watch)</h2>
+<div class="callout amber">
+  Our <code>context_graph/core.py :: extract_entities_with_context</code> and CG <code>lightrag/prompt.py</code> are a
+  customized fork of upstream's <code>extract_entities</code>: we added the 6th field (<code>RC_JSON</code>), garbage‑exclusion
+  and "connect‑what‑you‑extract" prompt rules, and rc parsing/merge. Upstream 1.5.0/1.5.1 rewrote that pipeline to emit
+  <b>JSON‑structured</b> entities/relations and dropped few‑shot examples.
+</div>
+<p>Implication: every further upstream extraction improvement lands in code we've diverged from. Two paths:</p>
+<ul>
+  <li><b>Re‑base onto JSON extraction (recommended, medium‑high effort).</b> Move our <code>rc</code> from a delimited 6th
+    field to a first‑class key in upstream's JSON output. Because <code>RelationContext</code> is already JSON, this likely
+    <i>reduces</i> our parsing code and makes future upstream merges cheap. Do it as a deliberate one‑time rebase with our
+    extraction tests as the guardrail (711 passing today).</li>
+  <li><b>Freeze the seam (cheap, accrues debt).</b> Keep our delimiter extraction, cherry‑pick everything else. Fine short‑term,
+    but each release widens the gap and the eventual rebase gets harder.</li>
+</ul>
+
+<h2>Measured merge surface (<code>lightrag/</code> vs v1.5.4)</h2>
+<p>Added an <code>upstream</code> remote and diffed our <code>lightrag/</code> against tag <code>v1.5.4</code>. Headline:
+<b>151 files, +57.8k / −12.6k</b> — which splits cleanly into <i>additive new modules</i> (take only if we adopt that
+feature) and the <i>shared files we customized</i> (the real merge cost).</p>
+
+<h3>Additive — new upstream modules (opt-in per feature, zero conflict)</h3>
+<ul>
+  <li><code>lightrag/llm_roles.py</code> (579 lines) — the role-LLM engine. <b>The clean win</b> — self-contained.</li>
+  <li><code>lightrag/chunker/*</code> — the four chunking strategies (token / recursive / semantic-vector / paragraph).</li>
+  <li><code>lightrag/parser/**</code>, <code>multimodal_context.py</code>, <code>llm/_vision_utils.py</code>, <code>llm/voyageai.py</code> — multimodal (defer).</li>
+  <li><code>lightrag/kg/factory.py</code>, <code>kg/opensearch_impl.py</code>, <code>evaluation/offline_retrieval_check.py</code>, <code>utils_pipeline.py</code> — infra.</li>
+</ul>
+<p class="muted">These are files we simply don't have yet — nothing to reconcile.</p>
+
+<h3>Shared &amp; customized — the actual merge cost</h3>
+<table>
+  <tr><th>File</th><th>Δ vs v1.5.4</th><th>Why it's costly for us</th></tr>
+  <tr><td><code>operate.py</code></td><td>+2057 / −1495</td><td>Holds <code>extract_entities</code> + query core (the extraction seam). We <b>mirror</b> it in <code>context_graph/core.py</code>.</td></tr>
+  <tr><td><code>lightrag.py</code></td><td>+2032 / −1642</td><td>The orchestrator we <b>subclass</b> (<code>ContextGraph</code>). Changed method signatures would break our overrides.</td></tr>
+  <tr><td><code>api/lightrag_server.py</code></td><td>+1562 / −758</td><td>Heavily modified by us (CG routes, workspace pool, governance wiring).</td></tr>
+  <tr><td><code>prompt.py</code></td><td>+506 / −445</td><td>Our CG extraction prompts (garbage-exclusion, connect-what-you-extract).</td></tr>
+  <tr><td><code>api/config.py</code></td><td>+330 / −55</td><td>Role-LLM + chunking env upstream; our <code>DEDUP_*</code>/<code>GARBAGE_*</code> live here.</td></tr>
+  <tr><td><code>constants.py</code> · <code>base.py</code> · <code>llm/openai.py</code></td><td>+248/−27 · +179/−26 · +234/−27</td><td>Storage-interface + LLM-binding shifts.</td></tr>
+</table>
+<div class="callout amber">
+  <b>Key finding from the diff:</b> the two most-diverged files — <code>operate.py</code> and <code>lightrag.py</code>,
+  ~3,500 changed lines each — are exactly the two we depend on most tightly (we <b>subclass</b> one and <b>mirror</b> the
+  other). So a <i>full</i> rebase to 1.5.4 is a genuine project, not a fast-forward. The role-LLM adoption, by contrast, is a
+  drop-in self-contained module. This measurement <b>reinforces</b> the selective-adoption strategy over a wholesale rebase.
+</div>
+
+<h2>How our features align with upstream's direction</h2>
+<table>
+  <tr><th>Our feature</th><th>Sits…</th><th>Relationship to 1.5.x</th></tr>
+  <tr><td>RelationContext quadruples</td><td><b>on top of</b> extraction</td><td>Complementary. JSON extraction makes rc cleaner to attach; role‑LLM makes extraction cheaper.</td></tr>
+  <tr><td>CGR3 reasoning</td><td><b>on top of</b> query</td><td>Complementary. Benefits directly from the QUERY role (strong reasoner) + query cancellation.</td></tr>
+  <tr><td>Governance (rules/ontology/RBAC/lifecycle/actions)</td><td><b>beside</b> the engine</td><td>Orthogonal. NL authors benefit from role‑LLM; otherwise independent.</td></tr>
+  <tr><td>Graph quality (dedup/garbage/connectivity/community)</td><td><b>after</b> extraction, on the graph</td><td>Orthogonal &amp; backend‑agnostic. Dedup/rescue LLM calls benefit from a cheap role; VDB‑rebuild aligns with our reindex.</td></tr>
+  <tr><td>Web ingestion</td><td><b>before</b> extraction</td><td>Overlaps upstream's new parser/multimodal layer — worth reconciling if we adopt MinerU/Docling.</td></tr>
+</table>
+
+<h2>Recommended plan</h2>
+<div class="step"><div class="num">1</div><div><b>Set up upstream tracking.</b> Add an <code>upstream</code> git remote (HKUDS/LightRAG) and diff <code>lightrag/</code> against <code>v1.5.4</code> to size the real merge surface (this brief is from release notes + our call‑site map; the file diff confirms scope).</div></div>
+<div class="step"><div class="num">2</div><div><b>Adopt role‑specific LLM config.</b> Highest ROI, localized, no engine rebase. Ship the role resolver + thread roles through the 13 CG call sites.</div></div>
+<div class="step"><div class="num">3</div><div><b>Cherry‑pick infra wins.</b> Vector batching, offline VDB rebuild, Neo4j sanitization, Bedrock, query‑cancellation — à la carte, low risk.</div></div>
+<div class="step"><div class="num">4</div><div><b>Re‑base the extraction seam.</b> Move <code>rc</code> onto upstream's JSON extraction; adopt the chunking strategies. Gate on our extraction test suite. This is the one substantive engineering task.</div></div>
+<div class="step"><div class="num">5</div><div><b>Multimodal — only on demand.</b> If a customer needs PDF/image ingestion, adopt MinerU/Docling + VLM as its own workstream and reconcile with web‑ingest.</div></div>
+
+<div class="callout red">
+  <b>Risk if we do nothing:</b> we're already 6 releases behind on a package we vendored. Each release widens the extraction
+  gap and the "free" engine improvements (perf, backends, parsing) drift out of reach. The cheap insurance is Steps 1–2 now,
+  and the extraction re‑base (Step 4) before the gap compounds further.
+</div>
+
+<footer>
+  Sources: upstream release notes (HKUDS/LightRAG releases), upstream <code>env.example</code> role‑LLM variables, and a
+  scan of our own <code>llm_model_func</code> call sites + extraction/prompt customizations. Verdicts are ours.
+</footer>
+
+</div>
+</body>
+</html>
