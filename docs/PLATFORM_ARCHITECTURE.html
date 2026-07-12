@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Governed-Workflow Platform — Architecture</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1180px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(25,184,154,.10), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(91,141,239,.08), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:64px 22px 30px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(25,184,154,.08),transparent)}
+.hero-inner{max-width:900px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(28px,4.6vw,46px);line-height:1.06;margin:.3em 0 .25em;background:linear-gradient(92deg,#8fd9c9,#9cc0ff 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(16px,2.1vw,20px);color:var(--ink-soft)}
+.byline{margin-top:12px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:250px 1fr;gap:40px;padding:28px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(25,184,154,.2),transparent);color:#fff;border-left:2px solid var(--b)}
+main{min-width:0;max-width:820px}article section{margin:0 0 50px;scroll-margin-top:20px}
+h2{font-size:clamp(22px,3vw,29px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--b);font-weight:700;margin-bottom:6px}
+h3{font-size:18px;margin:26px 0 8px}p{margin:.7em 0}.lead-p{font-size:18px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:20px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--b);padding:6px 0 6px 18px;margin:20px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:920px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(169,116,240,.55);background:rgba(169,116,240,.1)}.callout.key .clabel{color:#cdb1f7}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:580px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:12.5px;line-height:1.5}
+pre code{color:#d6deec}.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}.ty{color:#e0af68}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:28px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:28px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#7fe3cf}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-faint);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}.dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Architecture · governed-workflow platform</div>
+    <h1>Platform Architecture</h1>
+    <p class="lede">The target architecture for the governed-workflow platform: components, schemas, interfaces (ports),
+      the runtime and authoring sequences, the namespace model, and the reuse map onto today's Context Graph modules.
+      Every choice here traces to a resolved decision in the
+      <a href="GOVERNED_WORKFLOW_PLATFORM.html">design discussion</a>.</p>
+    <div class="byline">Companion to the <a href="GOVERNED_WORKFLOW_PLATFORM.html">design discussion</a> (the what/why)
+      and the <a href="PLATFORM_WORK_PLAN.md">work plan</a> (the how/when). Grounded in
+      <a href="ARCHITECTURE.html">Context Graph architecture</a>.</div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">Contents</div>
+  <ol>
+    <li><a href="#overview">Overview &amp; principles</a></li>
+    <li><a href="#modules">Module layout</a></li>
+    <li><a href="#concepts">The Concept model</a></li>
+    <li><a href="#schemas">Core schemas</a></li>
+    <li><a href="#ports">Interfaces (ports)</a></li>
+    <li><a href="#runtime">Runtime sequence</a></li>
+    <li><a href="#authoring">Authoring &amp; diff-and-approve</a></li>
+    <li><a href="#namespaces">Namespaces &amp; tenancy</a></li>
+    <li><a href="#determinism">Determinism &amp; audit</a></li>
+    <li><a href="#api">API surface</a></li>
+    <li><a href="#reuse">Reuse map</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="overview">
+  <div class="kicker">Orientation</div>
+  <h2>Overview &amp; principles</h2>
+  <p class="lead-p">The platform is a thin set of new subsystems bolted onto Context Graph's existing governance
+  primitives. It has three runtime subsystems — <b>integration</b>, <b>flow runtime</b>, <b>graph/audit</b> — and one
+  authoring subsystem — the <b>Studio</b> — plus the <b>packaging</b> layer that ties a domain's artifacts into Apps.</p>
+  <p>Five principles carry over from the resolved decisions and constrain every component:</p>
+  <ol>
+    <li><b>Ports &amp; adapters.</b> Every new subsystem is defined by an interface (a <code>Protocol</code>) with a
+      lean default adapter; the demo uses in-process adapters, production can swap them (bus → broker, run-store →
+      durable engine) without touching callers.</li>
+    <li><b>No unbounded LLM at runtime.</b> The model appears only as a declared <code>agent</code> Action with a typed
+      contract; everything else is deterministic. <span class="pill ctrl">decision 0/3</span></li>
+    <li><b>One diff gesture.</b> Authoring, migration, and re-approval are the same operation — review a diff to a typed,
+      versioned artifact — served by one engine. <span class="pill ctrl">decision 4/5/7</span></li>
+    <li><b>Everything is recorded.</b> Every ingress mapping, gateway evaluation, task, state transition, agent call, and
+      approval writes a quad <code>(h,r,t,rc)</code> — the run and the authoring history are both replayable.</li>
+    <li><b>Pin the version above.</b> Runs pin flow/block versions; Apps pin the meta-DSL; nothing auto-changes under a
+      running instance. <span class="pill ctrl">decision 4/6</span></li>
+  </ol>
+</section>
+
+<!-- 2 -->
+<section id="modules">
+  <div class="kicker">Where the code lives</div>
+  <h2>Module layout</h2>
+  <p>New packages follow the existing <code>context_graph/&lt;subpackage&gt;/{schema,service,store}.py</code> convention
+  (with <code>agent.py</code> where an LLM authors). Green = new, blue = extended, grey = reused as-is.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 396" role="img" aria-label="Module dependency map">
+      <defs><marker id="mm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.t{fill:#e7ebf3;font:11.5px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.s{fill:#aab3c5;font:9px var(--mono);text-anchor:middle}.hd{font:10.5px "Segoe UI",sans-serif;font-weight:800;text-anchor:middle;letter-spacing:.05em}.l{stroke:#8a93a8;stroke-width:1.4;fill:none;marker-end:url(#mm)}</style>
+
+      <!-- Studio / authoring band -->
+      <text class="hd" x="360" y="20" style="fill:#cdb1f7">AUTHORING</text>
+      <rect x="150" y="28" width="150" height="40" rx="9" fill="#231a33" stroke="rgba(169,116,240,.6)"/><text class="t" x="225" y="46">studio/</text><text class="s" x="225" y="60">diff · sign-off · version</text>
+      <rect x="316" y="28" width="120" height="40" rx="9" fill="#231a33" stroke="rgba(169,116,240,.6)"/><text class="t" x="376" y="46">apps/</text><text class="s" x="376" y="60">bundle · registry</text>
+
+      <!-- authored blocks band -->
+      <text class="hd" x="360" y="92" style="fill:#ffce86">BLOCKS (Concepts)</text>
+      <rect x="20" y="100" width="120" height="42" rx="9" fill="#1a2130" stroke="#4a5570"/><text class="t" x="80" y="118">ontology/</text><text class="s" x="80" y="132">reuse +author</text>
+      <rect x="152" y="100" width="110" height="42" rx="9" fill="#1a2130" stroke="#4a5570"/><text class="t" x="207" y="118">rules/</text><text class="s" x="207" y="132">reuse</text>
+      <rect x="274" y="100" width="120" height="42" rx="9" fill="#132a24" stroke="rgba(25,184,154,.6)"/><text class="t" x="334" y="118">flows/</text><text class="s" x="334" y="132">new</text>
+      <rect x="406" y="100" width="110" height="42" rx="9" fill="#1a2130" stroke="#4a5570"/><text class="t" x="461" y="118">lifecycle/</text><text class="s" x="461" y="132">reuse (states)</text>
+      <rect x="528" y="100" width="120" height="42" rx="9" fill="#1e2740" stroke="rgba(91,141,239,.6)"/><text class="t" x="588" y="118">actions/</text><text class="s" x="588" y="132">+agent handler</text>
+
+      <!-- runtime band -->
+      <text class="hd" x="360" y="176" style="fill:#7ee3b4">RUNTIME</text>
+      <rect x="40" y="184" width="150" height="56" rx="9" fill="#132a24" stroke="rgba(25,184,154,.6)"/><text class="t" x="115" y="204">integration/</text><text class="s" x="115" y="219">connectors · mapper</text><text class="s" x="115" y="231">ingress service</text>
+      <rect x="210" y="184" width="140" height="56" rx="9" fill="#132a24" stroke="rgba(25,184,154,.6)"/><text class="t" x="280" y="204">events/</text><text class="s" x="280" y="219">bus · ingress log</text><text class="s" x="280" y="231">idempotency</text>
+      <rect x="370" y="184" width="150" height="56" rx="9" fill="#132a24" stroke="rgba(25,184,154,.6)"/><text class="t" x="445" y="204">flows/ executor</text><text class="s" x="445" y="219">run · cursor · timers</text><text class="s" x="445" y="231">run-store</text>
+      <rect x="540" y="184" width="130" height="56" rx="9" fill="#1a2130" stroke="#4a5570"/><text class="t" x="605" y="204">core.py (CG)</text><text class="s" x="605" y="219">quads (h,r,t,rc)</text><text class="s" x="605" y="231">decision trace</text>
+
+      <!-- shared services band -->
+      <text class="hd" x="360" y="272" style="fill:#9cc0ff">SHARED</text>
+      <rect x="120" y="280" width="140" height="40" rx="9" fill="#1a2130" stroke="#4a5570"/><text class="t" x="190" y="298">rules/gate</text><text class="s" x="190" y="312">RulesGate</text>
+      <rect x="290" y="280" width="140" height="40" rx="9" fill="#1a2130" stroke="#4a5570"/><text class="t" x="360" y="298">api/routes + routers</text><text class="s" x="360" y="312">FastAPI</text>
+      <rect x="460" y="280" width="140" height="40" rx="9" fill="#1a2130" stroke="#4a5570"/><text class="t" x="530" y="298">workspace_pool</text><text class="s" x="530" y="312">per-domain</text>
+
+      <!-- deps -->
+      <line class="l" x1="225" y1="68" x2="300" y2="99"/><line class="l" x1="376" y1="68" x2="360" y2="99"/>
+      <line class="l" x1="115" y1="240" x2="240" y2="184"/>
+      <line class="l" x1="280" y1="240" x2="410" y2="184"/>
+      <line class="l" x1="445" y1="240" x2="360" y2="143"/><line class="l" x1="470" y1="240" x2="560" y2="184"/>
+      <line class="l" x1="445" y1="240" x2="588" y2="240" stroke-dasharray="3 3"/>
+      <line class="l" x1="360" y1="240" x2="360" y2="278" stroke-dasharray="3 3"/>
+    </svg>
+    <div class="legend">
+      <span><i class="dot" style="background:#19b89a"></i>new package</span>
+      <span><i class="dot" style="background:#5b8def"></i>extended</span>
+      <span><i class="dot" style="background:#4a5570"></i>reused as-is</span>
+    </div>
+    <figcaption><b>Four new packages</b> — <code>events/</code>, <code>integration/</code>, <code>flows/</code>,
+      <code>studio/</code>, <code>apps/</code> — plus an <code>agent</code> handler added to <code>actions/</code>.
+      Everything else (<code>rules/</code>, <code>ontology/</code>, <code>lifecycle/</code>, <code>core.py</code>,
+      workspace pool, API layer) is reused.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 3 -->
+<section id="concepts">
+  <div class="kicker">The fixed grammar (L0)</div>
+  <h2>The Concept model</h2>
+  <p>The platform's fixed vocabulary. Stage 1 instantiates these into domain blocks; Stage 2 composes those blocks.
+  Nothing outside this set is expressible.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Concept</th><th>Runtime meaning</th><th>Authored as</th><th>Backed by</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill ctrl">CG + Ontology</span></td><td>the typed knowledge substrate + validation wall</td><td>object/link types, properties</td><td><code>ontology/</code>, <code>core.py</code></td></tr>
+      <tr><td><span class="pill b">Rules</span></td><td>deterministic decisions &amp; gates</td><td>DSL rules (dry-run tested)</td><td><code>rules/engine</code>, <code>rules/gate</code></td></tr>
+      <tr><td><span class="pill a">States</span></td><td>legal states + guarded transitions per object</td><td>state machines</td><td><code>lifecycle/</code></td></tr>
+      <tr><td><span class="pill win">Flows</span></td><td>orchestration over states (BPMN-lite)</td><td>flow definitions</td><td><code>flows/</code> (new)</td></tr>
+      <tr><td><span class="pill c">Actions</span></td><td>side-effects &amp; actors (webhook · compute · agent)</td><td>action catalog</td><td><code>actions/</code> (+agent)</td></tr>
+      <tr><td><span class="pill a">Integrations</span></td><td>event ingress + ontology mapping</td><td>connector bindings + maps</td><td><code>integration/</code> (new)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">An <b>App</b> is not a Concept — it is a <i>composition</i> of Concept instances (a bundle). That
+  distinction is what keeps Stage 2's universe closed.</p>
+</section>
+
+<!-- 4 -->
+<section id="schemas">
+  <div class="kicker">Data model</div>
+  <h2>Core schemas</h2>
+  <p>Dataclasses, following the <code>schema.py</code> convention. Times are passed in (pure functions take no server
+  clock), IDs are caller-supplied or content-hashed.</p>
+
+  <h3>Event &amp; ingress <span class="pill win">events/</span></h3>
+  <pre><code><span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">Event</span>:
+    type: <span class="ty">str</span>              <span class="cm"># "request.submitted" — matches a flow's on_event</span>
+    payload: <span class="ty">dict</span>          <span class="cm"># raw (pre-map) or ontology-typed (post-map)</span>
+    source: <span class="ty">str</span>            <span class="cm"># connector id</span>
+    ts: <span class="ty">str</span>                <span class="cm"># ISO-8601, supplied by the connector</span>
+    idempotency_key: <span class="ty">str</span>   <span class="cm"># dedupe key (connectors re-deliver)</span>
+    workspace: <span class="ty">str</span>         <span class="cm"># domain</span>
+    app_id: <span class="ty">str</span> | <span class="kw">None</span> = <span class="kw">None</span>   <span class="cm"># routing target (else fan-out by type)</span>
+    mapped: <span class="ty">bool</span> = <span class="kw">False</span>       <span class="cm"># has the mapping layer run?</span>
+    mapping_meta: <span class="ty">dict</span> | <span class="kw">None</span> = <span class="kw">None</span>  <span class="cm"># {method, confidence, block_version}</span></code></pre>
+
+  <h3>Flow definition <span class="pill win">flows/</span></h3>
+  <pre><code><span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">FlowNode</span>:
+    id: <span class="ty">str</span>
+    kind: <span class="ty">str</span>               <span class="cm"># event | task | gateway | timer | state</span>
+    ref: <span class="ty">str</span> | <span class="kw">None</span> = <span class="kw">None</span>   <span class="cm"># action_id | rule_id | state_name | duration</span>
+    config: <span class="ty">dict</span> = field(default_factory=<span class="ty">dict</span>)   <span class="cm"># assignee, timeout, ...</span>
+
+<span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">FlowEdge</span>:
+    src: <span class="ty">str</span>; dst: <span class="ty">str</span>
+    when: <span class="ty">str</span> | <span class="kw">None</span> = <span class="kw">None</span>   <span class="cm"># gateway branch label ("exceeds" / "else")</span>
+
+<span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">FlowDefinition</span>:
+    id: <span class="ty">str</span>; version: <span class="ty">int</span>
+    on_event: <span class="ty">str</span>
+    nodes: <span class="ty">list</span>[<span class="ty">FlowNode</span>]
+    edges: <span class="ty">list</span>[<span class="ty">FlowEdge</span>]
+    test_cases: <span class="ty">list</span>[<span class="ty">dict</span>] = field(default_factory=<span class="ty">list</span>)  <span class="cm"># behaviour gate for re-approval</span></code></pre>
+
+  <h3>Run (a live flow instance) <span class="pill win">flows/</span></h3>
+  <pre><code><span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">Run</span>:
+    run_id: <span class="ty">str</span>
+    app_id: <span class="ty">str</span>; flow_id: <span class="ty">str</span>
+    flow_version: <span class="ty">int</span>       <span class="cm"># PINNED at start — decision 4</span>
+    cursor: <span class="ty">str</span>            <span class="cm"># current node id</span>
+    status: <span class="ty">str</span>            <span class="cm"># running | waiting | done | failed</span>
+    vars: <span class="ty">dict</span>             <span class="cm"># instance data (ontology-typed)</span>
+    state: <span class="ty">str</span> | <span class="kw">None</span> = <span class="kw">None</span>    <span class="cm"># current lifecycle state</span>
+    history: <span class="ty">list</span>[<span class="ty">dict</span>] = field(default_factory=<span class="ty">list</span>)  <span class="cm"># append-only step log → replay</span></code></pre>
+
+  <h3>Agent Action (LLM as boxed actor) <span class="pill danger">actions/ +agent</span></h3>
+  <pre><code><span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">AgentSpec</span>:                <span class="cm"># handler kind = "agent" on ActionHandler</span>
+    role_prompt: <span class="ty">str</span>
+    input_types: <span class="ty">list</span>[<span class="ty">str</span>]     <span class="cm"># ontology type names it may read</span>
+    output_schema: <span class="ty">str</span>         <span class="cm"># ontology type / enum it must return</span>
+    min_confidence: <span class="ty">float</span> = <span class="num">0.7</span>
+    on_low_confidence: <span class="ty">str</span> = <span class="str">"human_task"</span>   <span class="cm"># human_task | reject</span></code></pre>
+
+  <h3>App bundle (the Stage-2 composition) <span class="pill win">apps/</span></h3>
+  <pre><code><span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">AppBundle</span>:
+    domain: <span class="ty">str</span>              <span class="cm"># workspace</span>
+    project: <span class="ty">str</span>; app_id: <span class="ty">str</span>
+    meta_dsl_version: <span class="ty">str</span>    <span class="cm"># pins L0</span>
+    ontology_version: <span class="ty">int</span>    <span class="cm"># pins L1 ontology</span>
+    rule_ids: <span class="ty">list</span>[<span class="ty">str</span>]; flow_ids: <span class="ty">list</span>[<span class="ty">str</span>]; action_ids: <span class="ty">list</span>[<span class="ty">str</span>]
+    connector_bindings: <span class="ty">list</span>[<span class="ty">dict</span>]   <span class="cm"># which events feed this app</span>
+    views: <span class="ty">list</span>[<span class="ty">dict</span>]               <span class="cm"># queues, forms, trace timeline</span>
+    signed_by: <span class="ty">str</span>; signed_at: <span class="ty">str</span></code></pre>
+
+  <h3>Artifact diff (the one gesture) <span class="pill win">studio/</span></h3>
+  <pre><code><span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">ArtifactDiff</span>:
+    kind: <span class="ty">str</span>              <span class="cm"># ontology | rule | flow | action | app</span>
+    artifact_id: <span class="ty">str</span>
+    from_version: <span class="ty">int</span> | <span class="kw">None</span>; to_version: <span class="ty">int</span>
+    delta: <span class="ty">dict</span>            <span class="cm"># structured change</span>
+    behaviour_changed: <span class="ty">bool</span>   <span class="cm"># from re-running dry-run / test_cases</span>
+    origin: <span class="ty">str</span>            <span class="cm"># authoring | migration | reapproval — SAME path</span></code></pre>
+</section>
+
+<!-- 5 -->
+<section id="ports">
+  <div class="kicker">Ports &amp; adapters</div>
+  <h2>Interfaces (ports)</h2>
+  <p>Each subsystem is a <code>Protocol</code> with a lean default adapter. This is the seam every "swap later" decision
+  hangs on.</p>
+  <pre><code><span class="kw">class</span> <span class="ty">EventBus</span>(<span class="ty">Protocol</span>):
+    <span class="kw">async def</span> <span class="fn">publish</span>(self, e: <span class="ty">Event</span>) -> <span class="kw">None</span>: ...
+    <span class="kw">def</span> <span class="fn">subscribe</span>(self, event_type: <span class="ty">str</span>, h: <span class="ty">Handler</span>) -> <span class="kw">None</span>: ...
+    <span class="cm"># default: InProcessBus ; later: RedisStreamsBus / NatsBus</span>
+
+<span class="kw">class</span> <span class="ty">IngressLog</span>(<span class="ty">Protocol</span>):          <span class="cm"># durable, at-least-once — decision 2</span>
+    <span class="kw">async def</span> <span class="fn">append</span>(self, e: <span class="ty">Event</span>) -> <span class="ty">bool</span>: ...   <span class="cm"># False = idempotency_key seen</span>
+    <span class="kw">async def</span> <span class="fn">replay</span>(self, since: <span class="ty">str</span>) -> <span class="ty">AsyncIterator</span>[<span class="ty">Event</span>]: ...
+
+<span class="kw">class</span> <span class="ty">Connector</span>(<span class="ty">Protocol</span>):           <span class="cm"># extends webingest connector base</span>
+    <span class="kw">async def</span> <span class="fn">poll</span>(self) -> <span class="ty">list</span>[<span class="ty">RawRecord</span>]: ...      <span class="cm"># or push via webhook route</span>
+
+<span class="kw">class</span> <span class="ty">Mapper</span>(<span class="ty">Protocol</span>):              <span class="cm"># raw record → ontology-typed — decision 3</span>
+    <span class="kw">async def</span> <span class="fn">map</span>(self, rec: <span class="ty">RawRecord</span>, onto: <span class="ty">Ontology</span>) -> <span class="ty">Mapped</span>: ...
+    <span class="cm"># DeterministicMapper (field map + coerce) | AgentMapper (reuses AgentSpec)</span>
+
+<span class="kw">class</span> <span class="ty">FlowExecutor</span>(<span class="ty">Protocol</span>):
+    <span class="kw">async def</span> <span class="fn">start</span>(self, flow: <span class="ty">FlowDefinition</span>, e: <span class="ty">Event</span>) -> <span class="ty">Run</span>: ...
+    <span class="kw">async def</span> <span class="fn">advance</span>(self, run: <span class="ty">Run</span>) -> <span class="ty">Run</span>: ...   <span class="cm"># walk to next wait/terminal</span>
+
+<span class="kw">class</span> <span class="ty">RunStore</span>(<span class="ty">Protocol</span>):            <span class="cm"># durability seam — decision 1</span>
+    <span class="kw">async def</span> <span class="fn">save</span>(self, run: <span class="ty">Run</span>) -> <span class="kw">None</span>: ...
+    <span class="kw">async def</span> <span class="fn">get</span>(self, run_id: <span class="ty">str</span>) -> <span class="ty">Run</span>: ...
+    <span class="kw">async def</span> <span class="fn">due_timers</span>(self, now: <span class="ty">str</span>) -> <span class="ty">list</span>[<span class="ty">Run</span>]: ...
+
+<span class="kw">class</span> <span class="ty">DiffEngine</span>(<span class="ty">Protocol</span>):          <span class="cm"># authoring = migration = reapproval — decision 4/5/7</span>
+    <span class="kw">async def</span> <span class="fn">propose</span>(self, kind, intent, current) -> <span class="ty">ArtifactDiff</span>: ...
+    <span class="kw">async def</span> <span class="fn">assess</span>(self, d: <span class="ty">ArtifactDiff</span>) -> <span class="ty">ArtifactDiff</span>: ...   <span class="cm"># sets behaviour_changed</span>
+    <span class="kw">async def</span> <span class="fn">apply</span>(self, d: <span class="ty">ArtifactDiff</span>, signer: <span class="ty">str</span>) -> <span class="ty">int</span>: ...  <span class="cm"># → new version</span></code></pre>
+  <div class="callout info"><div class="clabel">◆ The two adapters that matter for "later"</div>
+    <b><code>EventBus</code></b> (in-process → broker) and <b><code>RunStore</code></b> (in-memory/JSON → durable
+    engine). Because both are ports, the durability decisions (#1, #2) become one-file swaps, not rewrites — exactly
+    what the "revisit trigger" language in those decisions promised.</div>
+</section>
+
+<!-- 6 -->
+<section id="runtime">
+  <div class="kicker">Decision time</div>
+  <h2>Runtime sequence — an event through a run</h2>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 300" role="img" aria-label="Runtime sequence diagram">
+      <defs><marker id="mr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.t{fill:#e7ebf3;font:10.5px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}.s{fill:#aab3c5;font:9px var(--mono);text-anchor:middle}.l{stroke:#8a93a8;stroke-width:1.5;fill:none;marker-end:url(#mr)}.lifeline{stroke:#2c3346;stroke-width:1;stroke-dasharray:3 4}</style>
+      <!-- actors -->
+      <g>
+        <rect x="14" y="18" width="96" height="26" rx="7" fill="#1a2236" stroke="rgba(91,141,239,.5)"/><text class="t" x="62" y="35">Connector</text><line class="lifeline" x1="62" y1="44" x2="62" y2="288"/>
+        <rect x="128" y="18" width="96" height="26" rx="7" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="t" x="176" y="35">Ingress+Bus</text><line class="lifeline" x1="176" y1="44" x2="176" y2="288"/>
+        <rect x="246" y="18" width="100" height="26" rx="7" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="t" x="296" y="35">Executor</text><line class="lifeline" x1="296" y1="44" x2="296" y2="288"/>
+        <rect x="368" y="18" width="90" height="26" rx="7" fill="#1a2130" stroke="#4a5570"/><text class="t" x="413" y="35">Rules</text><line class="lifeline" x1="413" y1="44" x2="413" y2="288"/>
+        <rect x="480" y="18" width="96" height="26" rx="7" fill="#241c10" stroke="rgba(240,167,60,.5)"/><text class="t" x="528" y="35">Action</text><line class="lifeline" x1="528" y1="44" x2="528" y2="288"/>
+        <rect x="598" y="18" width="108" height="26" rx="7" fill="#1a2130" stroke="#4a5570"/><text class="t" x="652" y="35">CG trace</text><line class="lifeline" x1="652" y1="44" x2="652" y2="288"/>
+      </g>
+      <!-- messages -->
+      <line class="l" x1="62" y1="64" x2="174" y2="64"/><text class="s" x="118" y="58">raw record</text>
+      <line class="l" x1="176" y1="88" x2="176" y2="88"/><text class="s" x="176" y="82">map+dedupe</text>
+      <line class="l" x1="176" y1="108" x2="294" y2="108"/><text class="s" x="235" y="102">Event → start(run)</text>
+      <line class="l" x1="296" y1="132" x2="411" y2="132"/><text class="s" x="352" y="126">gateway: evaluate</text>
+      <line class="l" x1="411" y1="152" x2="298" y2="152"/><text class="s" x="352" y="166">branch result</text>
+      <line class="l" x1="296" y1="180" x2="526" y2="180"/><text class="s" x="410" y="174">task: invoke action</text>
+      <line class="l" x1="526" y1="200" x2="298" y2="200"/><text class="s" x="410" y="214">result (recorded)</text>
+      <line class="l" x1="296" y1="228" x2="296" y2="228"/><text class="s" x="296" y="222">state transition (lifecycle)</text>
+      <line class="l" x1="296" y1="252" x2="650" y2="252"/><text class="s" x="470" y="246">write quad per hop</text>
+      <text class="s" x="360" y="282" style="fill:#7b8499">run persists to RunStore at every wait; timers re-enter via due_timers()</text>
+    </svg>
+    <figcaption><b>Deterministic except at declared agent nodes.</b> The executor is the only new orchestrator; Rules,
+      Action, lifecycle, and CG are today's modules. Every hop appends to the run history <i>and</i> the graph — the run
+      is replayable from either.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 7 -->
+<section id="authoring">
+  <div class="kicker">Authoring time</div>
+  <h2>Authoring &amp; the diff-and-approve engine</h2>
+  <p>Authoring (Stage 1), migration (a platform upgrade), and re-approval (a changed block) are <b>the same three
+  calls</b> on <code>DiffEngine</code> — only <code>ArtifactDiff.origin</code> differs. That is why one engine serves all
+  three, and why the Studio, the migration tool, and the re-approval prompt are one UI.</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 210" role="img" aria-label="Diff-and-approve sequence">
+      <defs><marker id="ma2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.t{fill:#e7ebf3;font:11px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.s{fill:#aab3c5;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}.l{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#ma2)}</style>
+      <rect x="14" y="80" width="96" height="46" rx="10" fill="#231a33" stroke="rgba(169,116,240,.55)"/><text class="t" x="62" y="100">expert</text><text class="s" x="62" y="116">intent (NL)</text>
+      <rect x="140" y="80" width="104" height="46" rx="10" fill="#231a33" stroke="rgba(169,116,240,.5)"/><text class="t" x="192" y="100">DiffEngine</text><text class="s" x="192" y="116">propose()</text>
+      <rect x="274" y="42" width="120" height="40" rx="10" fill="#1a2130" stroke="#4a5570"/><text class="t" x="334" y="62">structured view</text><text class="s" x="334" y="76">the diff, rendered</text>
+      <rect x="274" y="122" width="120" height="40" rx="10" fill="#241c10" stroke="rgba(240,167,60,.5)"/><text class="t" x="334" y="142">assess()</text><text class="s" x="334" y="156">dry-run / test_cases</text>
+      <rect x="424" y="80" width="104" height="46" rx="10" fill="#13251f" stroke="rgba(62,207,142,.55)"/><text class="t" x="476" y="100">gate + sign</text><text class="s" x="476" y="116">human approves</text>
+      <rect x="558" y="80" width="104" height="46" rx="10" fill="#1a2130" stroke="#4a5570"/><text class="t" x="610" y="100">apply()</text><text class="s" x="610" y="116">→ new version</text>
+      <line class="l" x1="110" y1="103" x2="138" y2="103"/>
+      <line class="l" x1="244" y1="94" x2="272" y2="66"/><line class="l" x1="244" y1="112" x2="272" y2="140"/>
+      <line class="l" x1="394" y1="103" x2="422" y2="103"/>
+      <line class="l" x1="528" y1="103" x2="556" y2="103"/>
+      <path class="l" d="M610 126 C 610 185, 62 185, 62 128"/><text class="s" x="340" y="200" style="fill:#7b8499">origin = authoring | migration | reapproval — identical path, recorded as a decision</text>
+    </svg>
+    <figcaption><b>One gesture, three uses.</b> <code>propose → assess → (gate+sign) → apply</code>. Behaviour-affecting
+      diffs (from <code>assess()</code>) demand full sign-off; cosmetic ones are lightweight. The signature is the trust
+      boundary of the whole platform.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 8 -->
+<section id="namespaces">
+  <div class="kicker">Isolation</div>
+  <h2>Namespaces &amp; tenancy</h2>
+  <p>Three-tier addressing over the existing per-workspace isolation — no change to the isolation mechanism, only a
+  naming convention above it.</p>
+  <pre><code>Domain   = workspace          <span class="cm"># CG + ontology + block catalog (L1)   → LIGHTRAG-WORKSPACE</span>
+ └ Project = grouping           <span class="cm"># all apps in the domain (the solution)</span>
+    └ App   = app-id            <span class="cm"># an L2 composition (bundle)</span>
+       └ Run = run_id           <span class="cm"># a live flow instance</span></code></pre>
+  <p class="small">Shared blocks are free within a domain (same workspace). Cross-domain sharing (a marketplace ontology)
+  rides on the App-bundle export format and is deferred. The demo is one Domain / one Project / one App.</p>
+</section>
+
+<!-- 9 -->
+<section id="determinism">
+  <div class="kicker">The trust surface</div>
+  <h2>Determinism &amp; audit</h2>
+  <div class="grid g2">
+    <div class="card"><b>Deterministic by construction</b>
+      <ul class="small" style="margin:.4em 0 0">
+        <li>rule evaluation, gateways, state transitions</li>
+        <li>the executor's walk (given the same run + inputs)</li>
+        <li>deterministic ingress maps</li>
+        <li>replay: re-walk history → identical result</li>
+      </ul></div>
+    <div class="card"><b>Non-deterministic but contained</b>
+      <ul class="small" style="margin:.4em 0 0">
+        <li>agent Actions (typed I/O, confidence, fallback)</li>
+        <li>agent ingress mapping (same contract)</li>
+        <li>trust = containment + validation + audit, not replay</li>
+        <li>low confidence → human task, never silent</li>
+      </ul></div>
+  </div>
+  <p class="small">Every hop — map, gateway, task, transition, agent call, approval — writes a quad
+  <code>(h,r,t,rc)</code> with <code>supporting_sentences</code>/provenance. The audit trail is not a bolt-on; it is the
+  same graph the platform reasons over.</p>
+</section>
+
+<!-- 10 -->
+<section id="api">
+  <div class="kicker">Surface</div>
+  <h2>API surface (new)</h2>
+  <p>New routers registered by the existing <code>create_context_graph_routes</code> factory / router pattern, all
+  workspace-aware.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Group</th><th>Endpoints</th></tr></thead>
+    <tbody>
+      <tr><td><b>Ingress</b></td><td><code>POST /ingress/webhook/{connector}</code> · <code>POST /ingress/event</code> · <code>GET /ingress/log</code></td></tr>
+      <tr><td><b>Flows &amp; runs</b></td><td><code>GET|POST /flows</code> · <code>POST /flows/{id}/dry-run</code> · <code>GET /runs</code> · <code>GET /runs/{id}</code> · <code>GET /runs/{id}/replay</code></td></tr>
+      <tr><td><b>Studio</b></td><td><code>POST /studio/propose</code> · <code>POST /studio/assess</code> · <code>POST /studio/apply</code> · <code>GET /studio/history/{kind}/{id}</code></td></tr>
+      <tr><td><b>Apps</b></td><td><code>GET|POST /apps</code> · <code>POST /apps/{id}/sign</code> · <code>GET /apps/{id}/export</code> · <code>POST /apps/import</code></td></tr>
+      <tr><td><b>Migration</b></td><td><code>GET /migration/diff?to={ver}</code> · <code>POST /migration/apply</code></td></tr>
+      <tr><td><b>Projects</b></td><td><code>GET|POST /projects</code> · <code>GET /projects/{id}/apps</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 11 -->
+<section id="reuse">
+  <div class="kicker">Leverage</div>
+  <h2>Reuse map — new component → existing module</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>New component</th><th>Builds directly on</th></tr></thead>
+    <tbody>
+      <tr><td><code>flows/</code> executor — gateway node</td><td><code>rules/engine.py</code> <code>RulesEngine.evaluate()</code></td></tr>
+      <tr><td><code>flows/</code> executor — state node</td><td><code>lifecycle/</code> <code>StateMachine</code>/<code>Transition</code></td></tr>
+      <tr><td><code>flows/</code> executor — task node</td><td><code>actions/</code> <code>ActionDefinition</code>/<code>ActionHandler</code></td></tr>
+      <tr><td><code>actions/</code> agent handler</td><td>extends <code>ActionHandler</code> (new <code>agent</code> kind)</td></tr>
+      <tr><td><code>integration/</code> connectors</td><td><code>webingest/connectors/</code> base</td></tr>
+      <tr><td><code>integration/</code> mapper</td><td><code>ontology/validate.py</code> <code>ExtractionValidator</code>, <code>Property.coerce</code></td></tr>
+      <tr><td><code>studio/</code> DiffEngine — propose</td><td><code>ontology/agent.py</code>, <code>rules/agent.py</code> authors</td></tr>
+      <tr><td><code>studio/</code> DiffEngine — gate/sign</td><td><code>rules/gate.py</code> <code>RulesGate</code></td></tr>
+      <tr><td>every hop — audit</td><td><code>core.py</code> quads + <code>emit_decision_trace</code></td></tr>
+      <tr><td>Domain isolation</td><td><code>workspace_pool.py</code> + <code>LIGHTRAG-WORKSPACE</code></td></tr>
+      <tr><td>Studio UI surfaces</td><td>extend existing Ontology / Rules WebUI; flow canvas net-new</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout ok"><div class="clabel">◆ The architecture in one sentence</div>
+    A new <b>flow executor</b> and <b>event backbone</b>, an <b>agent-action</b> handler, and a <b>diff-and-approve
+    Studio</b> — five new packages composing seven existing ones, every port swappable, every hop recorded.</div>
+  <p class="small">Next: the <a href="PLATFORM_WORK_PLAN.md">work plan</a> sequences this into phases with deliverables
+    and test gates. Back to the <a href="GOVERNED_WORKFLOW_PLATFORM.html">design discussion</a> for the why.</p>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  Target architecture for the governed-workflow platform on <a href="https://github.com/dsivov/Context_Graph" target="_blank" rel="noopener">Context
+  Graph</a>. Companion to the <a href="GOVERNED_WORKFLOW_PLATFORM.html">design discussion</a> and
+  <a href="PLATFORM_WORK_PLAN.md">work plan</a>.
+</footer>
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
+</script>
+</body>
+</html>
