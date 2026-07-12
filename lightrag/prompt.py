@@ -706,7 +706,14 @@ Output exactly this schema:
 
 Rules:
 - Include a relationship ONLY if both of its entities appear in "entities".
-- ALWAYS include "relation_context" for every relationship, populated with at least "supporting_sentences" (a verbatim quote from the text) and "confidence_score" in [0,1]. Add the decision-specific sub-fields (decision_trace, approved_by, approved_via, valid_from, valid_until, policy_ref, quantitative_data, temporal_info, provenance) whenever the text supports them. Omit only the individual sub-fields the text does not support — never omit the whole "relation_context".
+- ALWAYS include "relation_context" for every relationship, populated with at least "supporting_sentences" (a verbatim quote from the text) and "confidence_score" in [0,1]. Omit only the individual sub-fields the text does not support — never omit the whole "relation_context".
+- Fill in EACH sub-field whenever its trigger is present in the text — do not settle for supporting_sentences + confidence_score when more is available. Triggers:
+  * "quantitative_data": ANY number, amount, percentage, count, price, or measurement tied to the relationship (e.g. "21 theme nodes", "20% discount", "$1,499").
+  * "decision_trace": ANY stated reason, rationale, justification, cause, purpose, hypothesis, or "why" behind the relationship — even a one-clause explanation.
+  * "provenance": the source of the claim (document, section, channel, meeting, or example it comes from) whenever it is identifiable — fill this on nearly every relationship.
+  * "temporal_info": any validity period, date range, or "as of" phrasing.
+  * "approved_by" / "approved_via" / "policy_ref" / "valid_from" / "valid_until": explicit approvals, decision channels, policies, or validity dates.
+  Aim to populate 3+ sub-fields per relationship when the text allows; a bare supporting_sentences + confidence_score is only acceptable when the text truly offers nothing more.
 - Do NOT invent facts. Every value must be grounded in the input text.
 - Exclude non-entities: file paths, code identifiers, environment-variable names, git hashes, bare numbers, and pronouns.
 - Treat relationships as undirected unless the text states a direction.

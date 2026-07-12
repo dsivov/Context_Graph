@@ -93,15 +93,38 @@ Field-accuracy on shared relations (same `(src,tgt)` in both modes) — represen
   JSON  rc: supporting_sentences + confidence_score
 ```
 
+The 18-chunk run showed JSON attaching rc *reliably* (100%) but *thinly* (density 2.23) — it
+was settling for `supporting_sentences` + `confidence_score` and leaving `decision_trace`,
+`quantitative_data`, and `provenance` empty where the text supported them.
+
+### Depth pass — explicit field triggers
+
+To close the density gap, the JSON prompt rule was strengthened from a generic "add sub-fields
+when the text supports them" into an explicit **text-signal → field** trigger list
+(any number → `quantitative_data`; any stated reason/rationale/hypothesis → `decision_trace`;
+identifiable source → `provenance`; etc.), with a "populate 3+ sub-fields when the text allows"
+target. Two fresh 18-chunk runs:
+
+| metric | Delimiter (run 1 / run 2) | JSON (run 1 / run 2) |
+|--------|---------------------------|----------------------|
+| rc coverage | 100% / 100% | 100% / 100% |
+| **rc field density** | 3.50 / 3.31 | **2.78 / 2.72** |
+
+JSON rc field density rose from **2.23 → ~2.75** (stable across both runs, **+23%**) with
+coverage held at 100%. The gap to the delimiter path (~3.4) narrowed from ~0.9 to **~0.6** —
+meaningfully closer, but not eliminated.
+
 ## 4. Findings
 
 1. **rc coverage: JSON wins.** After the prompt fix JSON attaches rc to **100%** of relations
    vs the delimiter path's 93% — it never forgets the rc.
-2. **rc depth: delimiter wins.** The delimiter path populates **~3.16** rc sub-fields per
-   relation vs JSON's **~2.23**. On shared relations JSON reliably captures
-   `supporting_sentences` + `confidence_score` but more often leaves `decision_trace`,
-   `quantitative_data`, and `provenance` empty where the delimiter path fills them. Since
-   decision lineage *is* the product, this thinner rc is a real (if milder) quality gap.
+2. **rc depth: delimiter still leads, but the gap is now small.** Out of the box JSON
+   populated only **~2.23** rc sub-fields per relation vs delimiter's ~3.16. After the depth
+   pass (explicit field triggers) JSON rose to a stable **~2.75** vs delimiter's **~3.4** — the
+   gap narrowed from ~0.9 to **~0.6**. JSON now fills `quantitative_data` / `decision_trace` /
+   `provenance` far more often, but the delimiter path still captures marginally richer lineage.
+   Since decision lineage *is* the product, that residual ~0.6-field gap is the last thing
+   standing between the two paths.
 3. **Entity/relation counts: comparable.** 109 vs 98 and 89 vs 83 — the initial 2–3×
    over-extraction is gone. Cross-mode *overlap* is modest (47/109 shared entities), but that
    reflects gpt-4o sampling variance on naming/granularity — the delimiter path varied just as
@@ -114,19 +137,24 @@ Field-accuracy on shared relations (same `(src,tgt)` in both modes) — represen
 
 ## 5. Recommendation
 
-**Keep `CG_JSON_EXTRACTION` OFF as the default (do not yet flip / retire the delimiter path).**
+**Keep `CG_JSON_EXTRACTION` OFF as the default — but the two paths are now near parity.**
 
-The JSON path is now *viable and non-regressing on rc coverage*, and it is structurally more
-robust to parse — but it currently records **thinner decision lineage** (rc field density
-2.23 vs 3.16). Flipping the default would trade some captured rationale/quantitative/provenance
-detail for parse robustness. That trade is not clearly worth it yet.
+After the depth pass the JSON path is: at parity on rc *coverage* (100% vs 93–100%), more
+robust to parse (structurally immune to the delimiter's intermittent field-count errors), and
+within **~0.6 sub-fields** on rc *depth* (~2.75 vs ~3.4). The residual depth gap is the only
+remaining reason not to flip — and it is now small enough that the trade (marginally thinner
+lineage for guaranteed-valid parsing + guaranteed rc attachment) is a reasonable judgment call
+rather than a clear regression.
 
-**To close the gap before considering a default flip (increment 5):**
-- Strengthen the JSON prompt to actively fill `decision_trace` (when the text states a
-  rationale), `quantitative_data` (when it contains numbers/amounts), and `provenance` (source
-  reference) — the examples show these, but not emphatically enough to match delimiter density.
-- Re-run this A/B; target rc field density ≥ ~3.0 while holding coverage at 100%.
-- Optionally add a larger multi-run A/B to average out gpt-4o sampling variance.
+**Options from here:**
+- **Hold** — keep the flag off; the delimiter path's richer lineage is the safe default. (current)
+- **One more prompt iteration** — push JSON density to ≥3.0 (e.g. require `provenance` on every
+  relationship; add a third few-shot example dense in `quantitative_data`), then re-A/B.
+- **Flip with monitoring** — accept the ~0.6-field trade for parse robustness, set the default
+  on, and watch rc density on real ingests. Reversible via the flag.
+
+A multi-run A/B (already done: two 18-chunk runs post-depth-pass) confirms the JSON density
+gain (~2.75) is stable, not sampling noise.
 
 ## 6. How to run / enable
 
