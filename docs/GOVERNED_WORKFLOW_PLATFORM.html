@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Governed-Workflow Platform — a constrained-expert-system substrate on Context Graph</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.12), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.08), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(91,141,239,.09),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.05;margin:.3em 0 .25em;background:linear-gradient(92deg,#9cc0ff,#8fd9c9 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}.tag b{color:var(--ink)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(91,141,239,.2),transparent);color:#fff;border-left:2px solid var(--a)}
+main{min-width:0;max-width:772px}article section{margin:0 0 54px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}p{margin:.7em 0}.lead-p{font-size:19px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--a);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(169,116,240,.55);background:rgba(169,116,240,.1)}.callout.key .clabel{color:#cdb1f7}
+.callout.q{border-color:rgba(239,91,110,.45);background:rgba(239,91,110,.07)}.callout.q .clabel{color:#f6a2ad}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#9cc0ff}
+.stepnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:rgba(91,141,239,.16);color:#9cc0ff;font-family:var(--mono);font-size:12px;font-weight:700;margin-right:6px}
+ol.steps{padding-left:0;list-style:none;counter-reset:s}ol.steps>li{counter-increment:s;position:relative;padding:10px 0 10px 40px;border-bottom:1px solid var(--line-soft)}
+ol.steps>li::before{content:counter(s);position:absolute;left:0;top:11px;width:26px;height:26px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);color:var(--ink-soft);font-family:var(--mono);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-faint);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}.dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Design discussion · a new build on Context Graph</div>
+    <h1>The Governed-Workflow Platform</h1>
+    <p class="lede">A real application that demonstrates Context Graph — and, underneath it, the
+      <a href="BLOG_CONSTRAINED_EXPERT_SYSTEM.html">constrained expert system</a> made buildable. It's built in
+      <b>two LLM-driven development stages, both run by experts</b>: <b>Stage&nbsp;1</b> defines a domain's building
+      blocks (CG &amp; its ontology, Rules, Flows, States, Integrations, Actions); <b>Stage&nbsp;2</b> composes those
+      blocks into real applications — and because the Stage-2 LLM may only wire <i>existing, typed</i> blocks, the usual
+      LLM-dev mistakes become structurally impossible. An <b>integration engine</b> feeds events in; a deterministic
+      <b>runtime</b> executes, with any LLM confined to a defined <b>Action</b>.</p>
+    <div class="byline">A starting point for discussion — opinionated where the substrate already decides it, open where
+      it's ours to choose. Companion to <a href="BLOG_CONSTRAINED_EXPERT_SYSTEM.html">The Constrained Expert System</a>
+      and the <a href="ARCHITECTURE.html">Context Graph architecture</a>.</div>
+    <div class="hero-tags">
+      <span class="tag">events in → decisions out</span>
+      <span class="tag">two <b>expert + LLM</b> dev stages</span>
+      <span class="tag">Stage 1 <b>define the blocks</b></span>
+      <span class="tag">Stage 2 <b>compose into apps</b></span>
+      <span class="tag">LLM bounded by <b>what's defined</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">On this page</div>
+  <ol>
+    <li><a href="#what">What we're building</a></li>
+    <li><a href="#tower">The constraint tower</a></li>
+    <li><a href="#shape">The shape — three planes</a></li>
+    <li><a href="#studio">Stage 1 · the authoring studio</a></li>
+    <li><a href="#flows">The flow layer — BPMN-lite</a></li>
+    <li><a href="#integration">The integration engine</a></li>
+    <li><a href="#stage2">Stage 2 · custom apps</a></li>
+    <li><a href="#have">Have vs net-new</a></li>
+    <li><a href="#decisions">Open decisions</a></li>
+    <li><a href="#plan">A build path</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 0 -->
+<section id="what">
+  <div class="kicker">The product</div>
+  <h2>What we're building</h2>
+  <p class="lead-p">A domain-oriented application, built the way this platform makes possible: in <b>two LLM-driven
+  development stages, both run by experts</b> — possibly of different qualifications, but experts, not end-users, in
+  both. This is a <i>development process</i>, start to finish. What makes it new is not that an LLM writes the app; it's
+  <b>what the LLM is allowed to touch at each stage</b>.</p>
+  <ul>
+    <li><b>Stage 1 — define the building blocks &amp; the DSL.</b> A domain architect, with the LLM, defines the
+      concrete blocks for a domain: the ontology (over CG), the rule vocabulary, the flow templates, the state machines,
+      the integration bindings, the action catalog. This stage is bounded by the platform's fixed <b>Concepts</b>
+      (Rules · Flows · States · Integrations · Actions · CG) and their CG implementations — <i>not</i> by application
+      logic. You can only make things that are one of those kinds.</li>
+    <li><b>Stage 2 — compose blocks into applications.</b> An app builder, also with the LLM, assembles the Stage-1
+      blocks into real applications. Here the LLM's <i>entire universe</i> is the set of artifacts Stage 1 already
+      defined — so it cannot drift, cannot re-implement, cannot forget to reuse, cannot mis-architect. (The next section
+      makes that guarantee precise.)</li>
+  </ul>
+  <p>That is the <a href="BLOG_CONSTRAINED_EXPERT_SYSTEM.html">constrained-expert-system</a> thesis turned into a piece of
+  software — applied <i>twice</i>, recursively. The essay argued the <i>why</i>; this document proposes the <i>what</i>
+  and asks the questions we need to answer before building. We picked a <b>domain-neutral</b> demonstrator on purpose:
+  the point of the first build is to show the platform, not to sell a vertical. The worked example is a generic
+  <b>governed request workflow</b> — a request arrives, rules decide, a flow routes it through review, a human signs, a
+  decision trace is recorded — and the same machinery re-skins to deals, claims, clinical orders, or investigations
+  later.</p>
+
+  <div class="callout key"><div class="clabel">◆ The one invariant — restated honestly</div>
+    Not "no LLM at runtime." The truthful line is: <b>no <i>unbounded</i> LLM at runtime.</b> The orchestration and rule
+    logic execute deterministically; where a domain genuinely needs judgment, an LLM may act — but only as a
+    <b>declared, typed, gated Action</b> (see below), its inputs and outputs bounded by the ontology and its execution
+    recorded as a decision. The model is never on a free hot path; it is a boxed actor or it is absent.</div>
+
+  <p class="small">Naming, for this doc: <b>Stage 1</b> defines blocks in the <b>Studio</b>; <b>Stage 2</b> composes them
+  into <b>an App</b> (a versioned bundle: ontology + rules + flows + actions + connector bindings + views); the App runs
+  on <b>the Runtime</b>. <b>End-users</b> — the people who later operate a finished App — are not a stage; they appear
+  only at runtime.</p>
+</section>
+
+<!-- 0.5 -->
+<section id="tower">
+  <div class="kicker">The mechanism</div>
+  <h2>The constraint tower — why the Stage-2 LLM can't make the usual mistakes</h2>
+  <p class="lead-p">The same move — <i>constrain the LLM to defined blocks, not raw code</i> — applied at three levels,
+  each one boxing the level below it. An LLM's whole universe, at any level, is the set of artifacts defined above it.
+  That containment is the guarantee.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 306" role="img" aria-label="Three-level constraint tower: Concepts, Stage 1 blocks, Stage 2 apps">
+      <style>.t{fill:#e7ebf3;font:12px "Segoe UI",sans-serif;font-weight:700}.s{fill:#aab3c5;font:10.5px "Segoe UI",sans-serif}.s2{fill:#7b8499;font:10px "Segoe UI",sans-serif}.pil{font:10.5px var(--mono);fill:#cdb1f7;text-anchor:middle}</style>
+
+      <!-- L0 outer -->
+      <rect x="16" y="24" width="688" height="266" rx="14" fill="rgba(169,116,240,.07)" stroke="rgba(169,116,240,.5)"/>
+      <text class="t" x="34" y="46" style="fill:#cdb1f7">L0 · CONCEPTS</text>
+      <text class="s2" x="132" y="46">the fixed grammar — we build it</text>
+      <!-- concept pills -->
+      <g>
+        <rect x="34" y="56" width="70" height="22" rx="11" fill="rgba(169,116,240,.14)" stroke="rgba(169,116,240,.4)"/><text class="pil" x="69" y="71">Rules</text>
+        <rect x="112" y="56" width="70" height="22" rx="11" fill="rgba(169,116,240,.14)" stroke="rgba(169,116,240,.4)"/><text class="pil" x="147" y="71">Flows</text>
+        <rect x="190" y="56" width="70" height="22" rx="11" fill="rgba(169,116,240,.14)" stroke="rgba(169,116,240,.4)"/><text class="pil" x="225" y="71">States</text>
+        <rect x="268" y="56" width="104" height="22" rx="11" fill="rgba(169,116,240,.14)" stroke="rgba(169,116,240,.4)"/><text class="pil" x="320" y="71">Integrations</text>
+        <rect x="380" y="56" width="78" height="22" rx="11" fill="rgba(169,116,240,.14)" stroke="rgba(169,116,240,.4)"/><text class="pil" x="419" y="71">Actions</text>
+        <rect x="466" y="56" width="120" height="22" rx="11" fill="rgba(169,116,240,.14)" stroke="rgba(169,116,240,.4)"/><text class="pil" x="526" y="71">CG + Ontology</text>
+      </g>
+
+      <!-- L1 -->
+      <rect x="52" y="96" width="616" height="182" rx="12" fill="rgba(240,167,60,.06)" stroke="rgba(240,167,60,.5)"/>
+      <text class="t" x="70" y="118" style="fill:#ffce86">L1 · STAGE 1</text>
+      <text class="s2" x="150" y="118">domain architect + LLM — define the building blocks &amp; DSL</text>
+      <text class="s" x="70" y="138">LLM's universe = the Concepts above → can only make Rules / Flows / States / … , never raw logic</text>
+
+      <!-- L2 -->
+      <rect x="90" y="152" width="540" height="112" rx="12" fill="rgba(62,207,142,.06)" stroke="rgba(62,207,142,.5)"/>
+      <text class="t" x="108" y="174" style="fill:#7ee3b4">L2 · STAGE 2</text>
+      <text class="s2" x="186" y="174">app builder + LLM — compose blocks into applications</text>
+      <text class="s" x="108" y="196">LLM's universe = the Stage-1 artifacts above — a closed, typed set</text>
+      <text class="s" x="108" y="216" style="fill:#7ee3b4">⇒ can't drift · can't re-implement · can't skip reuse · can't mis-architect</text>
+      <text class="s2" x="108" y="238">every block it touches already exists, is typed, and is grounded</text>
+      <text class="s2" x="108" y="253">— there is no "write it from scratch" path to go wrong on</text>
+    </svg>
+    <figcaption><b>Each level's LLM plays only with what the level above defined.</b> L0 (Concepts) is fixed by us; L1
+      composes Concepts into domain blocks; L2 composes those blocks into apps. The universe narrows at every step — and
+      a narrowing universe is exactly what removes the freedom to make the classic mistakes.</figcaption>
+  </div></figure>
+
+  <p>Spell out the payoff. The failure modes that plague open-ended "LLM builds my app" agents aren't mitigated here by
+  better prompting — they're <b>structurally unreachable</b>, because the thing you'd need freedom to do wrong isn't in
+  the LLM's action space:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Classic LLM-dev failure</th><th>Why it can't happen in Stage 2</th></tr></thead>
+    <tbody>
+      <tr><td>Semantic drift</td><td>every term must resolve to an L1 ontology type; unbound terms are rejected, not invented</td></tr>
+      <tr><td>Re-implementing an existing feature</td><td>it can only <i>reference</i> blocks that exist; it has no path to author a new one</td></tr>
+      <tr><td>Forgetting to reuse</td><td>reuse is the only option — composition of existing blocks is the sole primitive</td></tr>
+      <tr><td>Wrong engineering / bad architecture</td><td>architecture is decided at L0/L1 and frozen before the app LLM runs</td></tr>
+      <tr><td>Ungrounded invention (fake APIs/entities)</td><td>integrations &amp; actions are a closed, typed catalog — nothing outside it is callable</td></tr>
+      <tr><td>Inconsistent state handling</td><td>states are declared machines with guarded transitions, not ad-hoc flags</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout key"><div class="clabel">◆ The reframe in one line</div>
+    Stage 1 fixes the <i>alphabet and the words</i> (bounded by the platform's fixed <i>grammar</i>); Stage 2 writes
+    <i>documents</i> (bounded by that alphabet and those words). Two development stages, both expert-driven and
+    LLM-assisted, together producing one domain app — with the LLM's freedom deliberately spent <i>up</i> the tower, not
+    <i>out</i> into open code.</div>
+</section>
+
+<!-- 1 -->
+<section id="shape">
+  <div class="kicker">The architecture</div>
+  <h2>The shape — three planes and a loop</h2>
+  <p>Read it left to right as data; top to bottom as trust. External reality enters through the <span class="pill a">integration
+  engine</span>, is mapped onto ontology terms, and becomes an <b>event</b>. The <span class="pill win">runtime</span>
+  drives that event through a <b>flow</b> whose gateways call <b>rules</b> and whose steps move <b>state</b> and fire
+  <b>actions</b> — recording a decision trace at each hop. None of that logic is generated on the hot path: it was all
+  authored earlier in the <span class="pill ctrl">Stage&nbsp;1 studio</span> and frozen into an App.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 384" role="img" aria-label="Three-plane architecture: authoring, integration, runtime">
+      <defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.bx{rx:10;stroke-width:1.1}.t{fill:#e7ebf3;font:12px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.s{fill:#aab3c5;font:10px "Segoe UI",sans-serif;text-anchor:middle}.hd{font:11px "Segoe UI",sans-serif;font-weight:800;text-anchor:middle;letter-spacing:.06em}.l{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#ma)}.ld{stroke:#a974f0;stroke-width:1.6;fill:none;marker-end:url(#ma);stroke-dasharray:5 4}</style>
+
+      <!-- Stage 1 authoring band -->
+      <rect x="12" y="26" width="696" height="92" rx="12" fill="rgba(169,116,240,.06)" stroke="rgba(169,116,240,.4)"/>
+      <text class="hd" x="360" y="44" style="fill:#cdb1f7">STAGE 1 · AUTHORING STUDIO — LLM present, human approves</text>
+      <rect class="bx" x="34" y="56" width="120" height="46" fill="#231a33" stroke="rgba(169,116,240,.55)"/><text class="t" x="94" y="76">expert + LLM</text><text class="s" x="94" y="92">visual · reversible</text>
+      <rect class="bx" x="188" y="56" width="118" height="46" fill="#241c10" stroke="rgba(240,167,60,.5)"/><text class="t" x="247" y="76">Ontology</text><text class="s" x="247" y="92">types · properties</text>
+      <rect class="bx" x="320" y="56" width="118" height="46" fill="#132a24" stroke="rgba(25,184,154,.55)"/><text class="t" x="379" y="76">Rules</text><text class="s" x="379" y="92">DSL · gated</text>
+      <rect class="bx" x="452" y="56" width="118" height="46" fill="#1a2236" stroke="rgba(91,141,239,.5)"/><text class="t" x="511" y="76">States / Flows</text><text class="s" x="511" y="92">BPMN-lite</text>
+      <rect class="bx" x="584" y="56" width="102" height="46" fill="#13251f" stroke="rgba(62,207,142,.5)"/><text class="t" x="635" y="76">approve</text><text class="s" x="635" y="92">sign-off</text>
+      <line class="l" x1="154" y1="79" x2="186" y2="79"/><line class="l" x1="306" y1="79" x2="318" y2="79"/><line class="l" x1="438" y1="79" x2="450" y2="79"/><line class="l" x1="570" y1="79" x2="582" y2="79"/>
+
+      <!-- frozen App artifact -->
+      <line class="ld" x1="360" y1="118" x2="360" y2="150"/>
+      <rect class="bx" x="250" y="150" width="220" height="34" fill="#12141c" stroke="rgba(169,116,240,.5)"/><text class="t" x="360" y="171">the App — a versioned, signed DSL bundle</text>
+
+      <!-- runtime band -->
+      <rect x="12" y="206" width="696" height="150" rx="12" fill="rgba(62,207,142,.05)" stroke="rgba(62,207,142,.32)"/>
+      <text class="hd" x="360" y="224" style="fill:#7ee3b4">RUNTIME · DECISION TIME — deterministic; LLM only as a boxed Action</text>
+
+      <!-- integration engine (left column of runtime) -->
+      <rect x="28" y="238" width="150" height="104" rx="10" fill="rgba(91,141,239,.07)" stroke="rgba(91,141,239,.4)"/>
+      <text class="s" x="103" y="255" style="font-weight:800;fill:#9cc0ff">INTEGRATION ENGINE</text>
+      <rect class="bx" x="40" y="264" width="126" height="24" fill="#1a2236" stroke="#39425a"/><text class="s" x="103" y="280">webhook · poller · scrape</text>
+      <rect class="bx" x="40" y="292" width="126" height="24" fill="#241c10" stroke="rgba(240,167,60,.45)"/><text class="s" x="103" y="308">map → ontology terms</text>
+      <rect class="bx" x="40" y="320" width="126" height="18" fill="#132a24" stroke="rgba(25,184,154,.45)"/><text class="s" x="103" y="333">event bus</text>
+
+      <!-- flow engine -->
+      <rect class="bx" x="200" y="258" width="96" height="70" fill="#1a2236" stroke="rgba(91,141,239,.5)"/><text class="t" x="248" y="284">flow</text><text class="s" x="248" y="300">engine</text><text class="s" x="248" y="314">tasks · gateways</text>
+      <rect class="bx" x="316" y="248" width="104" height="30" fill="#132a24" stroke="rgba(25,184,154,.6)"/><text class="t" x="368" y="267">rules eval</text>
+      <rect class="bx" x="316" y="286" width="104" height="30" fill="#1e2740" stroke="rgba(91,141,239,.5)"/><text class="t" x="368" y="305">state / lifecycle</text>
+      <rect class="bx" x="316" y="324" width="104" height="24" fill="#241c10" stroke="rgba(240,167,60,.5)"/><text class="s" x="368" y="340">actions · webhook out</text>
+      <rect class="bx" x="440" y="266" width="110" height="54" fill="#13251f" stroke="rgba(62,207,142,.55)"/><text class="t" x="495" y="288">decision trace</text><text class="s" x="495" y="304">who · why · when</text>
+      <rect class="bx" x="570" y="266" width="116" height="54" fill="#1a2130" stroke="#39425a"/><text class="t" x="628" y="288">Context Graph</text><text class="s" x="628" y="304">quads (h,r,t,rc)</text>
+
+      <line class="l" x1="178" y1="290" x2="198" y2="290"/>
+      <line class="l" x1="296" y1="284" x2="314" y2="266"/><line class="l" x1="296" y1="296" x2="314" y2="300"/><line class="l" x1="296" y1="310" x2="314" y2="334"/>
+      <line class="l" x1="420" y1="288" x2="438" y2="290"/><line class="l" x1="550" y1="293" x2="568" y2="293"/>
+      <!-- App feeds runtime -->
+      <line class="ld" x1="300" y1="184" x2="248" y2="256"/><text class="s" x="250" y="212" style="fill:#a974f0">loads</text>
+    </svg>
+    <div class="legend">
+      <span><i class="dot" style="background:#a974f0"></i>authored (LLM + human)</span>
+      <span><i class="dot" style="background:#5b8def"></i>ingress</span>
+      <span><i class="dot" style="background:#19b89a"></i>deterministic logic</span>
+      <span><i class="dot" style="background:#3ecf8e"></i>recorded &amp; auditable</span>
+    </div>
+    <figcaption><b>Two bands, one artifact between them.</b> Everything in the purple band happens once, slowly, with a
+      human approving. It freezes into an <b>App</b>. Everything in the green band happens millions of times, fast, with
+      no <i>unbounded</i> model in the loop — only boxed Action-actors — and every hop leaves a decision trace on the
+      graph.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 2 -->
+<section id="studio">
+  <div class="kicker">Stage 1</div>
+  <h2>The Studio — defining a domain's building blocks</h2>
+  <p class="lead-p">Stage 1 is where a domain architect and the LLM define the <b>blocks</b> the apps will later be built
+  from — bounded by the platform's fixed Concepts, never by open code. The Studio is a <b>visual, reversible</b> wizard:
+  go forward, go back, watch the model take shape, and ground every term as you go. It defines the domain's blocks in
+  dependency order.</p>
+
+  <ol class="steps">
+    <li><b>Ontology first — the boundary everything else is checked against.</b> The expert describes the domain in
+      natural language; <code>OntologyAuthor.generate()</code> drafts <code>ObjectType</code>s, <code>Property</code>s
+      (typed, with <code>PropertyKind</code> + cardinality), and <code>LinkType</code>s. Nothing downstream may reference
+      a term that isn't here. This is the anti-hallucination wall.</li>
+    <li><b>Rules next — bounded by that ontology.</b> <code>RuleAuthor.generate()</code> turns an intent
+      ("discounts over 20% need VP sign-off") into a DSL rule <i>and dry-runs it against sample cases</i> so the author
+      sees behaviour before approving — the same shape as the clinical "test vignettes" in the essay. Every rule carries
+      its <code>supporting_sentences</code>/provenance.</li>
+    <li><b>Flows, states, integrations &amp; actions — the composable behaviour.</b> The author lays out
+      <b>BPMN-lite flow</b> templates (entry events, tasks, rule-gateways, terminal states), the <code>StateMachine</code>s
+      they rest on, the integration bindings that feed them, and the <b>action catalog</b> — including
+      <b>LLM-agent actions</b> (§ below), each with a typed contract. These are the blocks Stage 2 will wire together.</li>
+    <li><b>Approve &amp; register.</b> The human signs; the blocks enter the domain's versioned catalog at a pinned
+      meta-DSL version. That signature is the trust boundary. Stage 2 then <i>composes</i> these approved blocks into an
+      <b>App</b> — and past the boundary, no <i>unbounded</i> model ever runs.</li>
+  </ol>
+
+  <div class="callout ok"><div class="clabel">◆ Why this is largely a UX problem, not an AI problem</div>
+    The generators (<code>OntologyAuthor</code>, <code>RuleAuthor</code>), the typed ontology that validates what they
+    write, the gate, and versioning <b>already exist</b> in Context Graph. Stage 1 is mostly the <i>reversible visual
+    surface</i> over them — a wizard that makes authoring legible and undoable — plus extending the same treatment to
+    flows. The hard, valuable part is interface and bookkeeping, not new model capability.</div>
+
+  <div class="callout caveat"><div class="clabel">◆ "Fixed" meta-DSL means versioned, not frozen</div>
+    An App pins a meta-DSL version. When the platform ships a v2 (a new property kind, a new gateway type), existing Apps
+    must <b>migrate</b>, not break. Skip this and we rebuild the maintenance rot that killed the rule bases the essay
+    buried. Migration policy is an <a href="#decisions">open decision</a>.</div>
+</section>
+
+<!-- 3 -->
+<section id="flows">
+  <div class="kicker">The net-new engine</div>
+  <h2>The flow layer — BPMN-lite over primitives we already have</h2>
+  <p>This is the biggest new build, and the design goal is restraint: <b>not</b> a full BPMN 2.0 engine (the essay is a
+  thirty-year warning about that ambition), but the smallest process model that composes the primitives we already ship.
+  A flow is a graph of five node kinds:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Flow node</th><th>Is really…</th><th>Backed by</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill a">Event</span> entry</td><td>a normalized external event that starts an instance</td><td>integration engine · event bus</td></tr>
+      <tr><td><span class="pill c">Task</span></td><td>a step that runs an Action — webhook, compute, or an <b>LLM-agent</b> — and records it</td><td><code>ActionDefinition</code> / <code>ActionHandler</code> (webhook | agent)</td></tr>
+      <tr><td><span class="pill b">Gateway</span></td><td>a branch that evaluates a rule and routes on the result</td><td><code>RulesEngine.evaluate()</code></td></tr>
+      <tr><td><span class="pill ctrl">Timer</span></td><td>a deferred/scheduled transition ("review due in 90d")</td><td>scheduler <span class="pill danger">net-new</span></td></tr>
+      <tr><td><span class="pill win">State</span></td><td>a lifecycle node an instance rests in</td><td><code>StateMachine</code> / <code>Transition</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 250" role="img" aria-label="A sample BPMN-lite governed request flow">
+      <defs>
+        <marker id="mf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
+      </defs>
+      <style>.t{fill:#e7ebf3;font:11.5px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.s{fill:#aab3c5;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}.l{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#mf)}.el{fill:#9ece6a;font:10px var(--mono);text-anchor:middle}</style>
+
+      <!-- event -->
+      <circle cx="46" cy="120" r="24" fill="#1a2236" stroke="rgba(91,141,239,.6)"/><text class="s" x="46" y="117">event</text><text class="s" x="46" y="129">request</text>
+      <!-- task extract/map -->
+      <rect x="96" y="98" width="92" height="44" rx="10" fill="#241c10" stroke="rgba(240,167,60,.55)"/><text class="t" x="142" y="118">task</text><text class="s" x="142" y="132">map → ontology</text>
+      <!-- gateway -->
+      <polygon points="238,120 268,96 298,120 268,144" fill="#132a24" stroke="rgba(25,184,154,.65)"/><text class="s" x="268" y="116">gateway</text><text class="s" x="268" y="128">rule?</text>
+      <!-- branch up: VP approval task -->
+      <rect x="342" y="40" width="104" height="44" rx="10" fill="#241c10" stroke="rgba(240,167,60,.55)"/><text class="t" x="394" y="60">task</text><text class="s" x="394" y="74">VP approval</text>
+      <!-- branch down: auto approve -->
+      <rect x="342" y="156" width="104" height="44" rx="10" fill="#241c10" stroke="rgba(240,167,60,.5)"/><text class="t" x="394" y="176">task</text><text class="s" x="394" y="190">auto-approve</text>
+      <!-- state booked -->
+      <rect x="500" y="98" width="96" height="44" rx="22" fill="#13251f" stroke="rgba(62,207,142,.6)"/><text class="t" x="548" y="118">state</text><text class="s" x="548" y="132">booked</text>
+      <!-- trace -->
+      <rect x="628" y="98" width="78" height="44" rx="10" fill="#1a2130" stroke="#39425a"/><text class="s" x="667" y="116">decision</text><text class="s" x="667" y="128">trace</text>
+
+      <line class="l" x1="70" y1="120" x2="94" y2="120"/>
+      <line class="l" x1="188" y1="120" x2="236" y2="120"/>
+      <line class="l" x1="290" y1="108" x2="340" y2="66"/><text class="el" x="316" y="86">&gt;20%</text>
+      <line class="l" x1="290" y1="132" x2="340" y2="176"/><text class="el" x="312" y="162">≤20%</text>
+      <line class="l" x1="446" y1="62" x2="524" y2="96"/>
+      <line class="l" x1="446" y1="178" x2="524" y2="144"/>
+      <line class="l" x1="596" y1="120" x2="626" y2="120"/>
+      <line x1="268" y1="150" x2="268" y2="228" stroke="#2c3346" stroke-dasharray="3 3"/>
+      <text class="s" x="360" y="224" style="fill:#7b8499">every task, gateway, and transition writes a quad (h,r,t,rc) — the run is replayable from the graph</text>
+    </svg>
+    <figcaption><b>A governed request, end to end.</b> The gateway is one <code>RulesEngine.evaluate()</code>; the two
+      approval steps are <code>Action</code>s; <b>booked</b> is a <code>StateMachine</code> node. The flow layer is the
+      orchestrator that walks this graph and persists each hop — the rest is machinery that runs today.</figcaption>
+  </div></figure>
+
+  <p>Concretely, an authored flow is just data — a shape the Studio emits and the runtime walks:</p>
+  <pre><code><span class="cm"># app: governed-request · flow: intake  (illustrative)</span>
+<span class="kw">flow</span> intake:
+  <span class="fn">on_event</span>: request.submitted
+  <span class="fn">task</span> map:      action=<span class="str">"normalize_to_ontology"</span> → next: decide
+  <span class="fn">gateway</span> decide:  rule=<span class="str">"discount_threshold"</span>
+                <span class="kw">when</span> exceeds → vp_review
+                <span class="kw">else</span>          → auto
+  <span class="fn">task</span> vp_review: action=<span class="str">"request_signoff"</span> assignee=<span class="str">"role:VP"</span> → next: book
+  <span class="fn">task</span> auto:      action=<span class="str">"auto_approve"</span> → next: book
+  <span class="fn">task</span> book:      action=<span class="str">"book_deal"</span> → state: booked</code></pre>
+
+  <div class="callout info"><div class="clabel">◆ What the engine must add over lifecycle</div>
+    Today's <code>Lifecycle</code> is a per-object FSM — legal states and guarded transitions. The flow engine adds the
+    <b>orchestration</b> around it: an instance/run with a cursor, gateway evaluation, task dispatch to actions, a timer
+    scheduler, and a persisted run log. States, rules, and actions stay exactly as they are; the engine is the conductor,
+    not a rewrite.</div>
+
+  <h3>The Action layer — including the LLM as a boxed actor</h3>
+  <p>Actions are a first-class Concept, not a flow detail: a task invokes an <code>ActionDefinition</code>, which runs a
+  handler and <b>records the execution as a decision</b>. Today handlers are <code>none</code> or <code>webhook</code>;
+  we add an <b>agent</b> handler so an <b>LLM can participate in the running application</b> — but only as a defined,
+  contract-bound block:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>An LLM-agent Action declares…</th><th>which makes it…</th></tr></thead>
+    <tbody>
+      <tr><td>ontology-typed <b>inputs</b> (drawn from the instance's objects)</td><td>grounded — it can't see beyond its declared inputs</td></tr>
+      <tr><td>a fixed <b>output schema</b> (an ontology type or enum)</td><td>parseable &amp; validated — output that fails the schema is rejected</td></tr>
+      <tr><td>a pinned <b>role/prompt</b> + guardrails</td><td>versioned &amp; reviewable like any other block</td></tr>
+      <tr><td>a <b>confidence</b> + fallback (route low-confidence to a human task)</td><td>safe — judgment without silent trust</td></tr>
+      <tr><td>execution <b>recorded as a decision</b> on the graph</td><td>audited — every agent call is in the trace</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout caveat"><div class="clabel">◆ Honest boundary at an agent node</div>
+    An <code>agent</code> Action is <b>not output-reproducible</b> — that's the point of using it. Determinism still holds
+    for the orchestration and the rule-gateways <i>around</i> it; trust at the agent node comes from <b>containment
+    (typed contract), validation (schema), and audit (decision trace)</b>, plus confidence-routing — not from replay.
+    Use it where the domain needs judgment; keep it off the paths that must be certifiable.</div>
+</section>
+
+<!-- 4 -->
+<section id="integration">
+  <div class="kicker">Events in</div>
+  <h2>The integration engine — and where determinism actually begins</h2>
+  <p>External reality is messy; the runtime is strict. The integration engine is the airlock between them. It has three
+  stages, and the essay's sharpest caveat lives in the middle one.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 220" role="img" aria-label="Integration ingress: connectors, mapping, event bus">
+      <defs><marker id="mi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.t{fill:#e7ebf3;font:12px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.s{fill:#aab3c5;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}.l{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#mi)}</style>
+      <!-- connectors -->
+      <text class="s" x="78" y="24" style="font-weight:800;fill:#9cc0ff">CONNECTORS</text>
+      <rect x="24" y="36" width="108" height="26" rx="7" fill="#1a2236" stroke="rgba(91,141,239,.45)"/><text class="s" x="78" y="53">inbound webhook</text>
+      <rect x="24" y="70" width="108" height="26" rx="7" fill="#1a2236" stroke="rgba(91,141,239,.45)"/><text class="s" x="78" y="87">poller / schedule</text>
+      <rect x="24" y="104" width="108" height="26" rx="7" fill="#1a2236" stroke="rgba(91,141,239,.45)"/><text class="s" x="78" y="121">email · Slack</text>
+      <rect x="24" y="138" width="108" height="26" rx="7" fill="#132a24" stroke="rgba(25,184,154,.45)"/><text class="s" x="78" y="155">webingest / scrape</text>
+
+      <!-- mapping -->
+      <rect x="196" y="60" width="150" height="96" rx="12" fill="#241c10" stroke="rgba(240,167,60,.6)"/>
+      <text class="t" x="271" y="88" style="fill:#ffce86">mapping layer</text>
+      <text class="s" x="271" y="106">raw record → ontology terms</text>
+      <text class="s" x="271" y="122">deterministic connector</text>
+      <text class="s" x="271" y="136">+ LLM-assisted fallback</text>
+      <text class="s" x="271" y="150" style="fill:#f6a2ad">the "curly-braces" boundary</text>
+
+      <!-- event bus -->
+      <rect x="404" y="78" width="96" height="60" rx="10" fill="#13251f" stroke="rgba(62,207,142,.55)"/><text class="t" x="452" y="104">event bus</text><text class="s" x="452" y="120">typed events</text>
+
+      <!-- runtime -->
+      <rect x="556" y="78" width="140" height="60" rx="10" fill="#1e2740" stroke="rgba(91,141,239,.5)"/><text class="t" x="626" y="104">flow engine</text><text class="s" x="626" y="120">deterministic from here →</text>
+
+      <line class="l" x1="132" y1="49" x2="194" y2="88"/><line class="l" x1="132" y1="83" x2="194" y2="100"/><line class="l" x1="132" y1="117" x2="194" y2="116"/><line class="l" x1="132" y1="151" x2="194" y2="130"/>
+      <line class="l" x1="346" y1="108" x2="402" y2="108"/>
+      <line class="l" x1="500" y1="108" x2="554" y2="108"/>
+      <line x1="528" y1="30" x2="528" y2="180" stroke="rgba(62,207,142,.4)" stroke-dasharray="4 4"/>
+      <text class="s" x="452" y="196" style="fill:#7b8499">left of the dashed line: fuzzy, real-world, possibly LLM-assisted — right of it: strict &amp; reproducible</text>
+    </svg>
+    <figcaption><b>The airlock.</b> Connectors already have a home (<code>webingest</code>'s pluggable connector base).
+      The mapping layer is where a messy record becomes ontology-typed — the one place fuzziness (and maybe an LLM) is
+      still allowed. Determinism starts at the event bus.</figcaption>
+  </div></figure>
+
+  <p><b>Connectors</b> (ingress) — the <code>webingest/connectors</code> package already defines a pluggable connector
+  base with real implementations; inbound webhooks and pollers are the same shape. <b>Mapping</b> — the essay's
+  "curly-braces problem": binding a real record to the ontology's terms. A deterministic connector-specific map is the
+  happy path (and the <i>only</i> path exercised in the demo); the unstructured tail uses LLM extraction that
+  <b>reuses the LLM-agent Action contract</b> and is validated by <code>ExtractionValidator</code>, with low-confidence
+  results routed to a human review task. <b>Event bus</b> — a durable ingress log + in-process dispatch keyed on the
+  event contract; pluggable to a broker later.</p>
+
+  <div class="callout caveat"><div class="clabel">◆ Be honest about the boundary</div>
+    "Deterministic" is a claim about the <i>rule logic</i>, not the mapping. If the mapping uses an LLM, that step is not
+    reproducible — so it must be <b>logged, versioned, and reviewable</b>, and ideally confidence-scored, with low
+    confidence routed to a human task rather than silently trusted. The mapping layer is where the residual real-world
+    effort actually sits.</div>
+</section>
+
+<!-- 5 -->
+<section id="stage2">
+  <div class="kicker">Stage 2</div>
+  <h2>Composing blocks into applications</h2>
+  <p class="lead-p">Stage 1 defined the blocks; Stage 2 is an app builder and the LLM <b>composing</b> them into real
+  applications. Still development, still expert-driven — but the LLM's universe is now the closed, typed set of Stage-1
+  artifacts, so each app is a bounded assembly of existing blocks, not a project written from scratch. That is where the
+  economics <i>and</i> the safety pay off at once.</p>
+  <p>An <b>App</b> is a single versioned bundle:</p>
+  <div class="grid g2">
+    <div class="card"><b>Declarative content</b>
+      <ul class="small" style="margin:.4em 0 0">
+        <li>an <b>ontology</b> (or a reuse of a shared one)</li>
+        <li>a set of <b>rules</b>, each gated &amp; cited</li>
+        <li>one or more <b>flows</b> (BPMN-lite)</li>
+        <li><b>connector bindings</b> — which events feed it</li>
+        <li><b>views</b> — the non-expert screens (queues, forms, a decision-trace timeline)</li>
+      </ul></div>
+    <div class="card"><b>Runtime posture</b>
+      <ul class="small" style="margin:.4em 0 0">
+        <li>lives in its own <b>workspace</b> (existing multi-tenant isolation)</li>
+        <li>pins a <b>meta-DSL version</b>; migrates on platform upgrade</li>
+        <li>no <b>unbounded</b> LLM at decision time — only defined Action-actors</li>
+        <li>every run is replayable from the decision graph (agent nodes: audited, not replayed)</li>
+      </ul></div>
+  </div>
+  <p>Multi-tenancy is not net-new: Context Graph already isolates everything per <code>LIGHTRAG-WORKSPACE</code> — graph,
+  vectors, rules, ontology, decision index. The addressing is three-tier: a <b>Domain</b> is a workspace (its CG,
+  ontology, and L1 block catalog); a <b>Project</b> groups all the apps in that domain; an <b>App</b> is an app-id within
+  the project; runs key under the app-id. Shared blocks are free within a domain; domains isolate through the existing
+  workspace mechanism, untouched. The demo is the degenerate case — one domain, one project, one app. Export/import and a
+  cross-domain marketplace ride on the App-bundle format but are deferred (see <a href="#decisions">decisions</a>).</p>
+
+  <div class="callout key"><div class="clabel">◆ Two dev stages, then the end-users</div>
+    Stage 1 (domain architects) and Stage 2 (app builders) are both development — both expert-driven, both LLM-assisted,
+    each constrained by the level above. Together they produce a signed, versioned App. <b>End-users</b> — the people who
+    later operate that App against live events — are a third population entirely, present only at runtime, trusting the
+    App because of <i>how</i> it was made. The platform's job is to make Stage 1 rigorous, Stage 2 safe-and-cheap, and
+    runtime accountable.</div>
+</section>
+
+<!-- 6 -->
+<section id="have">
+  <div class="kicker">The honest inventory</div>
+  <h2>What we already have vs what's net-new</h2>
+  <p>The reason this is a build and not a research project: the substrate is mostly here. Below, grounded in the actual
+  <code>context_graph/</code> modules.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Capability the platform needs</th><th>Status</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>NL → typed ontology, validate &amp; coerce</td><td><span class="pill win">have</span></td><td><code>ontology/</code> — <code>OntologyAuthor.generate()</code>, <code>Ontology.validate_*</code>, <code>Property.coerce</code></td></tr>
+      <tr><td>NL → DSL rule + dry-run on samples</td><td><span class="pill win">have</span></td><td><code>rules/agent.py</code> — <code>RuleAuthor.generate()</code></td></tr>
+      <tr><td>deterministic rule evaluation</td><td><span class="pill win">have</span></td><td><code>rules/engine.py</code> — <code>RulesEngine.evaluate()</code></td></tr>
+      <tr><td>pre-action governance gate</td><td><span class="pill win">have</span></td><td><code>rules/gate.py</code> — <code>RulesGate</code>, <code>RuleViolation</code></td></tr>
+      <tr><td>state machines (states + guarded transitions, roles)</td><td><span class="pill win">have</span></td><td><code>lifecycle/</code> — <code>StateMachine</code>, <code>Transition</code></td></tr>
+      <tr><td>invokable actions + webhook egress, recorded as decisions</td><td><span class="pill win">have</span></td><td><code>actions/</code> — <code>ActionDefinition</code>, <code>ActionHandler</code></td></tr>
+      <tr><td><b>LLM-agent Action</b> (typed-contract handler, confidence-routed)</td><td><span class="pill danger">net-new</span></td><td>an <code>agent</code> handler kind on <code>ActionHandler</code> — extends the existing action layer</td></tr>
+      <tr><td>raw record → ontology-term mapping/validation</td><td><span class="pill c">partial</span></td><td><code>ontology/validate.py</code> — <code>ExtractionValidator</code> (validation yes; connector maps + LLM-assist no)</td></tr>
+      <tr><td>ingress connectors (pluggable)</td><td><span class="pill c">partial</span></td><td><code>webingest/connectors/</code> (crawl connectors; webhook/poller not yet)</td></tr>
+      <tr><td>decision trace on every edge (audit)</td><td><span class="pill win">have</span></td><td><code>core.py</code> — quads <code>(h,r,t,rc)</code>, <code>emit_decision_trace</code></td></tr>
+      <tr><td>per-tenant isolation</td><td><span class="pill win">have</span></td><td>workspace pool + <code>LIGHTRAG-WORKSPACE</code></td></tr>
+      <tr><td>versioning of ontology &amp; rules</td><td><span class="pill c">partial</span></td><td>versioned artifacts exist; App-level pinning + migration not yet</td></tr>
+      <tr><td><b>flow orchestrator</b> (runs/cursors, gateways, task dispatch, timers, run log)</td><td><span class="pill danger">net-new</span></td><td>the core new engine</td></tr>
+      <tr><td><b>event bus + event contract</b></td><td><span class="pill danger">net-new</span></td><td>ingress → runtime backbone</td></tr>
+      <tr><td><b>Stage-1 visual reversible Studio</b></td><td><span class="pill danger">net-new</span></td><td>UX over existing generators + flows</td></tr>
+      <tr><td><b>Stage-2 App packaging</b> (bundle, export/import, marketplace)</td><td><span class="pill danger">net-new</span></td><td>the instantiation layer</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Eight <span class="pill win">have</span>, three <span class="pill c">partial</span>, five
+  <span class="pill danger">net-new</span>. The net-new items are an orchestrator, a bus, a Studio UX, a packaging layer,
+  and an agent-action handler — all engineering and interface, none of it new model capability. That is exactly the
+  essay's claim: let the AI build almost nothing; build the machine that runs what it authored.</p>
+</section>
+
+<!-- 7 -->
+<section id="decisions">
+  <div class="kicker">Resolved in discussion</div>
+  <h2>Design decisions — walked &amp; resolved</h2>
+  <p>All seven were worked through one at a time. Each callout records the <b>decision</b>, its <b>rationale</b>, and any
+  <b>revisit trigger</b> — the running log of why the platform is shaped the way it is.</p>
+
+  <div class="callout ok"><div class="clabel">✓ 1 · Flow engine — RESOLVED: build lean</div>
+    Build a lean in-process executor over lifecycle/rules/actions. The flow <i>DSL</i> is ours regardless (it's an L0
+    Concept, LLM-authored in Stage 1); only the <i>executor</i> was in question. Since the demo is
+    <b>minutes-to-hours human loops</b> — not multi-week processes — a lean executor wins: native decision-trace
+    emission and ontology grounding, no competing BPMN notation, no premature durability machinery. A clean
+    <b>run-store seam</b> is preserved so a durable engine (Temporal-style) can slot in <i>behind it</i> later.
+    <b>Revisit trigger:</b> a target domain with long-running (days/weeks), high-reliability, high-concurrency flows.</div>
+  <div class="callout ok"><div class="clabel">✓ 2 · Event bus — RESOLVED: in-process + durable ingress log</div>
+    In-process asyncio dispatch behind an <code>EventBus</code> interface, with a <b>durable ingress log</b>
+    (append-then-dispatch) so ingress is at-least-once and replayable <i>without</i> a broker. Two things locked now, as
+    they're the interface we can't cheaply change: the <b>event contract</b>
+    <code>{type, payload, source, ts, idempotency_key}</code>, and <b>consumer-side dedupe on
+    <code>idempotency_key</code></b> (connectors re-deliver — webhook retries, poller overlaps — even in-process). A real
+    broker (Redis Streams / NATS) earns its place only when we need cross-process workers or throughput — out of scope
+    for the demo.</div>
+  <div class="callout ok"><div class="clabel">✓ 3 · The mapping boundary — RESOLVED: tiered, unified, demo-deterministic</div>
+    Mapping tiers by <i>source structure</i>: structured input (webhook JSON, forms) uses a <b>deterministic field-map +
+    <code>Property.coerce</code></b> (no LLM); the unstructured tail uses <b>LLM extraction validated by
+    <code>ExtractionValidator</code></b>. Crucially, that LLM-mapper <b>reuses the LLM-agent Action contract</b>
+    (ontology-typed output, confidence, human-fallback, recorded-as-decision) — one mechanism, one audit story, not a
+    second bespoke path. Low-confidence mappings <b>route to a human review task</b>, never silently enter the graph.
+    Every mapped object is stamped with <b>method + confidence + block-version</b> (via <code>rc</code>/provenance), so
+    which inputs crossed a fuzzy boundary is auditable forever. <b>For the demo: deterministic-only at ingress</b> —
+    airtight determinism end-to-end; the LLM tail is designed, not exercised.</div>
+  <div class="callout ok"><div class="clabel">✓ 4 · Versioning &amp; migration — RESOLVED: three boundaries, diff-and-approve</div>
+    Three version boundaries — <b>L0 platform</b>, <b>L1 domain blocks</b>, and <b>run instances</b> — each <b>pins the
+    version of the level above</b> (L2 app pins L1, L1 pins L0). Migration is <b>authoring a delta, not new machinery</b>:
+    an upgrade produces a <b>migration diff</b> that the human approves through the same <b>gate + dry-run + sign-off</b>
+    that authored the originals ("approve the delta, not the whole thing"). <b>In-flight runs pin-to-start and finish on
+    their version</b> — live run-migration is deferred (the demo's short runs make it moot). Ontology changes split by
+    safety: additive → auto, breaking (rename/retype/remove) → a reviewed old→new mapping. Every object records the
+    block-version that produced it, so past decisions stay interpretable under the rules that made them.</div>
+  <div class="callout ok"><div class="clabel">✓ 5 · Human-in-the-loop — RESOLVED: sign everything, graduated by risk</div>
+    <b>All L1 blocks and the L2 app composition require sign-off</b> — a signed App can't rest on unsigned foundations —
+    but scrutiny <b>graduates by risk</b>: agent-actions &amp; egress webhooks (non-reproducible / real side effects) get
+    the hardest look; the app composition gets the lightest (everything it wires is already signed). <b>Re-approval
+    triggers only on behaviour-affecting diffs</b>, detected by re-running the artifact's own dry-runs / flow test-cases —
+    cosmetic edits are lightweight/auto. This <b>shares one mechanism with #4</b>: migration and re-approval are both
+    "approve the diff." Every approval is recorded natively as a decision (who / why / when).</div>
+  <div class="callout ok"><div class="clabel">✓ 6 · Packaging &amp; namespaces — RESOLVED: Domain / Project / App</div>
+    Three-tier addressing inside the existing isolation: <b>Domain = workspace</b> (holds CG + ontology + the L1 block
+    catalog); <b>Project</b> = the grouping of all apps in a domain (the solution/portfolio); <b>App = app-id</b> within
+    the project (an L2 composition: flows / rules / connectors / views); <b>runs</b> key under app-id. Shared blocks are
+    free within a domain; domains isolate via the existing <code>LIGHTRAG-WORKSPACE</code> mechanism, untouched. The demo
+    is the degenerate case — one domain / one project / one app. The <b>App bundle</b> (a portable, versioned JSON of
+    catalog refs + composition + pinned versions) is designed now — it's the same serialization #4/#5 operate on;
+    export/import polish and a cross-domain marketplace are deferred.</div>
+  <div class="callout ok"><div class="clabel">✓ 7 · Studio UX — RESOLVED: conversational drafts a diff</div>
+    The recurring gesture across #4/#5/migration is "review a diff to a typed, versioned artifact" — so the Studio is
+    built on it. <b>Conversational is the input method, not the state:</b> you talk to the LLM to draft or change
+    something, and it proposes a <b>diff</b> to a <b>structured source-of-truth view</b> (ontology graph, rule list +
+    dry-run, flow canvas) that you edit / accept / reject; the artifact versions. "Reversible" = versioned artifacts with
+    history + revert. <b>Reuse:</b> extend the existing Ontology and Rules UIs; a light Studio shell adds
+    Domain/Project/App navigation + history; the <b>flow canvas (BPMN-lite editor) is the one genuinely net-new
+    surface</b> for now. <b>Future:</b> richer <b>visual diagram representations for both flows and states</b>.</div>
+</section>
+
+<!-- 8 -->
+<section id="plan">
+  <div class="kicker">If we build it</div>
+  <h2>A build path — thin vertical slices</h2>
+  <p>Each phase is a demonstrable end-to-end slice, not a horizontal layer. The goal is to prove the loop early and
+  thicken it.</p>
+  <ol class="steps">
+    <li><b>The loop, minimal.</b> Event contract + in-process bus + one inbound-webhook connector → a single rule
+      evaluation → a decision trace written to the graph. No flows yet. Proves events-in → deterministic-decision-out.</li>
+    <li><b>Flow engine MVP.</b> Linear-plus-one-gateway flows: event → task(action) → gateway(rule) → state transition,
+      with a persisted run log and a replay view. Composes lifecycle + rules + actions under an orchestrator.</li>
+    <li><b>Stage-1 Studio.</b> The reversible authoring surface over <code>OntologyAuthor</code>/<code>RuleAuthor</code>
+      plus the new flow canvas; sign-off freezes an App. Extends existing UIs where possible.</li>
+    <li><b>Stage-2 packaging.</b> App = versioned bundle in a workspace; instantiate, run against live events, show the
+      non-expert queue + decision-trace timeline. Add meta-DSL version pinning.</li>
+    <li><b>Thicken.</b> The <code>agent</code> action handler (LLM-as-actor with a typed contract + confidence routing),
+      timers/scheduler, parallel gateways, connector breadth (poller, email/Slack), LLM-assisted mapping, migration
+      tooling, and richer <b>visual diagrams for flows &amp; states</b>.</li>
+  </ol>
+  <div class="callout ok"><div class="clabel">◆ The demo that proves the thesis</div>
+    A non-expert watches a request arrive from a webhook, get mapped to ontology terms, hit a rule-driven gateway, route
+    to a human sign-off, and land in a terminal state — then opens the decision trace and sees <i>who/why/when</i> for
+    every hop, with no LLM anywhere in that path. That single screen is the argument.</div>
+  <p class="small">This document is a starting point, not a spec — the <a href="#decisions">open decisions</a> come first.
+    Companion reading: <a href="BLOG_CONSTRAINED_EXPERT_SYSTEM.html">The Constrained Expert System</a> (the why),
+    <a href="RULES_ENGINE.html">Rules Engine</a>, <a href="ONTOLOGY.html">Ontology</a>, and
+    <a href="ACTIONS.html">Actions</a> (the primitives this composes).</p>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  A design discussion for a governed-workflow platform on <a href="https://github.com/dsivov/Context_Graph" target="_blank" rel="noopener">Context
+  Graph</a> — the <a href="BLOG_CONSTRAINED_EXPERT_SYSTEM.html">constrained expert system</a> made buildable: events in,
+  deterministic decisions out, the LLM confined to authoring time.
+</footer>
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
+</script>
+</body>
+</html>
