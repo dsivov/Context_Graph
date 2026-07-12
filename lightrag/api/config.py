@@ -476,6 +476,9 @@ def parse_args() -> argparse.Namespace:
     # enabling contextual quadruple extraction (h,r,t,rc) and the CGR3 query paradigm.
     args.use_context_graph = get_env_value("USE_CONTEXT_GRAPH", False, bool)
     args.cgr3_max_iterations = get_env_value("CGR3_MAX_ITERATIONS", 3, int)
+    # Step 4 prototype: route entity/relation extraction through the JSON path
+    # (upstream 1.5.x alignment) instead of the delimiter path. Default off.
+    args.cg_json_extraction = get_env_value("CG_JSON_EXTRACTION", False, bool)
     args.enable_mcp = get_env_value("ENABLE_MCP", True, bool)
 
     # Entity deduplication (Graph-Quality v-next, Topic 1)

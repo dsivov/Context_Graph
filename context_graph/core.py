@@ -397,6 +397,7 @@ async def extract_entities_with_context(
     pipeline_status_lock=None,
     llm_response_cache: BaseKVStorage | None = None,
     text_chunks_storage: BaseKVStorage | None = None,
+    json_mode: bool = False,
 ) -> list:
     """CG variant of operate.extract_entities using contextual-quadruple prompts.
 
@@ -458,16 +459,41 @@ async def extract_entities_with_context(
         file_path = chunk_dp.get("file_path", "unknown_source")
         cache_keys_collector: list = []
 
-        # Build prompts
-        cg_system_prompt = PROMPTS["cg_entity_extraction_system_prompt"].format(
-            **context_base
-        )
-        cg_user_prompt = PROMPTS["entity_extraction_user_prompt"].format(
-            **{**context_base, "input_text": content}
-        )
-        cg_continue_prompt = PROMPTS["cg_entity_continue_extraction_user_prompt"].format(
-            **{**context_base, "input_text": content}
-        )
+        # Build prompts — delimiter (default) or JSON (Step 4, behind json_mode)
+        if json_mode:
+            jctx = {"entity_types": ", ".join(entity_types),
+                    "language": language, "input_text": content}
+            cg_system_prompt = PROMPTS["cg_entity_extraction_json_system_prompt"].format(**jctx)
+            cg_user_prompt = PROMPTS["cg_entity_extraction_json_user_prompt"].format(**jctx)
+            cg_continue_prompt = PROMPTS["cg_entity_extraction_json_continue_prompt"].format(**jctx)
+        else:
+            cg_system_prompt = PROMPTS["cg_entity_extraction_system_prompt"].format(
+                **context_base
+            )
+            cg_user_prompt = PROMPTS["entity_extraction_user_prompt"].format(
+                **{**context_base, "input_text": content}
+            )
+            cg_continue_prompt = PROMPTS["cg_entity_continue_extraction_user_prompt"].format(
+                **{**context_base, "input_text": content}
+            )
+
+        async def _parse(res, ts):
+            """Parse an LLM extraction result into (maybe_nodes, maybe_edges) using
+            the JSON parser or the delimiter parser per json_mode."""
+            if json_mode:
+                parsed = _extract_json_object(res)
+                if not isinstance(parsed, dict):
+                    try:
+                        import json_repair
+                        parsed = json_repair.loads(res)
+                    except Exception:
+                        parsed = {}
+                return await _process_cg_json_result(parsed, chunk_key, ts, file_path)
+            return await _process_cg_extraction_result(
+                res, chunk_key, ts, file_path,
+                tuple_delimiter=context_base["tuple_delimiter"],
+                completion_delimiter=context_base["completion_delimiter"],
+            )
 
         final_result, timestamp = await use_llm_func_with_cache(
             cg_user_prompt,
@@ -481,14 +507,7 @@ async def extract_entities_with_context(
 
         history = pack_user_ass_to_openai_messages(cg_user_prompt, final_result)
 
-        maybe_nodes, maybe_edges = await _process_cg_extraction_result(
-            final_result,
-            chunk_key,
-            timestamp,
-            file_path,
-            tuple_delimiter=context_base["tuple_delimiter"],
-            completion_delimiter=context_base["completion_delimiter"],
-        )
+        maybe_nodes, maybe_edges = await _parse(final_result, timestamp)
 
         # Optional gleaning pass
         if entity_extract_max_gleaning > 0:
@@ -510,14 +529,7 @@ async def extract_entities_with_context(
                     chunk_id=chunk_key,
                     cache_keys_collector=cache_keys_collector,
                 )
-                glean_nodes, glean_edges = await _process_cg_extraction_result(
-                    glean_result,
-                    chunk_key,
-                    timestamp,
-                    file_path,
-                    tuple_delimiter=context_base["tuple_delimiter"],
-                    completion_delimiter=context_base["completion_delimiter"],
-                )
+                glean_nodes, glean_edges = await _parse(glean_result, timestamp)
                 for name, entities in glean_nodes.items():
                     if name in maybe_nodes:
                         orig_len = len(
@@ -777,6 +789,7 @@ class ContextGraph(LightRAG):
                 pipeline_status_lock=pipeline_status_lock,
                 llm_response_cache=self.llm_response_cache,
                 text_chunks_storage=self.text_chunks,
+                json_mode=self._json_extraction_enabled(),
             )
             # Garbage filter (Topic 2): quarantine low-quality / off-schema nodes
             # before they reach the merge. Covers the gleaning pass for free, since
@@ -810,6 +823,13 @@ class ContextGraph(LightRAG):
         import os
         return os.getenv("GARBAGE_FILTER_ENABLED", "true").strip().lower() not in (
             "false", "0", "no", "off", "")
+
+    def _json_extraction_enabled(self) -> bool:
+        """Step 4 prototype flag. Default OFF → the proven delimiter extractor.
+        Set CG_JSON_EXTRACTION=true to route extraction through the JSON path."""
+        import os
+        return os.getenv("CG_JSON_EXTRACTION", "false").strip().lower() in (
+            "true", "1", "yes", "on")
 
     def _node_filter(self):
         """Build (and cache) the workspace NodeFilter: its saved ontology if any,

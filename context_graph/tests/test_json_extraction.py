@@ -78,3 +78,42 @@ async def test_alt_field_names_and_drops_bad_records():
 async def test_non_dict_input_is_safe():
     nodes, edges = await _process_cg_json_result("not a dict", "c", 1)
     assert nodes == {} and edges == {}
+
+
+@pytest.mark.offline
+@pytest.mark.asyncio
+async def test_json_mode_orchestration_end_to_end(monkeypatch):
+    """extract_entities_with_context(json_mode=True) routes through the JSON prompt
+    + parser: a mocked LLM returns a JSON object and we get parsed nodes/edges."""
+    import context_graph.core as core
+
+    llm_out = (
+        '```json\n'
+        '{"entities":[{"entity_name":"Acme","entity_type":"Organization","description":"a company"}],'
+        '"relationships":[{"src_id":"Acme","tgt_id":"Beta","keywords":"PARTNERS","description":"x",'
+        '"relation_context":{"approved_via":"slack","confidence_score":0.9}}]}\n'
+        '```'
+    )
+
+    async def fake_llm_cache(user_prompt, use_llm_func, **kw):
+        return llm_out, 111
+
+    monkeypatch.setattr(core, "use_llm_func_with_cache", fake_llm_cache)
+
+    gc = {
+        "llm_model_func": (lambda *a, **k: None),
+        "entity_extract_max_gleaning": 0,
+        "addon_params": {"language": "English", "entity_types": ["Organization"]},
+        "llm_model_max_async": 1,
+    }
+    chunks = {"chunk-1": {"content": "Acme partners with Beta.", "file_path": "f.md"}}
+    results = await core.extract_entities_with_context(chunks, gc, json_mode=True)
+
+    nodes, edges = {}, {}
+    for n, e in results:
+        nodes.update(n)
+        edges.update(e)
+    assert "Acme" in nodes and nodes["Acme"][0]["entity_type"] == "Organization"
+    edge = edges[("Acme", "Beta")][0]
+    assert edge["keywords"] == "PARTNERS"
+    assert '"approved_via": "slack"' in edge["relation_context"]

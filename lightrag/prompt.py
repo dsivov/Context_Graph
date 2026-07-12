@@ -667,6 +667,64 @@ Based on the last extraction task, identify and extract any **missed or incorrec
 <Output>
 """
 
+# ─────────────────────────────────────────────────────────────────────────────
+# JSON extraction (Step 4 — upstream 1.5.x alignment). Emits a single JSON object;
+# relation_context is a first-class key. Braces are doubled for str.format().
+# ─────────────────────────────────────────────────────────────────────────────
+
+PROMPTS["cg_entity_extraction_json_system_prompt"] = """You are an expert knowledge-graph extractor. From the input text, extract entities and the relationships between them, and return a SINGLE JSON object — no prose, no markdown code fences.
+
+Use these entity types: {entity_types}. Write all text in {language} (keep proper nouns in their original language).
+
+Output exactly this schema:
+{{
+  "entities": [
+    {{"entity_name": "<name, Title Case>", "entity_type": "<one of the types above>", "description": "<concise description grounded in the text>"}}
+  ],
+  "relationships": [
+    {{
+      "src_id": "<source entity name — must match an entity above>",
+      "tgt_id": "<target entity name — must match an entity above>",
+      "keywords": "<high-level relationship keywords, comma-separated>",
+      "description": "<why these entities are related, grounded in the text>",
+      "relation_context": {{
+        "supporting_sentences": ["<verbatim quote from the text>"],
+        "decision_trace": "<rationale / approval / exception / override>",
+        "approved_by": "<approver name>",
+        "approved_via": "<slack|zoom|email|in_person|jira|system>",
+        "valid_from": "<YYYY-MM-DD>",
+        "valid_until": "<YYYY-MM-DD>",
+        "policy_ref": "<policy name or id>",
+        "quantitative_data": "<numbers, amounts, percentages>",
+        "temporal_info": "<validity period phrase>",
+        "provenance": "<source reference>",
+        "confidence_score": 0.0
+      }}
+    }}
+  ]
+}}
+
+Rules:
+- Include a relationship ONLY if both of its entities appear in "entities".
+- OMIT "relation_context" entirely for ordinary relationships. Include it ONLY when the text expresses a decision, approval, exception, policy, validity period, or quantitative fact — and include only the sub-fields the text supports, with confidence_score in [0,1].
+- Do NOT invent facts. Every value must be grounded in the input text.
+- Exclude non-entities: file paths, code identifiers, environment-variable names, git hashes, bare numbers, and pronouns.
+- Treat relationships as undirected unless the text states a direction.
+- Return ONLY the JSON object.
+"""
+
+PROMPTS["cg_entity_extraction_json_user_prompt"] = """Extract entities and relationships from the following text as a single JSON object matching the schema.
+
+Text:
+{input_text}
+"""
+
+PROMPTS["cg_entity_extraction_json_continue_prompt"] = """Some entities and relationships may have been missed. Return a JSON object (same schema) containing ONLY entities and relationships NOT already extracted from the text below. If none remain, return {{"entities": [], "relationships": []}}.
+
+Text:
+{input_text}
+"""
+
 PROMPTS["cgr3_reason_prompt"] = """---Role---
 You are a knowledge graph reasoning specialist performing iterative Retrieve-Rank-Reason analysis.
 
