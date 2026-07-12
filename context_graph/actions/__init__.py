@@ -22,6 +22,7 @@ from context_graph.actions.schema import (
     ActionHandler,
     ActionDefinition,
     ActionCatalog,
+    AgentSpec,
 )
 from context_graph.actions.store import (
     ActionStore,
@@ -40,6 +41,7 @@ __all__ = [
     "ActionHandler",
     "ActionDefinition",
     "ActionCatalog",
+    "AgentSpec",
     "ActionStore",
     "JsonActionStore",
     "InMemoryActionStore",

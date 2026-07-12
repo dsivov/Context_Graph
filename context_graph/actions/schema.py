@@ -260,3 +260,53 @@ class ActionCatalog:
             a = ActionDefinition.from_dict(ad)
             cat.actions[a.name] = a
         return cat
+
+
+@dataclass
+class AgentSpec:
+    """Contract for an LLM-agent Action / ingress mapper (schema in P0; the
+    ``agent`` handler kind lands in P5).
+
+    The LLM is a *boxed actor* (decision 3): it reads only ontology-typed inputs,
+    must return the declared ``output_schema``, and a result below
+    ``min_confidence`` is routed per ``on_low_confidence`` (to a human task, or
+    rejected) rather than entering the graph silently. Every run is recorded as a
+    decision like any other action.
+    """
+
+    role_prompt: str
+    input_types: List[str] = field(default_factory=list)   # ontology type names
+    output_schema: str = ""                                # ontology type / enum
+    min_confidence: float = 0.7
+    on_low_confidence: str = "human_task"                  # human_task | reject
+
+    def lint(self) -> List[str]:
+        problems: List[str] = []
+        if not self.role_prompt:
+            problems.append("agent spec needs a role_prompt")
+        if not self.output_schema:
+            problems.append("agent spec needs an output_schema")
+        if not 0.0 <= self.min_confidence <= 1.0:
+            problems.append("min_confidence must be in [0,1]")
+        if self.on_low_confidence not in ("human_task", "reject"):
+            problems.append("on_low_confidence must be 'human_task' or 'reject'")
+        return problems
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "role_prompt": self.role_prompt,
+            "input_types": self.input_types,
+            "output_schema": self.output_schema,
+            "min_confidence": self.min_confidence,
+            "on_low_confidence": self.on_low_confidence,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "AgentSpec":
+        return cls(
+            role_prompt=d.get("role_prompt", ""),
+            input_types=list(d.get("input_types", [])),
+            output_schema=d.get("output_schema", ""),
+            min_confidence=float(d.get("min_confidence", 0.7)),
+            on_low_confidence=d.get("on_low_confidence", "human_task"),
+        )
