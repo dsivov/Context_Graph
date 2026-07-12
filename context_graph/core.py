@@ -463,7 +463,16 @@ async def extract_entities_with_context(
         if json_mode:
             jctx = {"entity_types": ", ".join(entity_types),
                     "language": language, "input_text": content}
-            cg_system_prompt = PROMPTS["cg_entity_extraction_json_system_prompt"].format(**jctx)
+            # Few-shot examples carry literal JSON braces, so inject them AFTER
+            # .format() via a sentinel rather than as a format field.
+            json_examples = "\n".join(
+                PROMPTS.get("cg_entity_extraction_json_examples", [])
+            )
+            cg_system_prompt = (
+                PROMPTS["cg_entity_extraction_json_system_prompt"]
+                .format(**jctx)
+                .replace("__EXAMPLES__", json_examples)
+            )
             cg_user_prompt = PROMPTS["cg_entity_extraction_json_user_prompt"].format(**jctx)
             cg_continue_prompt = PROMPTS["cg_entity_extraction_json_continue_prompt"].format(**jctx)
         else:

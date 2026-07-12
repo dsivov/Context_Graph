@@ -706,12 +706,35 @@ Output exactly this schema:
 
 Rules:
 - Include a relationship ONLY if both of its entities appear in "entities".
-- OMIT "relation_context" entirely for ordinary relationships. Include it ONLY when the text expresses a decision, approval, exception, policy, validity period, or quantitative fact — and include only the sub-fields the text supports, with confidence_score in [0,1].
+- ALWAYS include "relation_context" for every relationship, populated with at least "supporting_sentences" (a verbatim quote from the text) and "confidence_score" in [0,1]. Add the decision-specific sub-fields (decision_trace, approved_by, approved_via, valid_from, valid_until, policy_ref, quantitative_data, temporal_info, provenance) whenever the text supports them. Omit only the individual sub-fields the text does not support — never omit the whole "relation_context".
 - Do NOT invent facts. Every value must be grounded in the input text.
 - Exclude non-entities: file paths, code identifiers, environment-variable names, git hashes, bare numbers, and pronouns.
 - Treat relationships as undirected unless the text states a direction.
 - Return ONLY the JSON object.
+
+Examples follow. Study how every relationship carries a relation_context — decision-rich relations fill the approval/policy fields; ordinary factual relations still carry supporting_sentences and confidence_score.
+
+__EXAMPLES__
 """
+
+PROMPTS["cg_entity_extraction_json_examples"] = [
+    """<Input Text>
+```
+During the Q3 2024 business review, Sarah Chen (VP of Sales) approved a 20% discount for MegaCorp's enterprise deal, citing their five-year relationship and a competing offer from Salesforce. The discount was valid until December 31, 2024. This was discussed in the Slack channel #deals-review on August 14, 2024.
+```
+
+<Output>
+{"entities": [{"entity_name": "Sarah Chen", "entity_type": "Person", "description": "Sarah Chen is the VP of Sales who approved a 20% discount for MegaCorp's enterprise deal during the Q3 2024 business review."}, {"entity_name": "MegaCorp", "entity_type": "Organization", "description": "MegaCorp is an enterprise client that received a 20% discount, citing a long-standing relationship and competitive pressure from Salesforce."}, {"entity_name": "Salesforce", "entity_type": "Organization", "description": "Salesforce is a competitor that made a competing offer to MegaCorp, influencing the discount approval."}], "relationships": [{"src_id": "Sarah Chen", "tgt_id": "MegaCorp", "keywords": "discount approval, deal negotiation", "description": "Sarah Chen approved a 20% discount for MegaCorp's enterprise deal during the Q3 2024 business review.", "relation_context": {"supporting_sentences": ["Sarah Chen (VP of Sales) approved a 20% discount for MegaCorp's enterprise deal"], "decision_trace": "Approved citing five-year relationship and competing offer from Salesforce", "approved_by": "Sarah Chen", "approved_via": "slack", "valid_until": "2024-12-31", "quantitative_data": "20% discount", "temporal_info": "Valid until December 31, 2024", "provenance": "Slack #deals-review, August 14, 2024", "confidence_score": 0.97}}, {"src_id": "MegaCorp", "tgt_id": "Salesforce", "keywords": "competitive pressure, market competition", "description": "Salesforce made a competing offer to MegaCorp that influenced the discount negotiation.", "relation_context": {"supporting_sentences": ["a competing offer from Salesforce"], "decision_trace": "Competing offer used as justification for discount approval", "temporal_info": "Q3 2024", "provenance": "Q3 2024 Business Review", "confidence_score": 0.88}}]}
+""",
+    """<Input Text>
+```
+Barack Obama served as the 44th President of the United States from January 20, 2009 to January 20, 2017. His administration passed the Affordable Care Act in 2010, expanding health insurance coverage to millions of Americans.
+```
+
+<Output>
+{"entities": [{"entity_name": "Barack Obama", "entity_type": "Person", "description": "Barack Obama is the 44th President of the United States who served from 2009 to 2017 and oversaw the passage of the Affordable Care Act."}, {"entity_name": "United States", "entity_type": "Location", "description": "The United States is the country led by Barack Obama during his presidency from 2009 to 2017."}, {"entity_name": "Affordable Care Act", "entity_type": "Concept", "description": "The Affordable Care Act is landmark healthcare legislation passed in 2010 that expanded health insurance coverage to millions of Americans."}], "relationships": [{"src_id": "Barack Obama", "tgt_id": "United States", "keywords": "political leadership, presidency", "description": "Barack Obama served as the 44th President of the United States.", "relation_context": {"supporting_sentences": ["Barack Obama served as the 44th President of the United States from January 20, 2009 to January 20, 2017"], "temporal_info": "January 20, 2009 - January 20, 2017", "quantitative_data": "44th President", "confidence_score": 0.99}}, {"src_id": "Barack Obama", "tgt_id": "Affordable Care Act", "keywords": "legislation, policy achievement", "description": "Barack Obama's administration passed the Affordable Care Act in 2010, expanding healthcare coverage.", "relation_context": {"supporting_sentences": ["His administration passed the Affordable Care Act in 2010, expanding health insurance coverage to millions of Americans"], "decision_trace": "Policy goal to expand healthcare access", "temporal_info": "2010", "quantitative_data": "millions of Americans covered", "confidence_score": 0.98}}]}
+""",
+]
 
 PROMPTS["cg_entity_extraction_json_user_prompt"] = """Extract entities and relationships from the following text as a single JSON object matching the schema.
 
