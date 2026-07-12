@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { RefreshCwIcon } from 'lucide-react'
+import { RefreshCwIcon, DatabaseIcon } from 'lucide-react'
 import { useSettingsStore } from '@/stores/settings'
 import Modal from '@/features/next/Modal'
 import {
-  graphConnectivity, dedupScan, dedupSweep, dedupReview, entityMerges, entityUnmerge,
+  graphConnectivity, reindexGraphVectors, dedupScan, dedupSweep, dedupReview, entityMerges, entityUnmerge,
   garbageScan, quarantineList, quarantineRestore, quarantineDiscard,
   connectivityRescue, pruneIsolates, communityBuild, communityList, communityQuery,
   type ConnectivityReport
@@ -76,6 +76,10 @@ export default function GraphQualityNext() {
               <span className="cgspin" />Working…
             </span>
           )}
+          <button className="btn ghost" disabled={busy !== null}
+            onClick={() => { if (confirm('Rebuild entity & relation vectors from the graph? This re-embeds every node and edge and may take a while for large graphs.')) run('reidx', () => reindexGraphVectors(), (r) => `Rebuilt ${r.entities} entities, ${r.relationships} relations`) }}>
+            <DatabaseIcon className="" />Rebuild vectors
+          </button>
           <button className="btn ghost" onClick={refreshConn} disabled={busy !== null}>
             <RefreshCwIcon className="" />Refresh
           </button>

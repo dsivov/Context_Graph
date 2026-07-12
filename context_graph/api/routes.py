@@ -1050,6 +1050,56 @@ def create_context_graph_routes(
         task.add_done_callback(_reindex_tasks.discard)
         return {"status": "started", "workspace": ws}
 
+    @router.post(
+        "/graph/vectors/reindex",
+        dependencies=[Depends(combined_auth)],
+        summary="Rebuild entity & relation vector indices from the graph (source of truth)",
+        responses={
+            200: {"description": "Counts of entities/relationships/decisions reindexed."},
+            503: {"description": "Context Graph mode is not enabled."},
+        },
+    )
+    async def reindex_graph_vectors(
+        wait: bool = Query(
+            default=False,
+            description="Run inline and return counts (for scripts). Default: run in the "
+            "background and return immediately.",
+        ),
+    ):
+        """Rebuild ``entities_vdb`` and ``relationships_vdb`` from the graph, using the
+        exact record shape ingestion writes — recovers from vector drift (embedding-model
+        or storage changes, partial write failures) so search and dedup keep working.
+        Decision projections are overlaid afterward. The graph is the source of truth;
+        this is idempotent and off the ingest path."""
+        _require_context_graph(rag)
+        if wait:
+            try:
+                return await rag.reindex_graph_vectors()
+            except Exception as e:
+                logger.error(f"reindex_graph_vectors error: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+
+        import asyncio
+
+        ws = getattr(rag, "workspace", "") or "default"
+        key = f"{ws}:vectors"
+        if key in _reindex_running:
+            return {"status": "already_running", "workspace": ws}
+        _reindex_running.add(key)
+
+        async def _run():
+            try:
+                await rag.reindex_graph_vectors()
+            except Exception as e:  # pragma: no cover - background best-effort
+                logger.error(f"background reindex_graph_vectors error: {e}", exc_info=True)
+            finally:
+                _reindex_running.discard(key)
+
+        task = asyncio.create_task(_run())
+        _reindex_tasks.add(task)
+        task.add_done_callback(_reindex_tasks.discard)
+        return {"status": "started", "workspace": ws}
+
     @router.get(
         "/graph/connectivity",
         dependencies=[Depends(combined_auth)],

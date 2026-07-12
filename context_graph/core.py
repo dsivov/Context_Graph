@@ -1559,6 +1559,79 @@ class ContextGraph(LightRAG):
         logger.info(f"reindex_decisions: re-projected {n} decision edges from the graph")
         return {"reindexed": n}
 
+    async def reindex_graph_vectors(self) -> dict:
+        """Rebuild ``entities_vdb`` and ``relationships_vdb`` from the graph — the
+        source of truth. Recovers from vector drift (embedding-model or storage
+        changes, partial write failures) using the EXACT record shape ingestion
+        writes (mirrors ``ainsert_custom_kg``), so semantic search and dedup keep
+        working. Off the ingest path.
+
+        Composition: entities_vdb is dropped + rebuilt (it holds only entities);
+        relationships_vdb is dropped + rebuilt from every edge with the standard
+        relation shape, then :meth:`reindex_decisions` overlays the richer decision
+        projections back on top (it upserts, never drops, relationships_vdb).
+        ``decisions_vdb`` is rebuilt by that same call.
+        """
+        graph = self.chunk_entity_relation_graph
+
+        # --- entities: name + first-nothing; content mirrors ainsert_custom_kg ---
+        labels = list(await graph.get_all_labels() or [])
+        ent_records: dict = {}
+        for name in labels:
+            node = await graph.get_node(name) or {}
+            desc = node.get("description", "") or ""
+            ent_records[compute_mdhash_id(name, prefix="ent-")] = {
+                "content": name + "\n" + desc,
+                "entity_name": name,
+                "source_id": node.get("source_id", ""),
+                "description": desc,
+                "entity_type": node.get("entity_type", "UNKNOWN"),
+                "file_path": node.get("file_path", "reindex"),
+            }
+
+        # --- relationships: every edge, standard shape (decisions overlaid after) ---
+        edges = list(await graph.get_all_edges() or [])
+        rel_records: dict = {}
+        for e in edges:
+            src, tgt = e.get("source"), e.get("target")
+            if not src or not tgt:
+                continue
+            kw = e.get("keywords", "") or ""
+            desc = e.get("description", "") or ""
+            rel_records[compute_mdhash_id(src + tgt, prefix="rel-")] = {
+                "src_id": src,
+                "tgt_id": tgt,
+                "source_id": e.get("source_id", ""),
+                "content": f"{kw}\t{src}\n{tgt}\n{desc}",
+                "keywords": kw,
+                "description": desc,
+                "weight": e.get("weight", 1.0),
+                "file_path": e.get("file_path", "reindex"),
+            }
+
+        for vdb in (self.entities_vdb, self.relationships_vdb):
+            try:
+                await vdb.drop()
+            except Exception as ex:  # pragma: no cover - best-effort
+                logger.warning(f"reindex_graph_vectors: could not drop "
+                               f"{getattr(vdb, 'namespace', 'vdb')}: {ex}")
+        if ent_records:
+            await self.entities_vdb.upsert(ent_records)
+        if rel_records:
+            await self.relationships_vdb.upsert(rel_records)
+        for vdb in (self.entities_vdb, self.relationships_vdb):
+            try:
+                await vdb.index_done_callback()
+            except Exception as ex:  # pragma: no cover
+                logger.warning(f"reindex_graph_vectors persist failed: {ex}")
+
+        # Overlay the decision projections (also rebuilds decisions_vdb).
+        dec = await self.reindex_decisions()
+        summary = {"entities": len(ent_records), "relationships": len(rel_records),
+                   "decisions_reprojected": dec.get("reindexed", 0)}
+        logger.info(f"reindex_graph_vectors: {summary}")
+        return summary
+
     # ------------------------------------------------------------------
     # Decision summary ingestion (makes decisions visible to /query)
     # ------------------------------------------------------------------

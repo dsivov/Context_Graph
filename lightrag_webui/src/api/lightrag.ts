@@ -1347,6 +1347,10 @@ export interface ConnectivityReport {
 export const graphConnectivity = async (): Promise<ConnectivityReport> =>
   (await axiosInstance.get('/graph/connectivity?sample_isolates=8')).data
 
+// Rebuild entity/relation vector indices from the graph (vector-drift recovery)
+export const reindexGraphVectors = async (): Promise<{ entities: number; relationships: number; decisions_reprojected: number }> =>
+  (await axiosInstance.post('/graph/vectors/reindex?wait=true', undefined, { timeout: 300000 })).data
+
 // Recorded decisions (the (h,r,t,rc) quadruples) — filterable list for the dashboard/decisions view
 export const listDecisions = async (
   params: Record<string, string | number> = {}
