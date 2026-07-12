@@ -281,6 +281,111 @@ async def _process_cg_extraction_result(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# JSON extraction (Step 4 prototype — upstream 1.5.x alignment)
+# Behind CG_JSON_EXTRACTION; produces the SAME (maybe_nodes, maybe_edges) shape as
+# the delimiter parser above, so everything downstream is unchanged. rc becomes a
+# first-class JSON key instead of a delimited 6th field.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _rc_json_from_obj(raw_rc, chunk_key: str, src: str, tgt: str) -> str | None:
+    """Normalise a relation_context (dict or JSON string) into a stored JSON string,
+    clamping confidence_score to [0,1]. Returns None if absent or malformed."""
+    if raw_rc is None or raw_rc == "":
+        return None
+    try:
+        rc_dict = raw_rc if isinstance(raw_rc, dict) else json.loads(str(raw_rc))
+    except (json.JSONDecodeError, TypeError):
+        logger.warning(f"{chunk_key}: Malformed relation context for `{src}`→`{tgt}`; ignored")
+        return None
+    if not isinstance(rc_dict, dict):
+        logger.warning(f"{chunk_key}: relation_context is not a JSON object; ignored")
+        return None
+    cs = rc_dict.get("confidence_score", 1.0)
+    try:
+        cs = float(cs)
+    except (TypeError, ValueError):
+        cs = 1.0
+    rc_dict["confidence_score"] = min(max(cs, 0.0), 1.0)
+    return json.dumps(rc_dict, ensure_ascii=False)
+
+
+async def _process_cg_json_result(
+    parsed, chunk_key: str, timestamp: int, file_path: str = "unknown_source"
+) -> tuple[dict, dict]:
+    """Convert a parsed ``{"entities": [...], "relationships": [...]}`` dict into the
+    same ``(maybe_nodes, maybe_edges)`` structure the delimiter parser produces.
+    Field names are accepted flexibly (entity_name/name, src_id/source, etc.)."""
+    maybe_nodes: dict = defaultdict(list)
+    maybe_edges: dict = defaultdict(list)
+    if not isinstance(parsed, dict):
+        logger.warning(f"{chunk_key}: JSON extraction result is not an object")
+        return dict(maybe_nodes), dict(maybe_edges)
+
+    for ent in parsed.get("entities") or []:
+        if not isinstance(ent, dict):
+            continue
+        name = sanitize_and_normalize_extracted_text(
+            str(ent.get("entity_name") or ent.get("name") or ""), remove_inner_quotes=True
+        )
+        if not name:
+            continue
+        name = _truncate_entity_identifier(
+            name, DEFAULT_ENTITY_NAME_MAX_LENGTH, chunk_key, "Entity name"
+        )
+        etype = sanitize_and_normalize_extracted_text(
+            str(ent.get("entity_type") or ent.get("type") or "UNKNOWN")
+        )
+        desc = sanitize_and_normalize_extracted_text(str(ent.get("description") or ""))
+        maybe_nodes[name].append({
+            "entity_name": name,
+            "entity_type": etype or "UNKNOWN",
+            "description": desc,
+            "source_id": chunk_key,
+            "file_path": file_path,
+            "timestamp": timestamp,
+        })
+
+    for rel in parsed.get("relationships") or parsed.get("relations") or []:
+        if not isinstance(rel, dict):
+            continue
+        src = sanitize_and_normalize_extracted_text(
+            str(rel.get("src_id") or rel.get("source") or rel.get("source_entity") or ""),
+            remove_inner_quotes=True,
+        )
+        tgt = sanitize_and_normalize_extracted_text(
+            str(rel.get("tgt_id") or rel.get("target") or rel.get("target_entity") or ""),
+            remove_inner_quotes=True,
+        )
+        if not src or not tgt or src == tgt:
+            continue
+        src = _truncate_entity_identifier(src, DEFAULT_ENTITY_NAME_MAX_LENGTH, chunk_key, "Relation entity")
+        tgt = _truncate_entity_identifier(tgt, DEFAULT_ENTITY_NAME_MAX_LENGTH, chunk_key, "Relation entity")
+        kw = sanitize_and_normalize_extracted_text(
+            str(rel.get("keywords") or rel.get("relationship_keywords") or ""),
+            remove_inner_quotes=True,
+        ).replace("，", ",")
+        desc = sanitize_and_normalize_extracted_text(
+            str(rel.get("description") or rel.get("relationship_description") or "")
+        )
+        try:
+            weight = float(rel.get("weight", 1.0))
+        except (TypeError, ValueError):
+            weight = 1.0
+        edge = {
+            "src_id": src, "tgt_id": tgt, "weight": weight,
+            "description": desc, "keywords": kw,
+            "source_id": chunk_key, "file_path": file_path, "timestamp": timestamp,
+        }
+        rc = _rc_json_from_obj(rel.get("relation_context"), chunk_key, src, tgt)
+        if rc is not None:
+            edge["relation_context"] = rc
+        maybe_edges[(src, tgt)].append(edge)
+
+    return dict(maybe_nodes), dict(maybe_edges)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CG entity extraction pipeline (mirrors operate.extract_entities)
 # ─────────────────────────────────────────────────────────────────────────────
 
