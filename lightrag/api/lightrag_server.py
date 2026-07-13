@@ -459,6 +459,27 @@ def create_app(args):
         except Exception as e:  # pragma: no cover - never block server start
             logger.warning(f"Lifecycle service unavailable: {e}")
 
+    # Ingress service (event front door: connector → mapper → log → bus).
+    # Only in CG mode — the P1 platform loop.
+    ingress_service = None
+    if getattr(args, "use_context_graph", False):
+        try:
+            from context_graph.events import InProcessBus
+            from context_graph.events.store import JsonIngressLog
+            from context_graph.integration import IngressService
+
+            ingress_service = IngressService(
+                JsonIngressLog(os.path.join(str(args.working_dir), "ingress")),
+                InProcessBus(),
+                ontology_resolver=(
+                    ontology_service.store.load
+                    if ontology_service is not None
+                    else None
+                ),
+            )
+        except Exception as e:  # pragma: no cover - never block server start
+            logger.warning(f"Ingress service unavailable: {e}")
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Lifespan context manager for startup and shutdown events"""
@@ -1362,6 +1383,19 @@ def create_app(args):
         from lightrag.api.routers.rules_routes import create_rules_routes
 
         app.include_router(create_rules_routes(rag, rules_service, api_key=api_key))
+
+    # Ingress API (webhook front door → durable log → bus → decision quad).
+    if ingress_service is not None:
+        from lightrag.api.routers.ingress_routes import create_ingress_routes
+        from context_graph.integration import DecisionSubscriber
+
+        # The P1 demo loop-closer: every mapped event that names an actor and
+        # an object is gated by the workspace rules and recorded as a quad.
+        # `rag` is the request-scoped workspace proxy, so the subscriber (which
+        # runs inside the request that published the event) hits the right
+        # workspace instance.
+        ingress_service.bus.subscribe("*", DecisionSubscriber(lambda ws: rag))
+        app.include_router(create_ingress_routes(rag, ingress_service, api_key=api_key))
 
     # Ontology API (manage the per-workspace typed schema).
     if ontology_service is not None:
