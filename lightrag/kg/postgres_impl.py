@@ -4858,17 +4858,24 @@ class PGGraphStorage(BaseGraphStorage):
             outgoing_results = await self._query(outgoing_query)
             incoming_results = await self._query(incoming_query)
 
+            # edges_norm is keyed by the normalized (Cypher-escaped) id, but AGE
+            # returns the unescaped value (e.g. '16" Model'), so re-normalize the
+            # result before the lookup — otherwise names containing " or \ KeyError.
             for result in outgoing_results:
                 if result["node_id"] and result["connected_id"]:
-                    edges_norm[result["node_id"]].append(
-                        (result["node_id"], result["connected_id"])
-                    )
+                    key = self._normalize_node_id(result["node_id"])
+                    if key in edges_norm:
+                        edges_norm[key].append(
+                            (result["node_id"], result["connected_id"])
+                        )
 
             for result in incoming_results:
                 if result["node_id"] and result["connected_id"]:
-                    edges_norm[result["node_id"]].append(
-                        (result["connected_id"], result["node_id"])
-                    )
+                    key = self._normalize_node_id(result["node_id"])
+                    if key in edges_norm:
+                        edges_norm[key].append(
+                            (result["connected_id"], result["node_id"])
+                        )
 
         out: dict[str, list[tuple[str, str]]] = {}
         for orig in node_ids:
