@@ -1548,7 +1548,10 @@ class ContextGraph(LightRAG):
             if top is None:
                 continue
             cand = top.get("entity_name") or top.get("id")
-            score = float(top.get("distance") or 0.0)
+            # entities_vdb returns pgvector cosine DISTANCE (0 = identical); convert
+            # to a similarity score in [0,1]. Missing distance -> 0.0 (no match).
+            _dist = top.get("distance")
+            score = 1.0 - float(_dist) if _dist is not None else 0.0
             ctype = top.get("entity_type")
             if ctype is None:
                 ctype = await node_type(cand)

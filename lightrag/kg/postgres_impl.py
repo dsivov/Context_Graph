@@ -5876,6 +5876,7 @@ SQL_TEMPLATES = {
                    """,
     "entities": """
                 SELECT e.entity_name,
+                       (e.content_vector <=> '[{embedding_string}]'::vector) AS distance,
                        EXTRACT(EPOCH FROM e.create_time)::BIGINT AS created_at
                 FROM {table_name} e
                 WHERE e.workspace = $1
