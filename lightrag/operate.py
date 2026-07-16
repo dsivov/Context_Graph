@@ -3450,8 +3450,12 @@ async def extract_keywords_only(
         f"[extract_keywords] Sending to LLM: {len_of_prompts:,} tokens (Prompt: {len_of_prompts})"
     )
 
-    # 4. Call the LLM for keyword extraction
-    if param.model_func:
+    # 4. Call the LLM for keyword extraction. The dedicated KEYWORD role
+    # (param.keyword_model_func) wins so keyword extraction can use a different
+    # model than synthesis; then the per-query model_func; then the global func.
+    if getattr(param, "keyword_model_func", None):
+        use_model_func = param.keyword_model_func
+    elif param.model_func:
         use_model_func = param.model_func
     else:
         use_model_func = global_config["llm_model_func"]

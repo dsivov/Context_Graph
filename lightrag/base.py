@@ -151,6 +151,12 @@ class QueryParam:
     This allows using different models for different query modes.
     """
 
+    keyword_model_func: Callable[..., object] | None = None
+    """Optional override for the query-stage keyword-extraction LLM.
+    Takes precedence over ``model_func`` and the global func for keyword extraction
+    only, so the KEYWORD role can differ from the synthesis/query model.
+    """
+
     user_prompt: str | None = None
     """User-provided prompt for the query.
     Addition instructions for LLM. If provided, this will be inject into the prompt template.

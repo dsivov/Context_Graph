@@ -1277,13 +1277,17 @@ def create_app(args):
     if use_context_graph:
         _role_extract = _build_role_llm(getattr(args, "llm_role_extract", None))
         _role_query = _build_role_llm(getattr(args, "llm_role_query", None))
-        if _role_extract is not None or _role_query is not None:
+        _role_keyword = _build_role_llm(getattr(args, "llm_role_keyword", None))
+        if _role_extract is not None or _role_query is not None or _role_keyword is not None:
             def _post_create(rag_instance):
                 if hasattr(rag_instance, "attach_llm_roles"):
-                    rag_instance.attach_llm_roles(extract=_role_extract, query=_role_query)
+                    rag_instance.attach_llm_roles(
+                        extract=_role_extract, query=_role_query, keyword=_role_keyword
+                    )
             logger.info(
-                "CG per-task LLM roles active — extract=%s, query=%s",
+                "CG per-task LLM roles active — extract=%s, query=%s, keyword=%s",
                 args.llm_role_extract["model"], args.llm_role_query["model"],
+                args.llm_role_keyword["model"],
             )
 
     # Create workspace pool and proxy for multi-tenant support
