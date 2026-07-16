@@ -1258,6 +1258,8 @@ class PostgreSQLDB:
             "LIGHTRAG_VDB_CHUNKS",
             "LIGHTRAG_VDB_ENTITY",
             "LIGHTRAG_VDB_RELATION",
+            "LIGHTRAG_VDB_DECISION",
+            "LIGHTRAG_VDB_COMMUNITY",
         }
 
         # First create all tables (except vector tables)
@@ -2957,6 +2959,44 @@ class PGVectorStorage(BaseVectorStorage):
         )
         return upsert_sql, values
 
+    def _upsert_decisions(
+        self, item: dict[str, Any], current_time: datetime.datetime
+    ) -> tuple[str, tuple[Any, ...]]:
+        """Prepare upsert data for the decisions vector store (precedent search)."""
+        upsert_sql = SQL_TEMPLATES["upsert_decision"].format(table_name=self.table_name)
+        values: tuple[Any, ...] = (
+            self.workspace,  # $1
+            item["__id__"],  # $2
+            item["content"],  # $3
+            item["__vector__"],  # $4 - numpy array, handled by pgvector codec
+            item.get("src_id"),  # $5
+            item.get("tgt_id"),  # $6
+            item.get("file_path", None),  # $7
+            current_time,  # $8
+            current_time,  # $9
+        )
+        return upsert_sql, values
+
+    def _upsert_communities(
+        self, item: dict[str, Any], current_time: datetime.datetime
+    ) -> tuple[str, tuple[Any, ...]]:
+        """Prepare upsert data for the communities vector store (thematic global mode)."""
+        upsert_sql = SQL_TEMPLATES["upsert_community"].format(table_name=self.table_name)
+        size = item.get("size")
+        values: tuple[Any, ...] = (
+            self.workspace,  # $1
+            item["__id__"],  # $2
+            item["content"],  # $3
+            item["__vector__"],  # $4 - numpy array, handled by pgvector codec
+            item.get("community_id"),  # $5
+            item.get("title"),  # $6
+            int(size) if size is not None else None,  # $7
+            item.get("file_path", None),  # $8
+            current_time,  # $9
+            current_time,  # $10
+        )
+        return upsert_sql, values
+
     async def upsert(self, data: dict[str, dict[str, Any]]) -> None:
         logger.debug(f"[{self.workspace}] Inserting {len(data)} to {self.namespace}")
         if not data:
@@ -2995,6 +3035,10 @@ class PGVectorStorage(BaseVectorStorage):
                 upsert_sql, values = self._upsert_entities(item, current_time)
             elif is_namespace(self.namespace, NameSpace.VECTOR_STORE_RELATIONSHIPS):
                 upsert_sql, values = self._upsert_relationships(item, current_time)
+            elif is_namespace(self.namespace, NameSpace.VECTOR_STORE_DECISIONS):
+                upsert_sql, values = self._upsert_decisions(item, current_time)
+            elif is_namespace(self.namespace, NameSpace.VECTOR_STORE_COMMUNITIES):
+                upsert_sql, values = self._upsert_communities(item, current_time)
             else:
                 raise ValueError(f"{self.namespace} is not supported")
 
@@ -5406,6 +5450,8 @@ NAMESPACE_TABLE_MAP = {
     NameSpace.VECTOR_STORE_CHUNKS: "LIGHTRAG_VDB_CHUNKS",
     NameSpace.VECTOR_STORE_ENTITIES: "LIGHTRAG_VDB_ENTITY",
     NameSpace.VECTOR_STORE_RELATIONSHIPS: "LIGHTRAG_VDB_RELATION",
+    NameSpace.VECTOR_STORE_DECISIONS: "LIGHTRAG_VDB_DECISION",
+    NameSpace.VECTOR_STORE_COMMUNITIES: "LIGHTRAG_VDB_COMMUNITY",
     NameSpace.DOC_STATUS: "LIGHTRAG_DOC_STATUS",
 }
 
@@ -5486,6 +5532,35 @@ TABLES = {
                     chunk_ids VARCHAR(255)[] NULL,
                     file_path TEXT NULL,
 	                CONSTRAINT LIGHTRAG_VDB_RELATION_PK PRIMARY KEY (workspace, id)
+                    )"""
+    },
+    "LIGHTRAG_VDB_DECISION": {
+        "ddl": """CREATE TABLE LIGHTRAG_VDB_DECISION (
+                    id VARCHAR(255),
+                    workspace VARCHAR(255),
+                    content TEXT,
+                    content_vector VECTOR(dimension),
+                    src_id VARCHAR(512) NULL,
+                    tgt_id VARCHAR(512) NULL,
+                    create_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+                    update_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+                    file_path TEXT NULL,
+                    CONSTRAINT LIGHTRAG_VDB_DECISION_PK PRIMARY KEY (workspace, id)
+                    )"""
+    },
+    "LIGHTRAG_VDB_COMMUNITY": {
+        "ddl": """CREATE TABLE LIGHTRAG_VDB_COMMUNITY (
+                    id VARCHAR(255),
+                    workspace VARCHAR(255),
+                    content TEXT,
+                    content_vector VECTOR(dimension),
+                    community_id VARCHAR(255) NULL,
+                    title TEXT NULL,
+                    size INTEGER NULL,
+                    create_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+                    update_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+                    file_path TEXT NULL,
+                    CONSTRAINT LIGHTRAG_VDB_COMMUNITY_PK PRIMARY KEY (workspace, id)
                     )"""
     },
     "LIGHTRAG_LLM_CACHE": {
@@ -5751,6 +5826,54 @@ SQL_TEMPLATES = {
                      ORDER BY r.content_vector <=> '[{embedding_string}]'::vector
                      LIMIT $3;
                      """,
+    "upsert_decision": """INSERT INTO {table_name} (workspace, id, content,
+                      content_vector, src_id, tgt_id, file_path, create_time, update_time)
+                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                      ON CONFLICT (workspace,id) DO UPDATE
+                      SET content=EXCLUDED.content,
+                      content_vector=EXCLUDED.content_vector,
+                      src_id=EXCLUDED.src_id,
+                      tgt_id=EXCLUDED.tgt_id,
+                      file_path=EXCLUDED.file_path,
+                      update_time=EXCLUDED.update_time
+                     """,
+    "upsert_community": """INSERT INTO {table_name} (workspace, id, content,
+                      content_vector, community_id, title, size, file_path, create_time, update_time)
+                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                      ON CONFLICT (workspace,id) DO UPDATE
+                      SET content=EXCLUDED.content,
+                      content_vector=EXCLUDED.content_vector,
+                      community_id=EXCLUDED.community_id,
+                      title=EXCLUDED.title,
+                      size=EXCLUDED.size,
+                      file_path=EXCLUDED.file_path,
+                      update_time=EXCLUDED.update_time
+                     """,
+    "decisions": """
+                 SELECT d.id,
+                        d.content,
+                        d.src_id,
+                        d.tgt_id,
+                        EXTRACT(EPOCH FROM d.create_time)::BIGINT AS created_at
+                 FROM {table_name} d
+                 WHERE d.workspace = $1
+                   AND d.content_vector <=> '[{embedding_string}]'::vector < $2
+                 ORDER BY d.content_vector <=> '[{embedding_string}]'::vector
+                 LIMIT $3;
+                 """,
+    "communities": """
+                   SELECT c.id,
+                          c.content,
+                          c.community_id,
+                          c.title,
+                          c.size,
+                          EXTRACT(EPOCH FROM c.create_time)::BIGINT AS created_at
+                   FROM {table_name} c
+                   WHERE c.workspace = $1
+                     AND c.content_vector <=> '[{embedding_string}]'::vector < $2
+                   ORDER BY c.content_vector <=> '[{embedding_string}]'::vector
+                   LIMIT $3;
+                   """,
     "entities": """
                 SELECT e.entity_name,
                        EXTRACT(EPOCH FROM e.create_time)::BIGINT AS created_at
