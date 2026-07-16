@@ -701,19 +701,27 @@ class ContextGraph(LightRAG):
         # from EXTRACT_/QUERY_ env config; see attach_llm_roles.
         self._llm_role_extract = None
         self._llm_role_query = None
+        self._llm_role_keyword = None
 
     # ------------------------------------------------------------------
     # Per-task LLM roles
     # ------------------------------------------------------------------
 
-    def attach_llm_roles(self, *, extract=None, query=None) -> None:
+    def attach_llm_roles(self, *, extract=None, query=None, keyword=None) -> None:
         """Wire per-task LLM callables. Each is an async ``(prompt, system_prompt=…,
         **kwargs) -> str`` with the same contract as ``llm_model_func``. Unset roles
-        keep falling back to ``llm_model_func``, so this is fully backward‑compatible."""
+        keep falling back to ``llm_model_func``, so this is fully backward‑compatible.
+
+        ``keyword`` binds the query-stage keyword-extraction LLM independently of
+        ``query`` (which drives synthesis/CGR3/community). This is the dedicated
+        KEYWORD role — e.g. pin keyword extraction to OpenAI while extraction runs on
+        a cheaper provider. Injected onto the query param by ``_apply_keyword_role``."""
         if extract is not None:
             self._llm_role_extract = extract
         if query is not None:
             self._llm_role_query = query
+        if keyword is not None:
+            self._llm_role_keyword = keyword
 
     @property
     def _llm_extract(self):
@@ -726,6 +734,20 @@ class ContextGraph(LightRAG):
         """LLM for reasoning / synthesis (strong role): CGR3, community & decision
         synthesis, blended query."""
         return getattr(self, "_llm_role_query", None) or self.llm_model_func
+
+    @property
+    def _llm_keyword(self):
+        """LLM for query-stage keyword extraction (hl/ll keywords before retrieval).
+        Falls back to ``llm_model_func`` when the role is unset."""
+        return getattr(self, "_llm_role_keyword", None) or self.llm_model_func
+
+    def _apply_keyword_role(self, param) -> None:
+        """Inject the KEYWORD role onto a query param, in place. No-op when the role
+        is unset (keyword extraction keeps its existing selection: ``param.model_func``
+        or the global func) or when the caller already set ``keyword_model_func``."""
+        role = getattr(self, "_llm_role_keyword", None)
+        if role is not None and getattr(param, "keyword_model_func", None) is None:
+            param.keyword_model_func = role
 
     async def initialize_storages(self) -> None:
         await super().initialize_storages()
@@ -1901,6 +1923,17 @@ class ContextGraph(LightRAG):
     _BLEND_MAX_SCAN_TOKENS = 40  # cap graph probes per query (C6)
     _BLEND_CHAR_BUDGET = 4000  # ~1k tokens ceiling on injected text (C5)
 
+    async def aquery_data(self, query, param=None):
+        """Retrieval-only query (no synthesis). Overridden solely to inject the
+        KEYWORD role onto the param so query-stage keyword extraction uses the
+        configured keyword LLM; retrieval logic is otherwise the base's."""
+        from lightrag.base import QueryParam
+
+        if param is None:
+            param = QueryParam()
+        self._apply_keyword_role(param)
+        return await super().aquery_data(query, param)
+
     async def aquery_llm(self, query, param=None, system_prompt=None):
         """Blend recorded decisions into the normal retrieval context.
 
@@ -1926,6 +1959,7 @@ class ContextGraph(LightRAG):
 
         if param is None:
             param = QueryParam()
+        self._apply_keyword_role(param)
 
         precedents: list[dict] = []
         named_nodes: list[dict] = []
