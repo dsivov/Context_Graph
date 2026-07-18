@@ -357,6 +357,15 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
       <b>cron scheduler</b> (<code>--script</code> + <code>--deliver</code>). So v1 is <b>pull-only</b> (a
       scheduled watcher diffs the CG API); true push would be a CG-side build, deferred to the team phase.</span></div>
   </div>
+  <div class="callout key">
+    <div class="clabel">Not to be misread — writes are always on</div>
+    <b>Pull-only (D5) is about <i>awareness</i>, not <i>writes</i>.</b> Two separate flows: (1) every agent
+    <b>writes into CG continuously</b> during development — recording decisions, advancing tasks, ingesting
+    commits and reviews (the whole point; the graph gets richer with every dev action). (2) How a
+    <i>teammate's</i> agent learns of those writes is the pull/push question — and there we chose pull (query
+    fresh) over push (get pinged). The graph is <b>always</b> being updated; pull-only only means peers
+    discover each other's updates by querying rather than by notification.
+  </div>
   <div class="callout caveat">
     <div class="clabel">Scoping honesty</div>
     Gaps 1–3 are concrete and bounded. Gap 4 (sync) is the deep, open one — and it's where the interesting
