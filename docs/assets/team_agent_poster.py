@@ -101,18 +101,36 @@ def grad_text(cx, top_y, text, font, c1, c2):
         ga[:, :, i] = (c1[i] + (c2[i] - c1[i]) * tvec).astype(np.uint8)
     img.paste(Image.fromarray(ga, "RGB"), (int(cx * S - w / 2 - pad), int(top_y * S - pad)), mask)
 
+def grad_text_left(left_x, top_y, text, font, c1, c2):
+    w, h, b = measure(text, font)
+    pad = 12 * S
+    mask = Image.new("L", (w + 2 * pad, h + 2 * pad), 0)
+    ImageDraw.Draw(mask).text((pad - b[0], pad - b[1]), text, font=font, fill=255)
+    ga = np.zeros((h + 2 * pad, w + 2 * pad, 3), dtype=np.uint8)
+    tvec = np.linspace(0, 1, w + 2 * pad)
+    for i in range(3):
+        ga[:, :, i] = (c1[i] + (c2[i] - c1[i]) * tvec).astype(np.uint8)
+    img.paste(Image.fromarray(ga, "RGB"), (int(left_x * S - pad), int(top_y * S - pad)), mask)
+
 
 CX = 540
 
 # eyebrow
 spaced(CX, 96, "A HERMES EXTENSION   ·   POWERED BY CONTEXT GRAPH", mono(14), INK_FAINT, 4)
 
-# title
-grad_text(CX, 148, "ONE GRAPH,", mont("xbold", 88), CYAN_HI, CYAN_HI2)
-grad_text(CX, 262, "ONE TEAM.", mont("xbold", 88), CYAN_HI2, BLUE)
+# wordmark — cohermes ("co" teal, "hermes" cyan→blue gradient)
+wf = mont("xbold", 112)
+w_co = measure("co", wf)[0] / S
+w_he = measure("hermes", wf)[0] / S
+x0 = CX - (w_co + w_he) / 2
+ltext(x0, 152, "co", wf, TEAL)
+grad_text_left(x0 + w_co, 152, "hermes", wf, CYAN_HI, BLUE)
+
+# tagline
+ctext(CX, 328, "One graph. One team.", mont("bold", 38), INK)
 
 # subtitle
-ctext(CX, 405, "Many developers. Many agents. One shared brain.", mont("reg", 26), INK_SOFT)
+ctext(CX, 392, "Many developers. Many agents. One shared brain.", mont("reg", 25), INK_SOFT)
 
 # ---- visual: agents -> hub -> artifacts ----
 chip_y0, chip_y1 = 500, 578
@@ -162,8 +180,8 @@ for p, w in zip(pills, ws):
     x += w + gap
 
 # ---- footer ----
-ctext(CX, 1322, "An extension of Hermes  ·  built on Context Graph  ·  the (h, r, t, rc) knowledge quadruple",
-      mono(12.5), INK_FAINT)
+ctext(CX, 1322, "cohermes  ·  an extension of Hermes  ·  built on Context Graph  ·  the (h, r, t, rc) quadruple",
+      mono(12), INK_FAINT)
 
 final = img.resize((1080, 1350), Image.LANCZOS)
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
