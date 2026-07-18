@@ -139,7 +139,8 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     <li><a href="#loop">The local agent loop</a></li>
     <li><a href="#auth">Subscription auth (hard constraint)</a></li>
     <li><a href="#expert">The constrained-expert tie-in</a></li>
-    <li><a href="#questions">Open questions — round 1</a></li>
+    <li><a href="#questions">Round 1 — settled</a></li>
+    <li><a href="#plan">Round 2 — build plan</a></li>
     <li><a href="#log">Decision log</a></li>
   </ol>
 </nav>
@@ -531,6 +532,97 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
   </div>
 </section>
 
+<!-- plan -->
+<section id="plan">
+  <div class="kicker">Round 2 · the spec</div>
+  <h2>Build plan</h2>
+  <p class="lead-p">Translating the decisions into a sequenced plan. Everything is <b>solo</b> (D1),
+  <b>reuse-first</b> (extend hermes + CG before building), and aimed at one target: a demo that <b>proves the
+  concept</b>.</p>
+
+  <h3>Definition of done — what "concept proven" means</h3>
+  <div class="callout key">
+    <div class="clabel">The demo we're building toward</div>
+    A single developer's forked-hermes agent, over a work session, produces a CG graph where you can
+    <b>trace the whole chain</b> — a <b>Decision</b> motivates a <b>Task</b>, the Task is
+    <b>implemented by Commits</b>, the Commits are <b>reviewed in</b> a code Review, the Review
+    <b>enacts</b> a Decision — and then a <i>later</i> agent session <b>queries that chain and reuses it</b>
+    instead of re-deriving it. Non-negotiables it must show: it ran on <b>subscription auth</b> (A2), it
+    <b>wrote to CG continuously</b> during the work (not just at the end), and it <b>pulled fresh context</b>
+    at task start (D5). That single traceable-and-reused chain is the concept.
+  </div>
+
+  <h3>The shape to build first — the 4-artifact ontology (D4)</h3>
+  <p>Per D4, the ontology comes first: it's what makes four artifact types into one connected brain rather
+  than four silos. Reuse-first: <b>extend the existing agentic-dev preset</b> (ontology/rules/lifecycle
+  already shipped, per <a href="AGENTIC_DEV_WALKTHROUGH.html">AGENTIC_DEV_WALKTHROUGH.html</a>) rather than
+  author fresh.</p>
+  <figure><div class="fig">
+  <svg viewBox="0 0 820 240" role="img" aria-label="The four-artifact ontology and its cross-links">
+    <defs><marker id="ahp" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22c3d6"/></marker></defs>
+    <style>.ob{fill:#1b1f2a;stroke:#22c3d6;rx:12}.ot{fill:#e7ebf3;font:700 13px "Segoe UI"}.op{fill:#aab3c5;font:10.5px "SF Mono",monospace}.oe{stroke:#22c3d6;stroke-width:1.5;fill:none;marker-end:url(#ahp);opacity:.85}.oel{fill:#8fe6f2;font:italic 10.5px "SF Mono",monospace}</style>
+    <rect class="ob" x="40" y="30" width="150" height="58"/><text class="ot" x="56" y="54">Decision</text><text class="op" x="56" y="72">why · developer · rc</text>
+    <rect class="ob" x="330" y="30" width="150" height="58"/><text class="ot" x="346" y="54">Task</text><text class="op" x="346" y="72">state · assignee</text>
+    <rect class="ob" x="620" y="30" width="150" height="58"/><text class="ot" x="636" y="54">Commit</text><text class="op" x="636" y="72">sha · author</text>
+    <rect class="ob" x="330" y="150" width="150" height="58"/><text class="ot" x="346" y="174">Review</text><text class="op" x="346" y="192">verdict · reviewer</text>
+
+    <line class="oe" x1="190" y1="55" x2="328" y2="55"/><text class="oel" x="210" y="46">motivates</text>
+    <line class="oe" x1="480" y1="55" x2="618" y2="55"/><text class="oel" x="500" y="46">implemented_by</text>
+    <line class="oe" x1="695" y1="88" x2="470" y2="150"/><text class="oel" x="560" y="130">reviewed_in</text>
+    <line class="oe" x1="360" y1="150" x2="150" y2="88"/><text class="oel" x="200" y="130">enacts</text>
+  </svg>
+  </div><figcaption>Four object types, four cross-links — the chain the demo traces. Decision carries the
+  <code>developer</code> attribution stamp (D2) and CG's <code>RelationContext</code> (the "why"). The links
+  are what turn commits/tasks/reviews from records into a reasoned history.</figcaption></figure>
+
+  <h3>The milestones</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>Milestone</th><th>What</th><th>Reuse vs build</th></tr></thead>
+    <tbody>
+      <tr><td>M1</td><td><b>Shared ontology</b></td><td>Extend the agentic-dev preset with Decision/Task/Commit/Review + the 4 cross-link edges + Task lifecycle FSM. Install into a dedicated CG workspace.</td><td><span class="pill b">reuse</span> CG ontology/lifecycle services + existing preset</td></tr>
+      <tr><td>M2</td><td><b>Solo loop preset</b></td><td>CG-native preset (D3): generated <code>CLAUDE.md</code> + slash-commands for orient → query-before-build → work → record-why. Plus the A2 auth preflight guard.</td><td><span class="pill b">reuse</span> CG bootstrap/playbook/manifest + MCP</td></tr>
+      <tr><td>M3</td><td><b>Fill the four + cross-link</b></td><td>Decisions (record-why, built) · Commits (git backfill, built) · Tasks (lifecycle + assignment stamp) · <b>Reviews (net-new PR connector — the hard piece)</b>. Ensure the chain forms.</td><td><span class="pill c">mixed</span> — 2 reuse, tasks partial, reviews build</td></tr>
+      <tr><td>M4</td><td><b>Fork + pull-sync</b></td><td>Fork hermes; wire the preset/loop in (CG as its memory); auth guard; the <code>watch-context-graph.py</code> cron watcher (D5). Then the demo.</td><td><span class="pill c">mixed</span> — reuse hermes runtime + cron; build the CG memory adapter + watcher</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout info">
+    <div class="clabel">Note — D3 sequences the fork late</div>
+    D3 says CG-native preset first, Hermes wrapper as a follow-on. So M1–M3 prove the loop and the four
+    artifacts with <b>plain Claude Code</b> against CG; the hermes fork (M4) then wraps a proven loop rather
+    than us debugging fork + loop + artifacts at once.
+  </div>
+
+  <h3>Round-2 questions — the plan's shape</h3>
+  <p>Same method; each checks reuse-first, has a recommendation, and lands in the log.</p>
+  <div class="callout q">
+    <div class="clabel"><span class="qn">Q6</span> Build shape — walking skeleton or foundations-first?</div>
+    Prove the whole loop end-to-end through <b>one</b> artifact first (decisions — already built), then widen
+    to the other three (walking skeleton)? Or build M1→M4 in order (foundations-first)? Either way D4's demo
+    still needs all four. <b>My rec:</b> walking skeleton — M1 ontology, then a thin M2+decisions slice that
+    proves orient→query→record end-to-end, then widen. Earliest real signal.
+  </div>
+  <div class="callout q">
+    <div class="clabel"><span class="qn">Q7</span> Where do we develop — reuse the live CG, or a fresh instance?</div>
+    Reuse the running CG server (<code>10.0.0.80:9621</code>) with a <b>dedicated workspace</b> (as the RAG
+    lab does), or stand up a fresh CG instance for the framework? <b>My rec:</b> dedicated workspace on the
+    live server — reuse-first, zero setup, isolated.
+  </div>
+  <div class="callout q">
+    <div class="clabel"><span class="qn">Q8</span> The review connector — which source first?</div>
+    The one net-new build (M3). Ingest reviews from <b>GitHub/GitLab PR APIs</b> (rich threads, platform
+    lock-in), from <b>local git</b> (notes / <code>git</code> CLI, host-agnostic, thinner), or a <b>generic
+    adapter</b> abstracting both? <b>My rec:</b> start with whichever host the team actually uses (likely
+    GitHub) for a real slice, structure it behind a thin adapter so a second host is additive.
+  </div>
+  <div class="callout q">
+    <div class="clabel"><span class="qn">Q9</span> What proves it — the acceptance bar?</div>
+    Is "concept proven" the <b>traceable + reused chain</b> above (a demo you watch), or do we want a
+    <b>measured</b> bar too (e.g. "second session answered from CG without re-deriving, N× fewer tokens")?
+    <b>My rec:</b> the traceable-chain demo as the primary bar, plus one lightweight before/after measurement
+    (did the second agent reuse vs re-derive?) — cheap, and it echoes the RAG project's measure-it habit.
+  </div>
+</section>
+
 <!-- log -->
 <section id="log">
   <div class="kicker">The record</div>
@@ -549,6 +641,10 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
       <tr><td>D3</td><td>2026-07-18</td><td>Loop form (Q3)</td><td><b>CG-native preset first</b> (bootstrap-generated <code>CLAUDE.md</code> + slash-commands, works with any Claude Code, reuses built bootstrap/playbook/manifest); thin Hermes <code>SKILL.md</code> wrapper as a follow-on for headless/CI. Single source of truth for the loop.</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D4</td><td>2026-07-18</td><td>Artifacts (Q4)</td><td><b>Full build of all four — decisions, code reviews, tasks, commits — cross-linked, then demo.</b> The concept IS the chain (task→commit→review→decision), so a thin slice won't prove it. Define the shared ontology (the four object types + edges) first. Applies to the artifact surface; still on a <b>solo</b> basis (reconciles with D1). Front-loads the PR/review connector + task board.</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D5</td><td>2026-07-18</td><td>Sync (Q5)</td><td><b>Pull-only v1, reuse hermes cron scheduler.</b> Confirmed by hermes source audit: hermes has <b>no</b> native agent↔agent bus / shared memory / subscribable events — its one reusable sync primitive is cron + <code>--script</code> + <code>--deliver</code>. Recipe: a scheduled <code>watch-context-graph.py</code> diffs the CG API against a cursor and delivers to a channel (mirrors hermes <code>news-digest</code>/<code>kanban_watchers</code>). Push = <b>build</b> (CG-side outbound event), not reuse — deferred.</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>Q6</td><td>—</td><td>Build shape</td><td>Walking skeleton (one artifact end-to-end first) vs foundations-first (M1→M4)</td><td><span class="pill mut">open</span></td></tr>
+      <tr><td>Q7</td><td>—</td><td>Environment</td><td>Reuse live CG (dedicated workspace) vs fresh instance</td><td><span class="pill mut">open</span></td></tr>
+      <tr><td>Q8</td><td>—</td><td>Review connector</td><td>GitHub/GitLab API vs local git vs generic adapter</td><td><span class="pill mut">open</span></td></tr>
+      <tr><td>Q9</td><td>—</td><td>Acceptance</td><td>Traceable-chain demo only vs demo + a lightweight measurement</td><td><span class="pill mut">open</span></td></tr>
     </tbody>
   </table></div>
 </section>
