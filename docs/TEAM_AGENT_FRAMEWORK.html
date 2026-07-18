@@ -122,7 +122,8 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     <div class="byline">Started 2026-07-18 · maintained as we discuss · grounded in the current code (file:line cited) · framework = a <b>fork of hermes-agent</b>; CG = shared backend, extended as needed</div>
     <div class="status-row">
       <span class="st"><span class="dot done"></span> Round 1 · vision &amp; scope — <b>&nbsp;decided (A1–A2, D1–D5)</b></span>
-      <span class="st"><span class="dot live"></span> Round 2 · build plan (solo loop + 4-artifact ontology) — <b>&nbsp;next</b></span>
+      <span class="st"><span class="dot done"></span> Round 2 · build plan — <b>&nbsp;decided (D6–D9)</b></span>
+      <span class="st"><span class="dot live"></span> Round 3 · build M1 (ontology decision-slice) — <b>&nbsp;ready</b></span>
     </div>
   </div>
 </header>
@@ -641,10 +642,10 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
       <tr><td>D3</td><td>2026-07-18</td><td>Loop form (Q3)</td><td><b>CG-native preset first</b> (bootstrap-generated <code>CLAUDE.md</code> + slash-commands, works with any Claude Code, reuses built bootstrap/playbook/manifest); thin Hermes <code>SKILL.md</code> wrapper as a follow-on for headless/CI. Single source of truth for the loop.</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D4</td><td>2026-07-18</td><td>Artifacts (Q4)</td><td><b>Full build of all four — decisions, code reviews, tasks, commits — cross-linked, then demo.</b> The concept IS the chain (task→commit→review→decision), so a thin slice won't prove it. Define the shared ontology (the four object types + edges) first. Applies to the artifact surface; still on a <b>solo</b> basis (reconciles with D1). Front-loads the PR/review connector + task board.</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D5</td><td>2026-07-18</td><td>Sync (Q5)</td><td><b>Pull-only v1, reuse hermes cron scheduler.</b> Confirmed by hermes source audit: hermes has <b>no</b> native agent↔agent bus / shared memory / subscribable events — its one reusable sync primitive is cron + <code>--script</code> + <code>--deliver</code>. Recipe: a scheduled <code>watch-context-graph.py</code> diffs the CG API against a cursor and delivers to a channel (mirrors hermes <code>news-digest</code>/<code>kanban_watchers</code>). Push = <b>build</b> (CG-side outbound event), not reuse — deferred.</td><td><span class="pill win">decided</span></td></tr>
-      <tr><td>Q6</td><td>—</td><td>Build shape</td><td>Walking skeleton (one artifact end-to-end first) vs foundations-first (M1→M4)</td><td><span class="pill mut">open</span></td></tr>
-      <tr><td>Q7</td><td>—</td><td>Environment</td><td>Reuse live CG (dedicated workspace) vs fresh instance</td><td><span class="pill mut">open</span></td></tr>
-      <tr><td>Q8</td><td>—</td><td>Review connector</td><td>GitHub/GitLab API vs local git vs generic adapter</td><td><span class="pill mut">open</span></td></tr>
-      <tr><td>Q9</td><td>—</td><td>Acceptance</td><td>Traceable-chain demo only vs demo + a lightweight measurement</td><td><span class="pill mut">open</span></td></tr>
+      <tr><td>D6</td><td>2026-07-18</td><td>Build shape (Q6)</td><td><b>Walking skeleton.</b> Thin end-to-end path through decisions first (ontology decision-slice + minimal loop that records+queries one), then widen to commits/tasks/reviews. Tests integration seams earliest; the hard review connector plugs into a proven chain. D4's demo still needs all four.</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D7</td><td>2026-07-18</td><td>Environment (Q7)</td><td><b>Live CG + dedicated workspace</b> <code>team_agent_lab</code> on <code>10.0.0.80:9621</code>. Zero setup, per-workspace isolation, tests the real HTTP/MCP path (same pattern as the RAG lab). Private instance only later if a CG-side code change needs it.</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D8</td><td>2026-07-18</td><td>Review connector (Q8)</td><td><b>GitHub PR API first</b>, behind a thin <code>Review</code> boundary. Richest "why/why-not" (the discussion) = a real concept proof. Defer any generic multi-host adapter until a 2nd source exists (abstract from two concretes, not zero).</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D9</td><td>2026-07-18</td><td>Acceptance (Q9)</td><td><b>Traceable-chain demo + one lightweight reuse measurement.</b> Same task in a fresh vs populated workspace → turns/tokens to answer + did it cite the recorded decision. Makes "reused not re-derived" objective (the RAG project's measure-it habit) and catches false-looking reuse.</td><td><span class="pill win">decided</span></td></tr>
     </tbody>
   </table></div>
 </section>
