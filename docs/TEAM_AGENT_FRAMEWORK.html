@@ -633,8 +633,8 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
   server in the isolated <code>team_agent_lab</code> workspace (D7).</p>
   <div class="status-row">
     <span class="st"><span class="dot done"></span> M1 · shared ontology — <b>&nbsp;done</b></span>
-    <span class="st"><span class="dot"></span> M2 · solo loop preset</span>
-    <span class="st"><span class="dot"></span> M3 · fill four + review connector</span>
+    <span class="st"><span class="dot done"></span> M2 · solo loop preset — <b>&nbsp;done</b></span>
+    <span class="st"><span class="dot live"></span> M3 · fill four + review connector</span>
     <span class="st"><span class="dot"></span> M4 · fork + pull-watcher</span>
   </div>
 
@@ -660,6 +660,36 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     to CG <b>HTTP-only</b> (no <code>context_graph</code> import): a developer running cohermes won't have CG
     installed locally, so the extension is a pure client. <code>python -m cg.ontology</code> installs the
     shared ontology idempotently.
+  </div>
+
+  <h3>M2 — the CG-native loop preset + auth guard <span class="pill win">done</span></h3>
+  <p>Reuse-first paid off: CG's <code>GET /workspace/bootstrap</code> already returns a ready
+  <code>.mcp.json</code>, a playbook, and next-steps that literally describe our loop. So M2
+  (<code>cohermes/cg/preset.py</code>) <b>reuses</b> it — <code>python -m cg.preset ./myrepo</code>
+  materializes a project wired to the shared graph:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>File written</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>.mcp.json</code></td><td>Claude Code → the CG MCP server, scoped to the workspace (from bootstrap)</td></tr>
+      <tr><td><code>CLAUDE.md</code></td><td>the loop, encoded: orient → query-before-build → work → record-the-why + the subscription-auth rule</td></tr>
+      <tr><td><code>cg/PLAYBOOK.md</code></td><td>the live workspace playbook (object types, guardrails)</td></tr>
+      <tr><td><code>.claude/commands/cg-{orient,precedent,decide}.md</code></td><td>slash-commands for the loop's steps</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout ok">
+    <div class="clabel">Also shipped — the A2 auth guard</div>
+    <code>cohermes/cg/auth.py</code>: scrubs the billing env vars (<code>ANTHROPIC_API_KEY</code>,
+    cloud-provider vars) from the spawn environment and asserts subscription auth via
+    <code>claude auth status</code>, refusing to run on metered API billing. Conservative: anything not
+    clearly "subscription" is a REVIEW, an explicit API key is a hard stop. Works with any Claude Code
+    (Hermes-driven or not), so the loop is proven before the fork's runtime is wired in (M4).
+  </div>
+  <div class="callout caveat">
+    <div class="clabel">Design question for M3 — Decision: node or trace?</div>
+    Our ontology models <b>Decision as an object node</b> (so it cross-links: <code>Decision→Task→…</code>).
+    CG's built <code>record_decision</code> / precedent search work on <b>edge-based decision traces</b>
+    (<code>rc</code>). M3's first task is reconciling these — likely a Decision node that <i>also</i> carries a
+    trace, so we keep both cross-linking and precedent search. This is the walking skeleton's decision-slice.
   </div>
 </section>
 
