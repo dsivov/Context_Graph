@@ -121,8 +121,8 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     fleet reasons over one living project instead of N amnesiac silos.</p>
     <div class="byline">Started 2026-07-18 · maintained as we discuss · grounded in the current code (file:line cited) · framework = a <b>fork of hermes-agent</b>; CG = shared backend, extended as needed</div>
     <div class="status-row">
-      <span class="st"><span class="dot live"></span> Round 1 · vision &amp; scope — <b>&nbsp;open for discussion</b></span>
-      <span class="st"><span class="dot"></span> Build — <b>&nbsp;nothing yet</b></span>
+      <span class="st"><span class="dot done"></span> Round 1 · vision &amp; scope — <b>&nbsp;decided (A1–A2, D1–D5)</b></span>
+      <span class="st"><span class="dot live"></span> Round 2 · build plan (solo loop + 4-artifact ontology) — <b>&nbsp;next</b></span>
     </div>
   </div>
 </header>
@@ -350,10 +350,12 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     <div class="card"><b>3 · Task assignment &amp; board</b> <span class="pill b">partial</span><br>
       <span class="small">Lifecycle FSMs + actions can model task <i>state</i>, but there's no notion of
       assigning a task to an <i>individual</i> or a board view across the fleet. Builds on gap 1 (identity).</span></div>
-    <div class="card"><b>4 · Cross-agent sync</b> <span class="pill c">the hard one</span><br>
+    <div class="card"><b>4 · Cross-agent sync</b> <span class="pill c">deferred (D5)</span><br>
       <span class="small">When agent A records a decision, should agent B <i>learn</i> of it proactively, or
-      just discover it next time it queries? AGENTIC_PROJECT_GRAPH calls this the "sync bus"; an in-process
-      <code>EventBus</code> exists (<code>events/service.py</code>) but no agent-to-agent push runtime.</span></div>
+      just discover it next time it queries? <b>Hermes source audit settled this:</b> hermes has no native
+      agent↔agent bus / shared memory / event subscription — its one reusable sync primitive is the
+      <b>cron scheduler</b> (<code>--script</code> + <code>--deliver</code>). So v1 is <b>pull-only</b> (a
+      scheduled watcher diffs the CG API); true push would be a CG-side build, deferred to the team phase.</span></div>
   </div>
   <div class="callout caveat">
     <div class="clabel">Scoping honesty</div>
@@ -479,9 +481,10 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
 
 <!-- 8 -->
 <section id="questions">
-  <div class="kicker">Your call</div>
-  <h2>Open questions — round 1</h2>
-  <p>These set the direction. Recommendation attached to each; answers land in the log.</p>
+  <div class="kicker">The record · round 1</div>
+  <h2>Round-1 questions <span class="pill win">settled</span></h2>
+  <p>All five are decided (D1–D5 in the log below), each after checking what hermes provides natively first
+  (the reuse-first principle). Kept here for the record.</p>
   <div class="callout q">
     <div class="clabel"><span class="qn">Q1</span> MVP boundary — solo-excellent first, or team-first?</div>
     Polish the <b>single-developer</b> Hermes+CG loop until it's genuinely great (fast path to something
@@ -529,13 +532,14 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     <thead><tr><th>#</th><th>Date</th><th>Topic</th><th>Decision</th><th>Status</th></tr></thead>
     <tbody>
       <tr><td>—</td><td>2026-07-18</td><td>Process</td><td>Discuss in this doc, decide before building, ground every claim in code; build on existing agentic/platform docs, don't duplicate</td><td><span class="pill win">agreed</span></td></tr>
+      <tr><td>—</td><td>2026-07-18</td><td>Process · <b>reuse-first</b></td><td><b>For every design question, first understand what hermes provides natively and propose a reuse option</b> before deciding to build new. We are forking hermes (A1) — its runtime, memory, messaging, teams, scheduler are ours to reuse. Build only what hermes + CG genuinely lack.</td><td><span class="pill win">agreed</span></td></tr>
       <tr><td>A1</td><td>2026-07-18</td><td>Architecture</td><td><b>Framework = a fork of hermes-agent</b> (MIT), not a CG branch. CG stays the shared backend (MCP+REST), extended with new modules only where a real gap is found. hermes already has per-user memory → our contribution is <b>swapping it for the team-shared CG</b>. This design doc lives in CG/docs.</td><td><span class="pill win">agreed</span></td></tr>
       <tr><td>A2</td><td>2026-07-18</td><td>Constraint</td><td><b>Subscription auth only — never metered API billing.</b> Every agent must run Claude Code on a Pro/Max/Team subscription (browser OAuth), in both tmux and <code>claude -p</code> modes. The fork must: never set <code>ANTHROPIC_API_KEY</code> in the spawn env, never use hermes <code>--bare</code> mode, and <b>assert auth mode on startup</b> (<code>claude auth status</code>) — fail fast rather than spend tokens.</td><td><span class="pill win">agreed</span></td></tr>
-      <tr><td>Q1</td><td>—</td><td>Scope</td><td>Solo-excellent first vs team-first</td><td><span class="pill mut">open</span></td></tr>
-      <tr><td>Q2</td><td>—</td><td>Identity</td><td>Per-developer now vs roles for v1</td><td><span class="pill mut">open</span></td></tr>
-      <tr><td>Q3</td><td>—</td><td>Form</td><td>Hermes SKILL.md vs CG-native preset</td><td><span class="pill mut">open</span></td></tr>
-      <tr><td>Q4</td><td>—</td><td>Artifact</td><td>First shared type: decisions / reviews / tasks</td><td><span class="pill mut">open</span></td></tr>
-      <tr><td>Q5</td><td>—</td><td>Sync</td><td>Pull-only v1 vs push "sync bus"</td><td><span class="pill mut">open</span></td></tr>
+      <tr><td>D1</td><td>2026-07-18</td><td>Scope (Q1)</td><td><b>Solo-excellent first.</b> Nail one developer's Hermes+CG loop before the team dimension — it's the foundation every fleet feature stands on, demoable in days, and lets us measure one subscription seat's real throughput before scaling.</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D2</td><td>2026-07-18</td><td>Identity (Q2)</td><td><b>Roles + lightweight attribution stamp.</b> Keep CG's role-based authorization; stamp a <code>developer</code> field on every decision/task from day 1 (attribution, un-backfillable later). Defer full per-user auth (authenticated MCP principal) to the team phase.</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D3</td><td>2026-07-18</td><td>Loop form (Q3)</td><td><b>CG-native preset first</b> (bootstrap-generated <code>CLAUDE.md</code> + slash-commands, works with any Claude Code, reuses built bootstrap/playbook/manifest); thin Hermes <code>SKILL.md</code> wrapper as a follow-on for headless/CI. Single source of truth for the loop.</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D4</td><td>2026-07-18</td><td>Artifacts (Q4)</td><td><b>Full build of all four — decisions, code reviews, tasks, commits — cross-linked, then demo.</b> The concept IS the chain (task→commit→review→decision), so a thin slice won't prove it. Define the shared ontology (the four object types + edges) first. Applies to the artifact surface; still on a <b>solo</b> basis (reconciles with D1). Front-loads the PR/review connector + task board.</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D5</td><td>2026-07-18</td><td>Sync (Q5)</td><td><b>Pull-only v1, reuse hermes cron scheduler.</b> Confirmed by hermes source audit: hermes has <b>no</b> native agent↔agent bus / shared memory / subscribable events — its one reusable sync primitive is cron + <code>--script</code> + <code>--deliver</code>. Recipe: a scheduled <code>watch-context-graph.py</code> diffs the CG API against a cursor and delivers to a channel (mirrors hermes <code>news-digest</code>/<code>kanban_watchers</code>). Push = <b>build</b> (CG-side outbound event), not reuse — deferred.</td><td><span class="pill win">decided</span></td></tr>
     </tbody>
   </table></div>
 </section>
