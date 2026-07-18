@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team Agent Framework — Hermes × Context Graph</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#22c3d6; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(34,195,214,.10), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.08), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none} a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}
+svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(34,195,214,.07),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(32px,5.5vw,54px);line-height:1.04;margin:.3em 0 .25em;
+  background:linear-gradient(92deg,#bdf0ea,#8fb4d9 55%,#a7ecf5);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+nav.toc a.active{background:linear-gradient(90deg,rgba(34,195,214,.18),transparent);color:#fff;border-left:2px solid var(--ctrl)}
+main{min-width:0;max-width:760px}
+article section{margin:0 0 52px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ctrl);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}
+h4{font-size:15px;margin:16px 0 4px;color:var(--ink-soft)}
+p{margin:.7em 0}
+.lead-p{font-size:19px;color:var(--ink)}
+.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--ctrl);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.stat .v{font-size:30px;font-weight:800;line-height:1;background:linear-gradient(92deg,#bdf0ea,#a7ecf5);-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat .l{font-size:13.5px;color:var(--ink-soft);margin-top:6px}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)} .callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)} .callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)} .callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(34,195,214,.55);background:rgba(34,195,214,.10)} .callout.key .clabel{color:#8fe6f2}
+.callout.q{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.09)} .callout.q .clabel{color:#9cc0ff}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:540px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(34,195,214,.16);color:#8fe6f2;border-color:rgba(34,195,214,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+.pill.mut{color:var(--ink-faint)}
+.opt{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0;position:relative}
+.opt::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;border-radius:12px 0 0 12px;background:var(--line)}
+.opt.rec::before{background:var(--ok)}
+.opt h4{margin:0 0 4px;color:var(--ink);font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.opt .meta{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 0;font-size:12.5px;color:var(--ink-faint)}
+.opt .meta b{color:var(--ink-soft);font-weight:600}
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{color:#d6deec}
+.kw{color:#7aa2f7}.str{color:#9ece6a}.num{color:#ff9e64}.cm{color:#5c6685;font-style:italic}.fn{color:#7dcfff}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);
+  border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fe6f2}
+figure{margin:20px 0}
+.fig{background:#12151d;border:1px solid var(--line-soft);border-radius:12px;padding:16px}
+figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
+.status-row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 0}
+.st{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--ink-soft)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--ink-faint)}
+.dot.live{background:var(--ctrl);box-shadow:0 0 0 3px rgba(34,195,214,.18)}
+.dot.done{background:var(--ok)}
+.qn{font-family:var(--mono);color:#9cc0ff;font-weight:700;margin-right:6px}
+.learn{border:1px dashed rgba(34,195,214,.45);background:rgba(34,195,214,.05);border-radius:12px;padding:12px 16px;margin:14px 0}
+.learn .clabel{font-weight:700;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:#8fe6f2;margin-bottom:4px}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Context Graph · team-agent framework · design discussion</div>
+    <h1>One Graph, Many Agents</h1>
+    <p class="lede">A Hermes-style autonomous agent for every developer on the team — and a
+    <b>shared Context Graph</b> as their common brain. Each engineer's Claude Code agent pulls project
+    context <i>from</i> the graph and pushes decisions, reviews and tasks <i>back into</i> it, so the whole
+    fleet reasons over one living project instead of N amnesiac silos.</p>
+    <div class="byline">Started 2026-07-18 · maintained as we discuss · grounded in the current code (file:line cited) · framework = a <b>fork of hermes-agent</b>; CG = shared backend, extended as needed</div>
+    <div class="status-row">
+      <span class="st"><span class="dot live"></span> Round 1 · vision &amp; scope — <b>&nbsp;open for discussion</b></span>
+      <span class="st"><span class="dot"></span> Build — <b>&nbsp;nothing yet</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">Contents</div>
+  <ol>
+    <li><a href="#scope">Scope &amp; method</a></li>
+    <li><a href="#gap">The gap Hermes leaves</a></li>
+    <li><a href="#vision">The fleet model</a></li>
+    <li><a href="#have">What CG already gives us</a></li>
+    <li><a href="#gaps">The gaps to build</a></li>
+    <li><a href="#loop">The local agent loop</a></li>
+    <li><a href="#auth">Subscription auth (hard constraint)</a></li>
+    <li><a href="#expert">The constrained-expert tie-in</a></li>
+    <li><a href="#questions">Open questions — round 1</a></li>
+    <li><a href="#log">Decision log</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="scope">
+  <div class="kicker">The plan</div>
+  <h2>Scope &amp; method</h2>
+  <p class="lead-p">The idea in one sentence: <b>take a Hermes-style autonomous Claude Code agent, give one to
+  every developer, and wire them all to a shared Context Graph so the team's knowledge — code, decisions,
+  reviews, tasks, architecture — lives in one place every agent can read and write.</b></p>
+  <p>This is not a green field. Context Graph already ships most of the substrate, and several of your docs
+  already circle this idea — <a href="AGENTIC_DEVELOPMENT.html">AGENTIC_DEVELOPMENT.html</a> ("AI agent
+  development, remembered"), <a href="AGENTIC_PROJECT_GRAPH.html">AGENTIC_PROJECT_GRAPH.html</a> ("CG as the
+  methodology actor", which already sketches a <i>sync bus</i> and roles-as-identities), and the platform
+  work (<a href="PLATFORM_ARCHITECTURE.html">PLATFORM_ARCHITECTURE.html</a>,
+  <a href="GOVERNED_WORKFLOW_PLATFORM.html">GOVERNED_WORKFLOW_PLATFORM.html</a>). So this doc's job is to
+  <b>name what is genuinely new</b> — the <i>Hermes local-agent loop</i> and the <i>team fabric</i> — and to
+  build on those docs, not re-propose them.</p>
+  <div class="grid g3">
+    <div class="stat"><div class="v">1</div><div class="l">A <b>Hermes local agent</b> loop that every dev runs, wired to CG over MCP</div></div>
+    <div class="stat"><div class="v">2</div><div class="l">The <b>team fabric</b> — many devs, many agents, one shared graph</div></div>
+    <div class="stat"><div class="v">3</div><div class="l">Close the real <b>gaps</b> — identity, review ingest, tasks, sync</div></div>
+  </div>
+  <div class="callout key">
+    <div class="clabel">How we'll work</div>
+    Same method as the security log: one topic per round, each grounded in code (file:line), options with
+    honest trade-offs and a recommendation, and a decision log that gates any building. Nothing gets built
+    until a row lands in the <a href="#log">log</a>.
+  </div>
+
+  <h3>Repo topology — where the code lives</h3>
+  <p>A deliberate split, decided up front (<a href="#log">A1</a>): the framework is <b>not</b> built inside
+  the Context Graph repo. Instead:</p>
+  <div class="grid g3">
+    <div class="card"><b>Framework</b> <span class="pill ctrl">fork of hermes-agent</span><br>
+      <span class="small">A fork of the MIT-licensed <a href="https://github.com/NousResearch/hermes-agent">hermes-agent</a>
+      (Python agent runtime, 40+ tools, terminal backends, learning loop). This is our codebase — we inherit
+      the orchestration and swap the substrate.</span></div>
+    <div class="card"><b>Backend</b> <span class="pill b">Context Graph, as-is</span><br>
+      <span class="small">CG runs as the shared service (MCP + REST). We add modules to it <b>only</b> when we
+      hit a genuine gap (identity, review ingest, sync) — CG stays clean, reusable, not coupled to the agent
+      framework.</span></div>
+    <div class="card"><b>This doc</b> <span class="pill a">CG docs family</span><br>
+      <span class="small">The design log lives in <code>CG/docs</code> as a companion to the agentic/platform
+      docs it builds on. The <i>implementation</i> lives in the fork.</span></div>
+  </div>
+  <div class="callout key">
+    <div class="clabel">The sharpened thesis — hermes already remembers; we make it remember <i>together</i></div>
+    Forking revealed the cleanest possible framing: hermes-agent <b>already ships a memory system</b> — but
+    it's <i>per-user</i>, cross-session recall for one operator. Our entire contribution is to <b>replace that
+    private memory with the team's shared Context Graph</b>. Same runtime, same tools; the difference is that
+    every agent's "memory" is now the whole team's living project graph. That single swap is the framework.
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="gap">
+  <div class="kicker">The core insight</div>
+  <h2>The gap Hermes-agent leaves — and why CG fills it</h2>
+  <p>NousResearch's <a href="https://github.com/NousResearch/hermes-agent">hermes-agent</a> is an excellent
+  <i>orchestration</i> layer: it drives a single Claude Code CLI (print mode for one-shot tasks, tmux/PTY for
+  interactive), manages permissions and tool whitelists, handles trust prompts, and can spin up parallel
+  worktree instances. What it does <b>not</b> solve is where the agent's <i>knowledge</i> lives.</p>
+  <div class="learn">
+    <div class="clabel">Concept · the amnesia problem, multiplied by the team</div>
+    A Claude Code agent has excellent <i>in-session</i> recall and near-total <i>between-session</i> amnesia —
+    its context is a local <code>CLAUDE.md</code> and a resumable transcript. That's already the problem
+    <a href="AGENTIC_DEVELOPMENT.html">AGENTIC_DEVELOPMENT.html</a> names for one developer. Now scale it to a
+    <b>team</b>: five developers, five agents, five private <code>CLAUDE.md</code> files. Developer B's agent
+    has no idea <i>why</i> Developer A's agent chose an approach yesterday, what was rejected in review, or
+    which task is in flight. Every agent re-derives context that another already established, and they drift
+    apart. Hermes orchestrates each agent beautifully; it gives them nothing to <b>share</b>.
+  </div>
+  <p class="pull">Hermes answers "how do I drive an autonomous coding agent?" Context Graph answers "what do a
+  team of them remember together?" The framework is the marriage of the two.</p>
+  <p>CG is unusually well-suited to be that shared brain because it isn't a passive index — it's built to be a
+  <b>methodology actor</b> (AGENTIC_PROJECT_GRAPH's framing): it stores decisions <i>with</i> their reasoning
+  (the quadruple <code>(h,r,t,rc)</code>), holds current project state, keeps agents in sync, and can refuse
+  process-breaking moves via its governance layers. That's exactly the substrate a fleet of agents needs.</p>
+</section>
+
+<!-- 3 -->
+<section id="vision">
+  <div class="kicker">The shape</div>
+  <h2>The fleet model</h2>
+  <p>Each developer works in their own environment — own machine, own repo checkout, own Claude Code. A
+  Hermes-orchestrated agent runs alongside them. Every agent connects to the <b>same</b> CG workspace (one
+  project = one shared graph), so reads and writes flow through a common knowledge fabric.</p>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 820 360" role="img" aria-label="Fleet of developer agents sharing one Context Graph">
+    <defs>
+      <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#7b8499"/></marker>
+      <marker id="ah2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22c3d6"/></marker>
+    </defs>
+    <style>
+      .b{fill:#1b1f2a;stroke:#2c3346}
+      .t{fill:#e7ebf3;font:600 12px "Segoe UI",system-ui}
+      .s{fill:#aab3c5;font:10.5px "Segoe UI",system-ui}
+      .lbl{fill:#7b8499;font:italic 10.5px "SF Mono",monospace}
+      .ln{stroke:#3a4256;stroke-width:1.5;fill:none;marker-end:url(#ah)}
+      .lnc{stroke:#22c3d6;stroke-width:1.6;fill:none;opacity:.8}
+    </style>
+    <!-- developer pods -->
+    <g>
+      <rect class="b" x="20" y="30" width="150" height="86" rx="10" stroke="#5b8def"/>
+      <text class="t" x="32" y="52">Dev A · env</text>
+      <text class="s" x="32" y="70">Hermes → Claude Code</text>
+      <text class="s" x="32" y="86">own repo checkout</text>
+      <text class="lbl" x="32" y="104">.mcp.json → CG</text>
+    </g>
+    <g>
+      <rect class="b" x="20" y="137" width="150" height="86" rx="10" stroke="#5b8def"/>
+      <text class="t" x="32" y="159">Dev B · env</text>
+      <text class="s" x="32" y="177">Hermes → Claude Code</text>
+      <text class="s" x="32" y="193">own repo checkout</text>
+      <text class="lbl" x="32" y="211">.mcp.json → CG</text>
+    </g>
+    <g>
+      <rect class="b" x="20" y="244" width="150" height="86" rx="10" stroke="#5b8def"/>
+      <text class="t" x="32" y="266">Dev C · env</text>
+      <text class="s" x="32" y="284">Hermes → Claude Code</text>
+      <text class="s" x="32" y="300">own repo checkout</text>
+      <text class="lbl" x="32" y="318">.mcp.json → CG</text>
+    </g>
+
+    <!-- MCP bus -->
+    <path class="lnc" d="M170,73 C 250,73 250,180 320,180" marker-end="url(#ah2)"/>
+    <path class="lnc" d="M170,180 L 320,180" marker-end="url(#ah2)"/>
+    <path class="lnc" d="M170,287 C 250,287 250,180 320,180" marker-end="url(#ah2)"/>
+    <text class="lbl" x="196" y="168" fill="#8fe6f2">MCP · 12 tools</text>
+
+    <!-- shared graph -->
+    <rect class="b" x="322" y="96" width="210" height="168" rx="12" stroke="#22c3d6"/>
+    <text class="t" x="338" y="120" fill="#8fe6f2">Shared Context Graph</text>
+    <text class="s" x="338" y="142">one workspace = one project</text>
+    <text class="s" x="338" y="164">· decisions + reasoning (rc)</text>
+    <text class="s" x="338" y="180">· code / modules / commits</text>
+    <text class="s" x="338" y="196">· code reviews · tasks · state</text>
+    <text class="s" x="338" y="212">· architecture · precedents</text>
+    <text class="lbl" x="338" y="236">ontology · rules · rbac · lifecycle</text>
+    <text class="lbl" x="338" y="252">= governance guardrails</text>
+
+    <!-- feeders -->
+    <rect class="b" x="580" y="60" width="150" height="50" rx="9" stroke="#19b89a"/>
+    <text class="t" x="592" y="80">git backfill</text><text class="s" x="592" y="96">code·commits·docs</text>
+    <line class="ln" x1="580" y1="88" x2="534" y2="120"/>
+    <rect class="b" x="580" y="130" width="150" height="50" rx="9" stroke="#19b89a"/>
+    <text class="t" x="592" y="150">CR / PR ingest</text><text class="s" x="592" y="166">(gap — to build)</text>
+    <line class="ln" x1="580" y1="158" x2="534" y2="172"/>
+    <rect class="b" x="580" y="200" width="150" height="50" rx="9" stroke="#a974f0"/>
+    <text class="t" x="592" y="220">bootstrap / manifest</text><text class="s" x="592" y="236">role-scoped context</text>
+    <line class="ln" x1="580" y1="224" x2="534" y2="210"/>
+  </svg>
+  </div><figcaption>Every developer's Hermes-driven agent connects to <b>one</b> shared CG workspace over MCP.
+  Context flows in (git backfill, bootstrap/manifest) and knowledge flows both ways (each agent records
+  decisions/reviews/tasks the others can query). The ontology/rules/RBAC layers are the shared guardrails that
+  keep the fleet coherent.</figcaption></figure>
+</section>
+
+<!-- 4 -->
+<section id="have">
+  <div class="kicker">Ground truth · the substrate</div>
+  <h2>What Context Graph already gives us</h2>
+  <p>The pleasant surprise from the code survey: most of the fabric exists. The framework is largely
+  <b>glue + a shared loop</b>, not new infrastructure.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Team need</th><th>Exists today</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Give each agent its project context</td><td><span class="pill win">done</span> role-scoped <b>manifest / bootstrap / playbook</b>, generated live from installed services</td><td><code>workspace_routes.py:142-382,406-439</code></td></tr>
+      <tr><td>Local Claude Code ↔ CG</td><td><span class="pill win">done</span> <b>MCP server, 12 tools</b> (query, cgr3, precedents, record_decision, invoke_action, get_manifest…)</td><td><code>mcp_server.py:105-546</code></td></tr>
+      <tr><td>One project = one shared graph, many concurrent devs</td><td><span class="pill win">done</span> header-scoped <b>WorkspacePool</b>, concurrency-safe via keyed locks</td><td><code>workspace_pool.py:28-220</code></td></tr>
+      <tr><td>Share code + commits + docs</td><td><span class="pill win">done</span> <b>git backfill</b> — modules, deps, authors, commits, docs, source</td><td><code>presets/backfill_git.py</code></td></tr>
+      <tr><td>Share decisions / ADRs / rationale</td><td><span class="pill win">done</span> <code>emit_decision_trace</code> + decisions vector store + precedent search + CGR3</td><td><code>core.py:1222</code>, <code>routes.py:692+</code></td></tr>
+      <tr><td>Share tasks + state</td><td><span class="pill b">partial</span> <b>lifecycle FSMs</b> + <b>actions</b> catalog + audit edges (e.g. <code>ChangeRequest: open→in&nbsp;progress→closed</code>)</td><td><code>{actions,lifecycle}/service.py</code></td></tr>
+      <tr><td>Bounded, governed agent behaviour</td><td><span class="pill win">done</span> ontology · rules gate · RBAC · lifecycle — "one action, five guards"</td><td><code>actions/service.py:106-192</code></td></tr>
+      <tr><td>Self-serve onboarding</td><td><span class="pill win">done</span> conversational <code>/onboard</code> wizard installs preset + seeds roles</td><td><code>workspace_routes.py:441-605</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout ok">
+    <div class="clabel">The one-line takeaway</div>
+    A brand-new repo's agent can already <code>curl</code> one bootstrap URL, write its <code>.mcp.json</code>,
+    backfill the repo, read the playbook, and enter a query-before-build / record-the-why loop — <b>solo</b>.
+    What's missing is everything that only matters once there's <b>more than one</b> of them.
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="gaps">
+  <div class="kicker">Ground truth · the gaps</div>
+  <h2>The gaps to build — the "more than one agent" problems</h2>
+  <p>Everything the solo flow needs exists. The genuinely new work is the <b>team</b> dimension: the four
+  things that only become problems when many agents share one graph.</p>
+  <div class="grid g2">
+    <div class="card"><b>1 · Per-developer identity</b> <span class="pill danger">gap</span><br>
+      <span class="small">Today RBAC is <b>role</b>-based, and MCP carries <i>no</i> authenticated identity at
+      all — <code>invoke_action</code> passes <code>role=None</code> (<code>mcp_server.py:523-528</code>). For
+      a team you need <i>who</i>: which developer's agent made this decision, touched this task, approved this
+      review. Attribution and per-user RBAC are the missing layer.</span></div>
+    <div class="card"><b>2 · Code-review / PR ingestion</b> <span class="pill danger">gap</span><br>
+      <span class="small">Backfill ingests commits + docs + source, but <b>not</b> PR/review threads. Reviews
+      are where the richest "why" and "why not" live — a net-new connector (GitHub/GitLab → decision edges +
+      review objects).</span></div>
+    <div class="card"><b>3 · Task assignment &amp; board</b> <span class="pill b">partial</span><br>
+      <span class="small">Lifecycle FSMs + actions can model task <i>state</i>, but there's no notion of
+      assigning a task to an <i>individual</i> or a board view across the fleet. Builds on gap 1 (identity).</span></div>
+    <div class="card"><b>4 · Cross-agent sync</b> <span class="pill c">the hard one</span><br>
+      <span class="small">When agent A records a decision, should agent B <i>learn</i> of it proactively, or
+      just discover it next time it queries? AGENTIC_PROJECT_GRAPH calls this the "sync bus"; an in-process
+      <code>EventBus</code> exists (<code>events/service.py</code>) but no agent-to-agent push runtime.</span></div>
+  </div>
+  <div class="callout caveat">
+    <div class="clabel">Scoping honesty</div>
+    Gaps 1–3 are concrete and bounded. Gap 4 (sync) is the deep, open one — and it's where the interesting
+    design lives (pull vs push, conflict when two agents touch the same object, staleness). It's tempting to
+    start there; it's probably wiser to start where identity + a real shared artifact prove the fabric works,
+    then earn our way to sync.
+  </div>
+</section>
+
+<!-- 6 -->
+<section id="loop">
+  <div class="kicker">The new artifact</div>
+  <h2>The local agent loop — the Hermes side</h2>
+  <p>The part that is genuinely ours to design: the <b>loop each developer's agent runs</b>. Hermes provides
+  the autonomy harness; CG provides the shared brain; the loop is the contract between them. In spirit it's
+  the "three habits" the playbook already preaches (<code>workspace_routes.py:249-382</code>), turned into an
+  explicit agent skill.</p>
+  <figure><div class="fig">
+  <svg viewBox="0 0 820 200" role="img" aria-label="The local agent loop">
+    <defs><marker id="ah3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#7b8499"/></marker></defs>
+    <style>.bx{fill:#1b1f2a;stroke:#22c3d6;rx:10}.tt{fill:#e7ebf3;font:600 12.5px "Segoe UI"}.ss{fill:#aab3c5;font:10.5px "Segoe UI"}.la{stroke:#3a4256;stroke-width:1.6;fill:none;marker-end:url(#ah3)}</style>
+    <rect class="bx" x="14" y="70" width="128" height="60"/><text class="tt" x="26" y="94">1 · Orient</text><text class="ss" x="26" y="112">bootstrap + manifest</text>
+    <line class="la" x1="142" y1="100" x2="176" y2="100"/>
+    <rect class="bx" x="178" y="70" width="140" height="60"/><text class="tt" x="190" y="94">2 · Query-first</text><text class="ss" x="190" y="112">precedents · decisions</text>
+    <line class="la" x1="318" y1="100" x2="352" y2="100"/>
+    <rect class="bx" x="354" y="70" width="128" height="60"/><text class="tt" x="366" y="94">3 · Work</text><text class="ss" x="366" y="112">code · Hermes drives</text>
+    <line class="la" x1="482" y1="100" x2="516" y2="100"/>
+    <rect class="bx" x="518" y="70" width="140" height="60"/><text class="tt" x="530" y="94">4 · Record-why</text><text class="ss" x="530" y="112">decision + task state</text>
+    <line class="la" x1="658" y1="100" x2="692" y2="100"/>
+    <rect class="bx" x="694" y="70" width="112" height="60" stroke="#3ecf8e"/><text class="tt" x="706" y="94">5 · Sync</text><text class="ss" x="706" y="112">fleet sees it</text>
+    <path class="la" d="M750,70 C 750,30 400,30 400,30 C 100,30 78,30 78,66"/>
+    <text class="ss" x="360" y="24" fill="#7b8499">loop per task</text>
+  </svg>
+  </div><figcaption>Orient (pull role context) → query-before-build (has the team solved this? what was
+  decided?) → work (Hermes drives Claude Code) → record-the-why (emit decision, advance task state) → sync
+  (the fabric now carries it for every other agent). Steps 1, 2, 4 are existing MCP tools; step 5 is gap 4.</figcaption></figure>
+  <div class="callout info">
+    <div class="clabel">Delivery question embedded here</div>
+    Is this loop a <b>Hermes skill</b> (a <code>SKILL.md</code> in the hermes-agent format, so it drops into
+    their ecosystem) or a <b>CG-native agent preset</b> (slash-commands + a project <code>CLAUDE.md</code>
+    generated by bootstrap)? That's <a href="#questions">Q3</a>.
+  </div>
+</section>
+
+<!-- auth -->
+<section id="auth">
+  <div class="kicker">Hard constraint · A2</div>
+  <h2>Subscription auth, never metered API billing</h2>
+  <p class="lead-p">A team-wide cost requirement: every agent must run Claude Code on a <b>Pro/Max/Team
+  subscription</b> (flat per-seat), never pay-per-token <b>API billing</b> — in both <code>tmux</code> and
+  <code>claude -p</code> modes. Verified against both the hermes skill and the Claude Code auth docs: this is
+  supported, preserved across modes, and — crucially — <b>enforceable</b>.</p>
+
+  <div class="callout ok">
+    <div class="clabel">Good news — hermes doesn't fight us</div>
+    The hermes skill <b>never injects an API key</b>: its launch commands (<code>claude -p '…'</code>,
+    <code>tmux send-keys … 'claude' Enter</code>) pass no credentials and rely entirely on the machine's
+    prior login state. Print mode and interactive mode resolve the <b>same</b> stored credential, so a
+    subscription login works identically in both. The one exception to avoid: hermes <code>--bare</code> mode
+    requires <code>ANTHROPIC_API_KEY</code> and skips OAuth.
+  </div>
+
+  <div class="learn">
+    <div class="clabel">Concept · the auth precedence chain (and the footgun)</div>
+    Claude Code picks its credential by a strict precedence, highest first:
+    <b>Bedrock/Vertex/Foundry env vars → <code>ANTHROPIC_AUTH_TOKEN</code> →
+    <code>ANTHROPIC_API_KEY</code> (metered!) → <code>apiKeyHelper</code> →
+    <code>CLAUDE_CODE_OAUTH_TOKEN</code> (subscription) → OAuth <code>/login</code> (subscription)</b>.
+    The footgun is stark: <b>a stray <code>ANTHROPIC_API_KEY</code> in the environment silently wins over a
+    logged-in subscription</b>, and in <code>-p</code> mode it's used with no prompt. A shared team
+    <code>.env</code> or shell profile that exports it is the single most dangerous pattern.
+  </div>
+
+  <h3>What our fork must guarantee</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Rule</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><b>Scrub the spawn env</b> — unset <code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_AUTH_TOKEN</code>, <code>CLAUDE_CODE_USE_BEDROCK/VERTEX/FOUNDRY</code>, <code>ANTHROPIC_BASE_URL</code> before launching Claude Code</td><td>Removes every higher-precedence credential so subscription wins</td></tr>
+      <tr><td><b>Preflight assert</b> — check auth mode before any real work; abort if API billing would apply</td><td>Fail fast, never spend tokens by accident (<code>claude auth status</code> / <code>/status</code> → must read "subscription")</td></tr>
+      <tr><td><b>Never use <code>--bare</code></b></td><td>It bypasses OAuth and demands an API key</td></tr>
+      <tr><td><b>Headless = per-dev OAuth token</b> — <code>claude setup-token</code> (1-year subscription token, needs Pro/Max/Team), exported as <code>CLAUDE_CODE_OAUTH_TOKEN</code> per developer</td><td>Lets CI / non-interactive <code>-p</code> stay on subscription; <b>never shared</b> across developers (one seat = one person)</td></tr>
+    </tbody>
+  </table></div>
+  <pre><code><span class="cm"># the fork's preflight guard, before it drives any agent</span>
+<span class="kw">unset</span> ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN \
+      CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
+<span class="kw">export</span> CLAUDE_CODE_OAUTH_TOKEN=<span class="str">"$(cat ~/.claude/oauth-token-$USER)"</span>   <span class="cm"># per-dev, headless</span>
+claude auth status <span class="cm"># must report subscription, NOT "API key: Confirmed" → else abort</span></code></pre>
+
+  <div class="callout caveat">
+    <div class="clabel">Team billing notes</div>
+    Each developer authenticates with <b>their own</b> subscription seat (no token sharing — one seat can't be
+    used by two people at once). Per-seat rate limits (TPM) scale down as the team grows and reset on rolling
+    5-hour + weekly windows, shared with their Claude chat usage. A fleet of always-on agents could exhaust a
+    seat's window — so agent pacing / concurrency caps become a real design concern, not just billing hygiene.
+    This feeds <a href="#questions">Q1</a> (solo-excellent first lets us learn one seat's real throughput
+    before scaling the fleet).
+  </div>
+</section>
+
+<!-- 7 -->
+<section id="expert">
+  <div class="kicker">The philosophy</div>
+  <h2>Why this is your "constrained expert system", for developers</h2>
+  <p>Your <a href="AGENTIC_EXPERT_SYSTEM.md">AGENTIC_EXPERT_SYSTEM.md</a> and
+  <a href="GOVERNED_WORKFLOW_PLATFORM.html">GOVERNED_WORKFLOW_PLATFORM.html</a> argue the same thesis from a
+  different angle: an AI agent should be a <b>constrained</b> system — bounded by an ontology, rules, and
+  typed building blocks — not a free-wheeling "natural-language compiler". A team of coding agents is exactly
+  that thesis applied to software development itself.</p>
+  <div class="learn">
+    <div class="clabel">The connection</div>
+    A lone coding agent with <code>bypassPermissions</code> is the "general-purpose compiler" your notes warn
+    against — it invents structure, drifts from methodology, and forgets the constraints. Wire that same agent
+    to a shared CG and it becomes <b>constrained by the team's ontology and rules</b>: it must use governed
+    actions, its decisions pass the rules gate, its moves respect lifecycle state, and its context is the
+    team's real graph, not its own guesses. The graph is the DSL; the agents may only <i>wire existing typed
+    blocks</i>. That's the governed-workflow idea, with <i>the software project</i> as the domain.
+  </div>
+  <p class="pull">The framework isn't just shared memory — it's shared <i>constraint</i>. The graph is what
+  keeps five autonomous agents building one coherent system instead of five divergent ones.</p>
+</section>
+
+<!-- 8 -->
+<section id="questions">
+  <div class="kicker">Your call</div>
+  <h2>Open questions — round 1</h2>
+  <p>These set the direction. Recommendation attached to each; answers land in the log.</p>
+  <div class="callout q">
+    <div class="clabel"><span class="qn">Q1</span> MVP boundary — solo-excellent first, or team-first?</div>
+    Polish the <b>single-developer</b> Hermes+CG loop until it's genuinely great (fast path to something
+    usable), or build the <b>team</b> dimension (identity + a shared artifact) from the start (the actual
+    point, but heavier)? <b>My rec:</b> solo-excellent first — it's the foundation every fleet feature stands
+    on, and it's demoable in days.
+  </div>
+  <div class="callout q">
+    <div class="clabel"><span class="qn">Q2</span> Identity — per-developer now, or roles for v1?</div>
+    Do we add real per-developer identity (who did what, per-user RBAC, MCP-carried principal) now, or lean on
+    CG's existing <b>role</b>-based model for v1 and defer individual identity? <b>My rec:</b> roles for v1,
+    but thread a lightweight <code>developer</code> attribute through decisions/tasks immediately so
+    attribution exists even before full per-user auth.
+  </div>
+  <div class="callout q">
+    <div class="clabel"><span class="qn">Q3</span> The loop's form — Hermes skill or CG-native preset?</div>
+    Ship the loop as a <b>hermes-agent <code>SKILL.md</code></b> (drops into their ecosystem, print/tmux modes)
+    or as a <b>CG-native agent preset</b> (bootstrap-generated <code>CLAUDE.md</code> + slash-commands,
+    Hermes-agnostic)? <b>My rec:</b> CG-native preset first (works with any Claude Code, reuses bootstrap), and
+    a thin Hermes <code>SKILL.md</code> wrapper as a follow-on so it also runs headless/CI.
+  </div>
+  <div class="callout q">
+    <div class="clabel"><span class="qn">Q4</span> First shared artifact — decisions, reviews, or tasks?</div>
+    Which team-knowledge type do we make <i>excellent</i> first? <b>Decisions</b> (already strongest in CG),
+    <b>code reviews</b> (richest "why", but needs the new PR connector), or <b>tasks</b> (needs identity +
+    board)? <b>My rec:</b> decisions — it's built, it's the highest-value shared knowledge, and it proves the
+    "one agent records, another benefits" loop end-to-end with least new plumbing.
+  </div>
+  <div class="callout q">
+    <div class="clabel"><span class="qn">Q5</span> Sync model — pull-only for v1, or push?</div>
+    Do agents just <b>query fresh</b> each task (pull — simple, stateless, good enough early) or do we build
+    proactive <b>push</b> notification when the graph changes (the "sync bus" — powerful, but the hard open
+    problem)? <b>My rec:</b> pull-only for v1; design the record format so a push layer can be added later
+    without reworking it.
+  </div>
+</section>
+
+<!-- log -->
+<section id="log">
+  <div class="kicker">The record</div>
+  <h2>Decision log</h2>
+  <p>Every settled decision lands here with date and rationale, so a build phase has an unambiguous spec.
+  Empty until round 1 closes — the questions above are what we're deciding.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>Date</th><th>Topic</th><th>Decision</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>—</td><td>2026-07-18</td><td>Process</td><td>Discuss in this doc, decide before building, ground every claim in code; build on existing agentic/platform docs, don't duplicate</td><td><span class="pill win">agreed</span></td></tr>
+      <tr><td>A1</td><td>2026-07-18</td><td>Architecture</td><td><b>Framework = a fork of hermes-agent</b> (MIT), not a CG branch. CG stays the shared backend (MCP+REST), extended with new modules only where a real gap is found. hermes already has per-user memory → our contribution is <b>swapping it for the team-shared CG</b>. This design doc lives in CG/docs.</td><td><span class="pill win">agreed</span></td></tr>
+      <tr><td>A2</td><td>2026-07-18</td><td>Constraint</td><td><b>Subscription auth only — never metered API billing.</b> Every agent must run Claude Code on a Pro/Max/Team subscription (browser OAuth), in both tmux and <code>claude -p</code> modes. The fork must: never set <code>ANTHROPIC_API_KEY</code> in the spawn env, never use hermes <code>--bare</code> mode, and <b>assert auth mode on startup</b> (<code>claude auth status</code>) — fail fast rather than spend tokens.</td><td><span class="pill win">agreed</span></td></tr>
+      <tr><td>Q1</td><td>—</td><td>Scope</td><td>Solo-excellent first vs team-first</td><td><span class="pill mut">open</span></td></tr>
+      <tr><td>Q2</td><td>—</td><td>Identity</td><td>Per-developer now vs roles for v1</td><td><span class="pill mut">open</span></td></tr>
+      <tr><td>Q3</td><td>—</td><td>Form</td><td>Hermes SKILL.md vs CG-native preset</td><td><span class="pill mut">open</span></td></tr>
+      <tr><td>Q4</td><td>—</td><td>Artifact</td><td>First shared type: decisions / reviews / tasks</td><td><span class="pill mut">open</span></td></tr>
+      <tr><td>Q5</td><td>—</td><td>Sync</td><td>Pull-only v1 vs push "sync bus"</td><td><span class="pill mut">open</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+</article>
+</main>
+</div>
+
+<a href="#" class="backtotop" id="backtotop">↑ top</a>
+<footer class="footer">
+  Context Graph — Team Agent Framework working log · living document, updated as we discuss ·
+  companion to <a href="AGENTIC_PROJECT_GRAPH.html">AGENTIC_PROJECT_GRAPH.html</a>,
+  <a href="AGENTIC_DEVELOPMENT.html">AGENTIC_DEVELOPMENT.html</a>,
+  <a href="PLATFORM_ARCHITECTURE.html">PLATFORM_ARCHITECTURE.html</a>.
+</footer>
+
+<script>
+const links=[...document.querySelectorAll('nav.toc a')];
+const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+const spy=()=>{let i=secs.length;while(--i>0&&window.scrollY+120<secs[i].offsetTop);links.forEach(l=>l.classList.remove('active'));links[i]&&links[i].classList.add('active')};
+document.addEventListener('scroll',spy,{passive:true});spy();
+const b=document.getElementById('backtotop');
+document.addEventListener('scroll',()=>b.classList.toggle('show',window.scrollY>500),{passive:true});
+</script>
+</body>
+</html>
