@@ -123,7 +123,7 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     <div class="status-row">
       <span class="st"><span class="dot done"></span> Round 1 · vision &amp; scope — <b>&nbsp;decided (A1–A2, D1–D5)</b></span>
       <span class="st"><span class="dot done"></span> Round 2 · build plan — <b>&nbsp;decided (D6–D9)</b></span>
-      <span class="st"><span class="dot live"></span> Round 3 · build M1 (ontology decision-slice) — <b>&nbsp;ready</b></span>
+      <span class="st"><span class="dot live"></span> Round 3 · building — <b>&nbsp;M1 done, M2 next</b></span>
     </div>
   </div>
 </header>
@@ -142,6 +142,7 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     <li><a href="#expert">The constrained-expert tie-in</a></li>
     <li><a href="#questions">Round 1 — settled</a></li>
     <li><a href="#plan">Round 2 — build plan</a></li>
+    <li><a href="#build">Round 3 — build log</a></li>
     <li><a href="#log">Decision log</a></li>
   </ol>
 </nav>
@@ -621,6 +622,42 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     <b>measured</b> bar too (e.g. "second session answered from CG without re-deriving, N× fewer tokens")?
     <b>My rec:</b> the traceable-chain demo as the primary bar, plus one lightweight before/after measurement
     (did the second agent reuse vs re-derive?) — cheap, and it echoes the RAG project's measure-it habit.
+  </div>
+</section>
+
+<!-- build -->
+<section id="build">
+  <div class="kicker">Round 3 · building</div>
+  <h2>Build log</h2>
+  <p class="lead-p">The walking skeleton (D6), one milestone at a time. Everything runs against the live CG
+  server in the isolated <code>team_agent_lab</code> workspace (D7).</p>
+  <div class="status-row">
+    <span class="st"><span class="dot done"></span> M1 · shared ontology — <b>&nbsp;done</b></span>
+    <span class="st"><span class="dot"></span> M2 · solo loop preset</span>
+    <span class="st"><span class="dot"></span> M3 · fill four + review connector</span>
+    <span class="st"><span class="dot"></span> M4 · fork + pull-watcher</span>
+  </div>
+
+  <h3>M1 — the 4-artifact ontology <span class="pill win">done</span></h3>
+  <p>Reuse-first check first: no canned "agentic-dev preset" actually ships — onboarding <i>generates</i> an
+  ontology per workspace via LLM (<code>/onboard</code>, <code>/ontology/generate</code>). So we defined the
+  4-artifact ontology directly, reusing the ontology <i>machinery</i> (<code>context_graph.ontology.schema</code>
+  classes → guaranteed-valid <code>to_dict</code>) and installed it with <code>POST /ontology</code>,
+  workspace-scoped by header.</p>
+  <div class="callout ok">
+    <div class="clabel">Installed &amp; verified in <code>team_agent_lab</code></div>
+    <b>4 object types</b> — Decision (requires <code>title</code>, <code>rationale</code>, and the
+    <code>developer</code> stamp / D2), Task, Commit, Review — and <b>5 link types</b> forming the chain
+    <code>Decision→Task→Commit→Review→Decision</code> (+ <code>Task depends_on Task</code>).
+    <b>Direction is enforced:</b> validation accepted the legal <code>motivates: Decision→Task</code> and
+    <b>rejected</b> the reversed <code>Task→Decision</code>. The ontology already governs structure — the
+    "shared constraint" thesis, working at milestone one.
+  </div>
+  <div class="callout caveat">
+    <div class="clabel">Open — where the code lives (blocks M2)</div>
+    M1's artifact is currently staged in scratch. Per A1 the framework's code belongs in the <b>hermes fork</b>,
+    which doesn't exist yet — so before M2 (the loop preset) we need to stand up that fork repo (name +
+    location). That's the immediate decision.
   </div>
 </section>
 
