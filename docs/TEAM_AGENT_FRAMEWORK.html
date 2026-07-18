@@ -653,11 +653,13 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     <b>rejected</b> the reversed <code>Task→Decision</code>. The ontology already governs structure — the
     "shared constraint" thesis, working at milestone one.
   </div>
-  <div class="callout caveat">
-    <div class="clabel">Open — where the code lives (blocks M2)</div>
-    M1's artifact is currently staged in scratch. Per A1 the framework's code belongs in the <b>hermes fork</b>,
-    which doesn't exist yet — so before M2 (the loop preset) we need to stand up that fork repo (name +
-    location). That's the immediate decision.
+  <div class="callout ok">
+    <div class="clabel">Code home — resolved (A3)</div>
+    The fork is stood up: <b><code>cohermes</code></b> (a local clone of hermes-agent; hermes remote moved to
+    <code>upstream</code>). M1 now lives at <code>cohermes/cg/</code> and — importantly — was rebuilt to talk
+    to CG <b>HTTP-only</b> (no <code>context_graph</code> import): a developer running cohermes won't have CG
+    installed locally, so the extension is a pure client. <code>python -m cg.ontology</code> installs the
+    shared ontology idempotently.
   </div>
 </section>
 
@@ -673,6 +675,7 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
       <tr><td>—</td><td>2026-07-18</td><td>Process</td><td>Discuss in this doc, decide before building, ground every claim in code; build on existing agentic/platform docs, don't duplicate</td><td><span class="pill win">agreed</span></td></tr>
       <tr><td>—</td><td>2026-07-18</td><td>Process · <b>reuse-first</b></td><td><b>For every design question, first understand what hermes provides natively and propose a reuse option</b> before deciding to build new. We are forking hermes (A1) — its runtime, memory, messaging, teams, scheduler are ours to reuse. Build only what hermes + CG genuinely lack.</td><td><span class="pill win">agreed</span></td></tr>
       <tr><td>A1</td><td>2026-07-18</td><td>Architecture</td><td><b>Framework = a fork of hermes-agent</b> (MIT), not a CG branch. CG stays the shared backend (MCP+REST), extended with new modules only where a real gap is found. hermes already has per-user memory → our contribution is <b>swapping it for the team-shared CG</b>. This design doc lives in CG/docs.</td><td><span class="pill win">agreed</span></td></tr>
+      <tr><td>A3</td><td>2026-07-18</td><td>Architecture</td><td><b>Fork = <code>cohermes</code></b> (local clone of hermes-agent; hermes → <code>upstream</code> remote). Our code lives in <code>cohermes/cg/</code> as a <b>pure HTTP client of CG</b> — never imports the Context Graph Python package (developers running cohermes won't have CG installed). GitHub fork to be created by the user later.</td><td><span class="pill win">agreed</span></td></tr>
       <tr><td>A2</td><td>2026-07-18</td><td>Constraint</td><td><b>Subscription auth only — never metered API billing.</b> Every agent must run Claude Code on a Pro/Max/Team subscription (browser OAuth), in both tmux and <code>claude -p</code> modes. The fork must: never set <code>ANTHROPIC_API_KEY</code> in the spawn env, never use hermes <code>--bare</code> mode, and <b>assert auth mode on startup</b> (<code>claude auth status</code>) — fail fast rather than spend tokens.</td><td><span class="pill win">agreed</span></td></tr>
       <tr><td>D1</td><td>2026-07-18</td><td>Scope (Q1)</td><td><b>Solo-excellent first.</b> Nail one developer's Hermes+CG loop before the team dimension — it's the foundation every fleet feature stands on, demoable in days, and lets us measure one subscription seat's real throughput before scaling.</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D2</td><td>2026-07-18</td><td>Identity (Q2)</td><td><b>Roles + lightweight attribution stamp.</b> Keep CG's role-based authorization; stamp a <code>developer</code> field on every decision/task from day 1 (attribution, un-backfillable later). Defer full per-user auth (authenticated MCP principal) to the team phase.</td><td><span class="pill win">decided</span></td></tr>
