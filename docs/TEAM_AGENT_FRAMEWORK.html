@@ -635,7 +635,8 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     <span class="st"><span class="dot done"></span> M1 · shared ontology — <b>&nbsp;done</b></span>
     <span class="st"><span class="dot done"></span> M2 · solo loop preset — <b>&nbsp;done</b></span>
     <span class="st"><span class="dot done"></span> M3 · fill four + review connector — <b>&nbsp;done</b></span>
-    <span class="st"><span class="dot live"></span> M4 · fork + pull-watcher</span>
+    <span class="st"><span class="dot done"></span> M4 · fork + pull-watcher — <b>&nbsp;done</b></span>
+    <span class="st"><span class="dot done"></span> D9 · demo + reuse measurement — <b>&nbsp;concept proven</b></span>
   </div>
 
   <h3>M1 — the 4-artifact ontology <span class="pill win">done</span></h3>
@@ -731,6 +732,32 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     <b>additive, not a rewrite</b>. Ingested 3 reviews (sarah/marcus/priya), linked to the commit and the
     decision; the chain still traces. <b>M3 complete — all four artifacts, cross-linked, fed by real PR
     data.</b>
+  </div>
+
+  <h3>M4 — pull-sync watcher <span class="pill win">done</span></h3>
+  <p>Cross-agent sync is <b>pull-only, reusing Hermes's cron scheduler</b> (D5 — its one native sync
+  primitive). <code>cohermes/cg/watch.py</code> polls the graph, diffs a cursor, and prints new artifacts;
+  <code>scripts/watch-context-graph.py</code> is the Hermes <code>--script</code> entry. Proven: a baseline,
+  then a teammate's new decision (<i>"Use fixture-first connectors — by sarah"</i>) is reported on the next
+  run — awareness without a push bus. (Deeper: swapping Hermes's per-user <code>MEMORY.md</code> for CG as a
+  memory provider is noted as later work.)</p>
+
+  <h3>D9 — the concept, proven with a measurement <span class="pill win">✓</span></h3>
+  <p><code>cohermes/cg/demo.py</code> runs the acceptance bar: trace the chain, then ask the <b>same
+  question</b> of the populated team workspace vs a <b>fresh empty</b> one.</p>
+  <div class="callout key">
+    <div class="clabel">Shared brain works — the measured result</div>
+    <b>Q:</b> <i>"How should our coding agents stay in sync with each other, and why?"</i>
+    <div class="tablewrap" style="margin-top:8px"><table>
+      <thead><tr><th>Workspace</th><th>Reused the recorded decision?</th><th>Answer</th></tr></thead>
+      <tbody>
+        <tr><td><code>team_agent_lab</code> (populated)</td><td><b class="hl">yes</b></td><td>"…use a <b>pull-only cross-agent sync</b> method… agents learning of each other's changes by querying the graph fresh, rather than push…" — verbatim the recorded rationale</td></tr>
+        <tr><td><code>team_agent_fresh</code> (control)</td><td><b>no</b></td><td>"Sorry, I'm not able to provide an answer… <code>[no-context]</code>"</td></tr>
+      </tbody>
+    </table></div>
+    The populated workspace's agent <b>reused a teammate's "why"</b>; the fresh one could only re-derive (and
+    couldn't). That contrast — the same agent, same question, one with the shared brain and one without — is
+    the whole thesis, <b>measured</b>. The walking skeleton is complete.
   </div>
 </section>
 
