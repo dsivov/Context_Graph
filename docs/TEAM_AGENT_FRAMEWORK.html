@@ -684,12 +684,23 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     clearly "subscription" is a REVIEW, an explicit API key is a hard stop. Works with any Claude Code
     (Hermes-driven or not), so the loop is proven before the fork's runtime is wired in (M4).
   </div>
-  <div class="callout caveat">
-    <div class="clabel">Design question for M3 — Decision: node or trace?</div>
-    Our ontology models <b>Decision as an object node</b> (so it cross-links: <code>Decision→Task→…</code>).
-    CG's built <code>record_decision</code> / precedent search work on <b>edge-based decision traces</b>
-    (<code>rc</code>). M3's first task is reconciling these — likely a Decision node that <i>also</i> carries a
-    trace, so we keep both cross-linking and precedent search. This is the walking skeleton's decision-slice.
+  <h3>M3 — fill the four (decision-slice) <span class="pill c">in progress</span></h3>
+  <p>Walking skeleton (D6): decisions first. Opened with the node-vs-trace fork, now settled
+  (<a href="#log">D10</a>): a Decision is <b>both</b> — a node <i>and</i> a trace, written by one operation
+  (<code>cohermes/cg/decisions.py</code> <code>record()</code>), so we keep the cross-linked chain
+  <i>and</i> CG's built precedent search.</p>
+  <div class="callout ok">
+    <div class="clabel">Proven end-to-end in <code>team_agent_lab</code> — the reuse loop</div>
+    <code>record(title, rationale, developer, concerns)</code> writes a <b>Decision node</b>
+    (<code>type=Decision</code>, <code>developer=dima</code> — the D2 stamp, the chain anchor) <b>and</b>
+    emits a <b>decision-trace</b> into <code>decisions_vdb</code>. Then a precedent query — <i>the kind a
+    different agent session runs at "query-before-build"</i> — retrieved it:
+    <pre style="margin-top:8px"><code><span class="cm"># session B, later:</span> precedents(<span class="str">"how should agents stay in sync?"</span>)
+→ Adopt pull-only cross-agent sync (by dima): <span class="str">"Agents learn of each other's
+  changes by querying the graph fresh, not via push…"</span></code></pre>
+    One agent records the <b>why</b>; another <b>reuses</b> it instead of re-deriving. That is the whole
+    thesis, working. Next: widen to Task / Commit / Review + the cross-links, then the GitHub review
+    connector (D8).
   </div>
 </section>
 
@@ -715,6 +726,7 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
       <tr><td>D6</td><td>2026-07-18</td><td>Build shape (Q6)</td><td><b>Walking skeleton.</b> Thin end-to-end path through decisions first (ontology decision-slice + minimal loop that records+queries one), then widen to commits/tasks/reviews. Tests integration seams earliest; the hard review connector plugs into a proven chain. D4's demo still needs all four.</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D7</td><td>2026-07-18</td><td>Environment (Q7)</td><td><b>Live CG + dedicated workspace</b> <code>team_agent_lab</code> on <code>10.0.0.80:9621</code>. Zero setup, per-workspace isolation, tests the real HTTP/MCP path (same pattern as the RAG lab). Private instance only later if a CG-side code change needs it.</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D8</td><td>2026-07-18</td><td>Review connector (Q8)</td><td><b>GitHub PR API first</b>, behind a thin <code>Review</code> boundary. Richest "why/why-not" (the discussion) = a real concept proof. Defer any generic multi-host adapter until a 2nd source exists (abstract from two concretes, not zero).</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D10</td><td>2026-07-19</td><td>M3 · decision model</td><td><b>A Decision is a node + a trace, written by one operation.</b> The node (type <code>Decision</code>, structured fields, chain anchor) gives cross-linking; the emitted decision-trace gives CG's built precedent search (<code>decisions_vdb</code>). <code>cg/decisions.py record()</code> owns the dual-write so they can't drift. Proven: record → a different session's precedent query retrieves it by rationale.</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D9</td><td>2026-07-18</td><td>Acceptance (Q9)</td><td><b>Traceable-chain demo + one lightweight reuse measurement.</b> Same task in a fresh vs populated workspace → turns/tokens to answer + did it cite the recorded decision. Makes "reused not re-derived" objective (the RAG project's measure-it habit) and catches false-looking reuse.</td><td><span class="pill win">decided</span></td></tr>
     </tbody>
   </table></div>
