@@ -699,9 +699,23 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
 → Adopt pull-only cross-agent sync (by dima): <span class="str">"Agents learn of each other's
   changes by querying the graph fresh, not via push…"</span></code></pre>
     One agent records the <b>why</b>; another <b>reuses</b> it instead of re-deriving. That is the whole
-    thesis, working. Next: widen to Task / Commit / Review + the cross-links, then the GitHub review
-    connector (D8).
+    thesis, working.
   </div>
+
+  <h4>Widened — the full chain traces</h4>
+  <p>Added the Task / Commit / Review node-writers and the four cross-links
+  (<code>cohermes/cg/artifacts.py</code>, <code>graph.py</code>). A whole unit of work is now one traceable
+  subgraph:</p>
+  <pre><code>Decision <span class="cm">"Add per-seat rate-limit guard"</span>
+  ──motivates──▶ Task <span class="cm">"Implement…"</span>
+  ──implemented_by──▶ Commit <span class="cm">9f2c1ab</span>
+  ──reviewed_in──▶ Review <span class="cm">"#42"</span>
+  ──enacts──▶ Decision  <span class="cm">(closes the loop)</span></code></pre>
+  <p class="small">Two things learned in the build: CG stores edges <b>undirected</b> (endpoints
+  canonicalized), so traversal is undirected + link-keyed; and <code>relation/create</code> isn't
+  idempotent (<code>relate()</code> now tolerates "already exists"). <b>The traceable chain is the heart of
+  the D9 demo</b> — every node typed, each carrying its attribution stamp. Remaining in M3: the GitHub PR
+  review connector (D8, the net-new build).</p>
 </section>
 
 <!-- log -->
