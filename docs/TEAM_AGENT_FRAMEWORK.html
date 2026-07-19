@@ -759,6 +759,23 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     couldn't). That contrast — the same agent, same question, one with the shared brain and one without — is
     the whole thesis, <b>measured</b>. The walking skeleton is complete.
   </div>
+
+  <h3>Real-agent proof — an agent drives the loop, not a script <span class="pill win">✓</span></h3>
+  <p>Everything above was script-driven, proving the plumbing. This closes the last gap: a <b>real headless
+  Claude Code agent</b> (<code>claude -p</code>, on this box's <b>Max subscription</b> — A2 satisfied)
+  autonomously drove the loop through the CG <b>MCP tools</b> in a preset-generated project.</p>
+  <div class="callout key">
+    <div class="clabel">The agent did it itself</div>
+    Given one task, the agent: (1) called <code>search_precedents</code> and <b>found + quoted a teammate's
+    prior decision verbatim</b> — <i>"Adopt pull-only cross-agent sync (by dima)… querying the graph fresh,
+    not via push"</i> — synthesizing <i>"reuse this rather than building an event bus"</i>; then (2) called
+    <code>record_decision</code> to write a new decision (<code>Cap webhook connector retries</code>, by
+    <code>agent-demo</code>), server-confirmed. <b>Independently verified</b>: that decision is now in the
+    graph, findable by the next agent's precedent search. The loop is agent-driven, end to end — D1
+    "solo-excellent" is genuinely proven. (Fixes folded back: the preset now pre-approves the CG MCP server
+    so projects are agent-ready; <code>cg/auth.py</code> now reads the real <code>claude auth status</code>
+    JSON → "subscription (max)".)
+  </div>
 </section>
 
 <!-- log -->
