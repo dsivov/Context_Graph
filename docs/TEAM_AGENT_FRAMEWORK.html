@@ -634,8 +634,8 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
   <div class="status-row">
     <span class="st"><span class="dot done"></span> M1 · shared ontology — <b>&nbsp;done</b></span>
     <span class="st"><span class="dot done"></span> M2 · solo loop preset — <b>&nbsp;done</b></span>
-    <span class="st"><span class="dot live"></span> M3 · fill four + review connector</span>
-    <span class="st"><span class="dot"></span> M4 · fork + pull-watcher</span>
+    <span class="st"><span class="dot done"></span> M3 · fill four + review connector — <b>&nbsp;done</b></span>
+    <span class="st"><span class="dot live"></span> M4 · fork + pull-watcher</span>
   </div>
 
   <h3>M1 — the 4-artifact ontology <span class="pill win">done</span></h3>
@@ -714,8 +714,24 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
   <p class="small">Two things learned in the build: CG stores edges <b>undirected</b> (endpoints
   canonicalized), so traversal is undirected + link-keyed; and <code>relation/create</code> isn't
   idempotent (<code>relate()</code> now tolerates "already exists"). <b>The traceable chain is the heart of
-  the D9 demo</b> — every node typed, each carrying its attribution stamp. Remaining in M3: the GitHub PR
-  review connector (D8, the net-new build).</p>
+  the D9 demo</b> — every node typed, each carrying its attribution stamp.</p>
+
+  <h4>The GitHub review connector <span class="pill win">done</span></h4>
+  <p>The one net-new build (D8), fixture-driven so it needs no token
+  (<code>cohermes/cg/connectors/reviews.py</code>). It parses a GitHub PR and ingests its reviews as
+  <b>Review</b> nodes, linked <code>reviewed_in</code> to the PR's commits and — parsing a
+  <code>Decision:</code> line from the PR body — <code>enacts</code> to that Decision, tying real reviews
+  into the chain. Verdicts map GitHub state → the ontology enum (<code>APPROVED→approved</code>,
+  <code>CHANGES_REQUESTED→changes_requested</code>, <code>COMMENTED→</code> none).</p>
+  <div class="callout ok">
+    <div class="clabel">Thin boundary held (D8) — proven on <code>fixtures/pr_42.json</code></div>
+    Neutral <code>PullRequest</code>/<code>PRReview</code> shapes; GitHub-specific parsing isolated in one
+    <code>_normalize_github</code>; <code>FixtureSource</code> (offline) and <code>GitHubSource</code>
+    (live, <code>GITHUB_TOKEN</code>) share that normalizer — so a real token or a GitLab source is
+    <b>additive, not a rewrite</b>. Ingested 3 reviews (sarah/marcus/priya), linked to the commit and the
+    decision; the chain still traces. <b>M3 complete — all four artifacts, cross-linked, fed by real PR
+    data.</b>
+  </div>
 </section>
 
 <!-- log -->
