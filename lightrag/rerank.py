@@ -542,9 +542,9 @@ async def bedrock_rerank(
         documents: List of strings to rerank
         top_n: Number of top results to return (defaults to all)
         model: Bedrock model id or ARN (default: cohere.rerank-v3-5:0)
-        region: AWS region (default: BEDROCK_RERANK_REGION / AWS_REGION /
-            us-east-1). Cohere Rerank 3.5: us-east-1, us-west-2, ca-central-1,
-            eu-central-1, ap-northeast-1.
+        region: AWS region (default: BEDROCK_RERANK_REGION env, else us-east-1).
+            Cohere Rerank 3.5: us-east-1, us-west-2, ca-central-1, eu-central-1,
+            ap-northeast-1.
         api_key: Bedrock API key; sets AWS_BEARER_TOKEN_BEDROCK if provided
         max_chars_per_doc: Truncate each document before sending (Cohere Rerank
             3.5 context window is 4K tokens)
@@ -555,13 +555,7 @@ async def bedrock_rerank(
     if not documents:
         return []
 
-    region = (
-        region
-        or os.getenv("BEDROCK_RERANK_REGION")
-        or os.getenv("AWS_REGION")
-        or os.getenv("AWS_DEFAULT_REGION")
-        or "us-east-1"
-    )
+    region = region or os.getenv("BEDROCK_RERANK_REGION") or "us-east-1"
     if api_key:
         os.environ.setdefault("AWS_BEARER_TOKEN_BEDROCK", api_key)
 
