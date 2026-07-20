@@ -357,7 +357,7 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     <text class="num" x="216" y="164">①</text>
     <text class="t" x="234" y="166" fill="#8fe6f2">cohermes MCP</text>
     <text class="s" x="216" y="184">local stdio · thin · stateless</text>
-    <text class="s" x="216" y="198">node+trace · chain · ingest · learning</text>
+    <text class="s" x="216" y="198">record · link · ingest · learn · orient</text>
 
     <!-- agent to local cohermes MCP -->
     <path class="ct" d="M300,130 L 290,144"/>
@@ -404,6 +404,15 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     <!-- ghost dev + watcher to CG -->
     <path class="dash" d="M230,395 C 430,395 470,360 486,320"/>
     <path class="dash" d="M402,250 C 450,250 460,250 470,240"/>
+
+    <!-- flow legend -->
+    <rect x="16" y="450" width="830" height="30" rx="8" fill="#12151d" stroke="#232a3a"/>
+    <text class="s" x="30" y="469" fill="#8fe6f2">▲ writes</text>
+    <text class="s" x="100" y="469">agent → brain (decisions · chain · learnings · ingest)</text>
+    <text class="s" x="420" y="469" fill="#9cc0ff">◀ orient</text>
+    <text class="s" x="486" y="469">brain → agent briefing (read-from-brain)</text>
+    <text class="s" x="700" y="469" fill="#7fe3cf">● backfill</text>
+    <text class="s" x="770" y="469">seeds it</text>
   </svg>
   </div><figcaption><b>① Why a local cohermes MCP server?</b> See below. The agent connects to <i>two</i> MCP
   servers — <span style="color:#8fe6f2">cohermes</span> (local) and <span style="color:#9cc0ff">context-graph</span>
@@ -1013,6 +1022,23 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
   raw code/diffs and unfiltered agent memory are kept out. The brain carries both a <b>structured spine</b>
   (the traceable chain) and <b>textual flesh</b> (retrievable prose) — the reason an agent can both
   <i>trace</i> a decision and <i>explain</i> the architecture.</figcaption></figure>
+
+  <h3>record_learning + make-the-brain-real + orient <span class="pill win">✓</span></h3>
+  <p>Three moves that turn the brain from a test fixture into something that reduces drift.</p>
+  <div class="grid g3">
+    <div class="card"><b>record_learning</b> (D12/D13)<br><span class="small">agents promote <i>curated</i> learnings as attributed, confidence-scored <code>Insight</code> nodes + retrievable prose, with active/superseded validity. Proven: an agent promoted a learning; a query retrieves it verbatim.</span></div>
+    <div class="card"><b>Curated backfill</b> (D11)<br><span class="small">dogfood — <code>cg/backfill.py</code> ingested cohermes's own <b>13 module purposes</b> (docstrings) + design docs as prose + <code>Module</code> nodes. Not a repo dump; the durable <i>why</i>.</span></div>
+    <div class="card"><b>orient</b> (read-from-brain)<br><span class="small"><code>cg/orient.py</code> + tool brief an agent at task start: relevant decisions + active learnings + architecture context — so it <b>begins aligned</b>.</span></div>
+  </div>
+  <div class="callout key">
+    <div class="clabel">The drift-reduction loop, closed — proven with a real agent</div>
+    Before building a new connector, an agent called <code>orient</code> and the brief surfaced sarah's
+    <i>"use fixture-first connectors"</i> decision and the <i>"MCP needs PYTHONPATH=repo root"</i> learning.
+    The agent <b>reused them, cited them, and stayed within the existing pattern</b> — it began with the
+    team's current understanding instead of re-deriving. That's the whole point of a shared brain: agents
+    <i>start</i> aligned and <i>end</i> aligned. (Diagram updated: writes → brain, orient ← brain, backfill
+    seeds it.)
+  </div>
 </section>
 
 <!-- log -->
