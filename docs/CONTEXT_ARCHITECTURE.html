@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cohermes — How context actually works</title>
+<style>
+:root{--bg:#0f1117;--panel:#1b1f2a;--panel2:#222736;--ink:#e7ebf3;--ink-soft:#aab3c5;--ink-faint:#7b8499;
+--line:#2c3346;--line-soft:#232a3a;--a:#5b8def;--b:#19b89a;--c:#f0a73c;--ctrl:#22c3d6;--ok:#3ecf8e;--danger:#ef5b6e;
+--mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;--maxw:1080px;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.35);}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(1100px 600px at 82% -10%,rgba(34,195,214,.10),transparent 60%),
+radial-gradient(900px 520px at -10% 8%,rgba(25,184,154,.08),transparent 55%),var(--bg);
+color:var(--ink);font:16px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:64px 22px 30px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(34,195,214,.07),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,48px);margin:.3em 0 .2em;background:linear-gradient(92deg,#bdf0ea,#8fb4d9 55%,#a7ecf5);
+-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(16px,2vw,20px);color:var(--ink-soft)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:220px 1fr;gap:38px;padding:28px 22px 90px}
+nav.toc{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;border:1px solid var(--line);
+border-radius:var(--radius);background:var(--panel);padding:12px}
+nav.toc .tl{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 8px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:t}nav.toc li{counter-increment:t}
+nav.toc a{display:flex;gap:8px;padding:5px 8px;border-radius:8px;color:var(--ink-soft);font-size:13px}
+nav.toc a::before{content:counter(t,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);color:var(--ink);text-decoration:none}
+main{min-width:0;max-width:760px}section{margin:0 0 48px;scroll-margin-top:18px}
+h2{font-size:clamp(21px,3vw,28px);margin:0 0 6px}h3{font-size:18px;margin:24px 0 6px}
+.kick{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ctrl);font-weight:700;margin-bottom:6px}
+p{margin:.6em 0}.small{font-size:13.5px;color:var(--ink-faint)}.lead-p{font-size:18px;color:var(--ink)}
+pre{background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:13px 15px;overflow:auto;font-size:13px;line-height:1.55}
+code:not(pre code){background:#161922;border:1px solid var(--line-soft);border-radius:5px;padding:1px 5px;font-size:13px}
+.callout{border-radius:12px;padding:13px 15px;border:1px solid var(--line);background:var(--panel2);margin:16px 0}
+.callout .cl{font-weight:700;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}
+.callout.key{border-color:rgba(34,195,214,.55);background:rgba(34,195,214,.10)}.callout.key .cl{color:#8fe6f2}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .cl{color:#7ee3b4}
+.callout.warn{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.warn .cl{color:#ffce86}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th{background:var(--panel2);text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink-soft)}
+td{padding:9px 11px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.fig{background:#12151d;border:1px solid var(--line-soft);border-radius:12px;padding:15px;margin:18px 0}
+figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(34,195,214,.16);color:#8fe6f2;border-color:rgba(34,195,214,.45)}
+.footer{max-width:var(--maxw);margin:0 auto;padding:26px 22px 60px;color:var(--ink-faint);font-size:13px;border-top:1px solid var(--line)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}main{max-width:none}}
+</style>
+</head>
+<body>
+<header class="hero"><div class="hero-inner">
+  <div class="eyebrow">cohermes · architecture · explainer</div>
+  <h1>How context actually works</h1>
+  <p class="lede">A working coding session succeeds on more than shared knowledge. This is what "context"
+  really is, where each piece lives in cohermes, who decides to call tools, and how their results reach the
+  model — with the honest limits.</p>
+</div></header>
+
+<div class="layout">
+<nav class="toc"><div class="tl">Contents</div><ol>
+  <li><a href="#q">The question</a></li>
+  <li><a href="#layers">Four layers of context</a></li>
+  <li><a href="#enough">Is CG enough?</a></li>
+  <li><a href="#who">Who calls the tools</a></li>
+  <li><a href="#flow">How results reach the model</a></li>
+  <li><a href="#window">The finite window → curation</a></li>
+  <li><a href="#model">The mental model</a></li>
+</ol></nav>
+
+<main>
+
+<section id="q">
+  <div class="kick">why this matters</div>
+  <h2>The question</h2>
+  <p class="lead-p">When a developer works with a Claude Code agent, the <b>whole session</b> is part of the
+  success: the agent knows what was done, where things are, how to start the dev server, which port a service
+  runs on. A fair worry: in a cohermes/Hermes setup, where does the working agent get all of that? Only from
+  the Context Graph? Is that enough for complex development?</p>
+  <div class="callout key"><div class="cl">Short answer</div>
+    The Context Graph is <b>one layer</b> — the durable, shared one. A working agent assembles <b>four</b>
+    layers, and cohermes makes exactly one of them first-class. CG is not, and was never meant to be, the
+    whole context.</div>
+</section>
+
+<section id="layers">
+  <div class="kick">the reframe</div>
+  <h2>"Context" is four layers, in four places</h2>
+  <p>They all converge on one place — the model's context window — but they come from different sources with
+  very different properties (shared? durable? how it arrives).</p>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 840 384" role="img" aria-label="Four context layers converging on the model's context window">
+    <defs><marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#7b8499"/></marker></defs>
+    <style>.b{fill:#1b1f2a;stroke:#2c3346;rx:9}.t{fill:#e7ebf3;font:600 12.5px "Segoe UI"}.s{fill:#8a93a6;font:10px "Segoe UI"}
+    .l{fill:#7b8499;font:italic 10px "SF Mono",monospace}.ln{stroke:#3a4256;stroke-width:1.5;fill:none;marker-end:url(#ah)}</style>
+    <rect class="b" x="14" y="26" width="266" height="66" stroke="#22c3d6"/><text class="t" x="28" y="47">A · Durable shared knowledge</text>
+    <text class="s" x="28" y="65">decisions · architecture · learnings</text><text class="l" x="28" y="82">in CG/cohermes · shared · via orient</text>
+    <rect class="b" x="14" y="112" width="266" height="66" stroke="#5b8def"/><text class="t" x="28" y="133">B · Operational facts</text>
+    <text class="s" x="28" y="151">ports · run cmds · env · conventions</text><text class="l" x="28" y="168">in CLAUDE.md · promote durable → CG</text>
+    <rect class="b" x="14" y="198" width="266" height="66" stroke="#3ecf8e"/><text class="t" x="28" y="219">C · The codebase</text>
+    <text class="s" x="28" y="237">the actual files &amp; structure</text><text class="l" x="28" y="254">in git · read live (Read/Grep/Bash)</text>
+    <rect class="b" x="14" y="284" width="266" height="66" stroke="#f0a73c"/><text class="t" x="28" y="305">D · Session working state</text>
+    <text class="s" x="28" y="323">the current task's thread</text><text class="l" x="28" y="340">in the live session · transient</text>
+
+    <rect class="b" x="556" y="120" width="270" height="150" stroke="#22c3d6" fill="#12242a"/>
+    <text class="t" x="574" y="150" fill="#8fe6f2">The model's context window</text>
+    <text class="s" x="574" y="172">everything converges here —</text>
+    <text class="s" x="574" y="188">CLAUDE.md + brief + tool results + code</text>
+    <text class="l" x="574" y="214" fill="#ffce86">FINITE → must stay curated</text>
+    <text class="s" x="574" y="238">(the agent reasons over this)</text>
+
+    <path class="ln" d="M280,59 C 420,59 430,150 556,150"/><text class="l" x="330" y="86">inject (orient)</text>
+    <path class="ln" d="M280,145 C 420,145 440,175 556,178"/><text class="l" x="330" y="132">loaded at start</text>
+    <path class="ln" d="M280,231 C 420,231 440,210 556,206"/><text class="l" x="330" y="252">on-demand reads</text>
+    <path class="ln" d="M280,317 C 430,317 440,240 556,236"/><text class="l" x="330" y="336">accumulates</text>
+  </svg>
+  </div><figcaption>Four sources, one destination. cohermes owns <b>A</b> (and the shareable part of
+  <b>B</b>); <b>B/C/D</b> are Claude Code's native mechanisms, unchanged.</figcaption></figure>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Layer</th><th>Example (this project)</th><th>Lives in</th><th>Shared? Durable?</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill ctrl">A</span> durable knowledge</td><td>why pull-only sync; node+trace; architecture</td><td>CG / cohermes</td><td>shared · cross-session</td></tr>
+      <tr><td><span class="pill a">B</span> operational</td><td>CG on :9621, conda env, how to run the server</td><td>CLAUDE.md (+ promote to CG)</td><td>per-repo · durable</td></tr>
+      <tr><td><span class="pill b">C</span> codebase</td><td>the actual <code>cg/*.py</code> files</td><td>git</td><td>shared · read live</td></tr>
+      <tr><td><span class="pill c">D</span> session state</td><td>what we did 5 min ago; the debug thread</td><td>the session window</td><td>transient · not shared</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="enough">
+  <div class="kick">the honest answer</div>
+  <h2>Is the Context Graph enough on its own?</h2>
+  <p><b>No — and that's by design.</b> CG's job is to make sure the agent doesn't <i>re-derive team decisions</i>
+  and <i>starts aligned</i>. Complex development still needs the operational memory (CLAUDE.md), the live code
+  (read on demand), and the session's working state. cohermes makes the <b>shared, durable layer</b>
+  excellent; the rest stays Claude Code's native context.</p>
+  <div class="callout ok"><div class="cl">What converts a session into shared knowledge</div>
+    The loop — <code>record-the-why</code>, <code>record_learning</code>, <code>ingest_context</code>. That's
+    how the durable parts of <i>this</i> session (a decision, a gotcha, "the server runs on :9621") become
+    layer A/B for the <i>next</i> agent. What you don't promote is re-derived or lost — inherent to any
+    hand-off. cohermes maximizes what survives; it can't perfectly clone a session.</div>
+  <p class="small">So the completeness of the shared context depends on <b>team discipline in promoting
+  knowledge</b> — which the tools + <code>orient</code> make cheap, but the team still has to do.</p>
+</section>
+
+<section id="who">
+  <div class="kick">the runtime</div>
+  <h2>Who decides to call tools, subagents, and MCP?</h2>
+  <p class="lead-p">The <b>model (Claude), inside Claude Code's agentic loop</b> — not Hermes. Hermes is the
+  outer orchestrator; it launches and manages Claude Code but does not drive its inner tool loop.</p>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 840 380" role="img" aria-label="Hermes wraps Claude Code wraps the model; the model drives the tool loop">
+    <defs><marker id="ah2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22c3d6"/></marker>
+    <marker id="ah3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#7b8499"/></marker></defs>
+    <style>.z{fill:none;rx:12}.bx{fill:#1b1f2a;stroke:#2c3346;rx:9}.t{fill:#e7ebf3;font:600 12px "Segoe UI"}
+    .s{fill:#8a93a6;font:10px "Segoe UI"}.l{fill:#7b8499;font:italic 10px "SF Mono",monospace}
+    .lc{stroke:#22c3d6;stroke-width:1.6;fill:none;marker-end:url(#ah2)}.ln{stroke:#3a4256;stroke-width:1.5;fill:none;marker-end:url(#ah3)}</style>
+
+    <rect class="z" x="12" y="18" width="620" height="250" stroke="#3a4256" stroke-dasharray="5 4"/>
+    <text class="l" x="26" y="38">HERMES — orchestrator: launch · gateway/UI · scheduling · (outside the loop)</text>
+
+    <rect class="bx" x="34" y="52" width="470" height="196" stroke="#5b8def"/>
+    <text class="t" x="48" y="72">Claude Code — the working agent (harness)</text>
+
+    <rect class="bx" x="54" y="86" width="300" height="70" stroke="#22c3d6" fill="#12242a"/>
+    <text class="t" x="68" y="108" fill="#8fe6f2">the Model (Claude)</text>
+    <text class="s" x="68" y="126">reasons · decides which tool to call</text>
+    <text class="l" x="68" y="143">steered by CLAUDE.md + orient brief + tool descriptions</text>
+
+    <!-- tools -->
+    <rect class="bx" x="54" y="182" width="128" height="50"/><text class="t" x="66" y="202">Bash · Read · Edit</text><text class="s" x="66" y="218">local, on the machine</text>
+    <rect class="bx" x="196" y="182" width="150" height="50" stroke="#22c3d6"/><text class="t" x="208" y="202">MCP client</text><text class="s" x="208" y="218">cohermes + context-graph</text>
+    <rect class="bx" x="360" y="182" width="128" height="50"/><text class="t" x="372" y="202">Subagent</text><text class="s" x="372" y="218">Task tool (own loop)</text>
+
+    <path class="lc" d="M120,156 L 118,180"/><path class="lc" d="M230,156 L 260,180"/><path class="lc" d="M300,156 L 400,180"/>
+    <text class="l" x="360" y="172" fill="#8fe6f2">the model calls tools</text>
+
+    <!-- CG remote -->
+    <rect class="bx" x="662" y="120" width="160" height="86" stroke="#22c3d6"/>
+    <text class="t" x="676" y="142" fill="#8fe6f2">Context Graph</text><text class="s" x="676" y="160">the shared brain (remote)</text>
+    <text class="s" x="676" y="178">MCP + REST · one workspace</text><text class="l" x="676" y="196">all shared state</text>
+    <path class="lc" d="M346,205 C 520,205 560,170 662,165"/><text class="l" x="520" y="195" fill="#8fe6f2">HTTP</text>
+
+    <!-- hermes launches claude code -->
+    <path class="ln" d="M300,300 C 300,280 300,262 300,250"/>
+    <rect class="bx" x="200" y="300" width="240" height="46" stroke="#a974f0"/>
+    <text class="t" x="214" y="320">Hermes launches Claude Code</text><text class="s" x="214" y="336">cohermes-agent / the agent:start hook</text>
+    <text class="l" x="470" y="326">…but never drives the inner tool loop</text>
+  </svg>
+  </div><figcaption>Three nested responsibilities: <b>Hermes</b> orchestrates (when/how to launch),
+  <b>Claude Code</b> is the harness, <b>the model</b> decides tool calls. In the simplest cohermes flow
+  (<code>cohermes-agent</code>, no Hermes) it's just Claude Code + the brain.</figcaption></figure>
+</section>
+
+<section id="flow">
+  <div class="kick">the loop</div>
+  <h2>How results from tools / MCP / subagents reach the model</h2>
+  <p>Through the agentic loop — every result lands back in the model's context window as a
+  <code>tool_result</code>:</p>
+  <figure><div class="fig">
+  <svg viewBox="0 0 840 250" role="img" aria-label="The agentic loop: model to tool_use to executor to tool_result back to model">
+    <defs><marker id="ah4" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22c3d6"/></marker></defs>
+    <style>.bx{fill:#1b1f2a;stroke:#2c3346;rx:9}.t{fill:#e7ebf3;font:600 12px "Segoe UI"}.s{fill:#8a93a6;font:10px "Segoe UI"}
+    .l{fill:#8fe6f2;font:italic 10.5px "SF Mono",monospace}.lc{stroke:#22c3d6;stroke-width:1.6;fill:none;marker-end:url(#ah4)}</style>
+    <rect class="bx" x="30" y="90" width="150" height="64" stroke="#22c3d6" fill="#12242a"/><text class="t" x="44" y="116">the Model</text><text class="s" x="44" y="134">reasons over the window</text>
+    <path class="lc" d="M180,110 L 330,110"/><text class="l" x="200" y="102">emits tool_use</text>
+    <rect class="bx" x="332" y="86" width="170" height="72"/><text class="t" x="346" y="108">Claude Code</text><text class="s" x="346" y="126">executes the call:</text><text class="s" x="346" y="142">bash · MCP · subagent</text>
+    <rect class="bx" x="540" y="30" width="270" height="40"/><text class="s" x="554" y="55">Bash/Read → runs locally</text>
+    <rect class="bx" x="540" y="82" width="270" height="40" stroke="#22c3d6"/><text class="s" x="554" y="107">MCP → Context Graph (HTTP) → result</text>
+    <rect class="bx" x="540" y="134" width="270" height="40"/><text class="s" x="554" y="159">Subagent → own loop → <tspan fill="#8fe6f2">summary only</tspan></text>
+    <path class="lc" d="M502,110 L 540,50"/><path class="lc" d="M502,120 L 540,102"/><path class="lc" d="M502,140 L 540,154"/>
+    <path class="lc" d="M540,190 C 300,220 120,220 105,156"/><text class="l" x="250" y="212">tool_result → back into the window</text>
+  </svg>
+  </div><figcaption>The model emits a <code>tool_use</code>; Claude Code runs it (locally, as an MCP client
+  to CG, or as a subagent with its own loop); the <code>tool_result</code> is appended to the conversation and
+  the model sees it next turn. A <b>subagent returns only its summary</b> — its raw work stays out of the
+  parent's window.</figcaption></figure>
+</section>
+
+<section id="window">
+  <div class="kick">the constraint</div>
+  <h2>The window is finite — so curation is <em>architectural</em></h2>
+  <p>Everything converges on one finite context window, which the injected knowledge shares with the code the
+  agent must read. You <b>cannot</b> pour the whole team brain into it. That's precisely why the brain is
+  <b>curated</b> (store the durable <i>why</i>, not a repo mirror) and <code>orient</code> returns a
+  <b>focused brief</b>, not everything.</p>
+  <div class="callout warn"><div class="cl">Your "curated learnings, not index-overload" was load-bearing</div>
+    It isn't just tidiness — it's what keeps the working agent's window high-signal. The design that follows
+    from the constraint: a <b>curated brain</b> + a <b>focused orient brief</b> + <b>on-demand retrieval</b>
+    (the agent pulls more via tools only when it needs it), rather than front-loading everything.</div>
+</section>
+
+<section id="model">
+  <div class="kick">in one picture</div>
+  <h2>The mental model</h2>
+  <p>Keep these three sentences and the rest follows:</p>
+  <ul>
+    <li><b>Context is four layers</b> — durable shared (CG), operational (CLAUDE.md), the code (git), the
+      session (transient). cohermes owns the first; the others are native.</li>
+    <li><b>The model drives</b> the tool/MCP/subagent calls inside Claude Code; Hermes orchestrates from
+      outside and never touches that inner loop.</li>
+    <li><b>Everything converges on a finite window</b>, so the brain stays curated and <code>orient</code>
+      stays focused — the agent retrieves more only on demand.</li>
+  </ul>
+  <div class="callout key"><div class="cl">Net</div>
+    cohermes doesn't try to <i>be</i> the whole context. It makes the one layer that was missing — durable,
+    shared, cross-agent knowledge — first-class and cheap to read/write, and lets Claude Code's native layers
+    do the rest.</div>
+</section>
+
+</main>
+</div>
+<footer class="footer">cohermes — context architecture explainer · companion to
+<a href="TEAM_AGENT_FRAMEWORK.html">TEAM_AGENT_FRAMEWORK.html</a> and the cohermes
+<code>docs/SETUP.html</code></footer>
+</body>
+</html>
