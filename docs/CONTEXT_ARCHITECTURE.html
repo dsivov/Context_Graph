@@ -73,6 +73,7 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
   <li><a href="#window">The finite window → curation</a></li>
   <li><a href="#pp">"-p" and the layers</a></li>
   <li><a href="#history">Where history lives</a></li>
+  <li><a href="#vshermes">CG vs Hermes memory</a></li>
   <li><a href="#example">Worked example · -p</a></li>
   <li><a href="#tmux">Worked example · tmux</a></li>
   <li><a href="#model">The mental model</a></li>
@@ -298,6 +299,62 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     The <b>model is stateless</b>; <b>Claude Code</b> is what stores conversation history on disk and re-sends
     it each turn; <b>Hermes</b> keeps its own. cohermes puts the knowledge that must <b>outlive and cross</b>
     sessions (and machines) in <b>CG</b> — not in any transcript, which is local, per-agent, and transient.</div>
+</section>
+
+<section id="vshermes">
+  <div class="kick">a fair question</div>
+  <h2>Isn't this just Hermes's memory, in graph mode?</h2>
+  <p class="lead-p">Hermes already tracks sessions, recalls across sessions (FTS5 search), and bookkeeps async
+  work. So does the Context Graph just re-implement that? <b>No</b> — it's a different <i>kind</i> of memory
+  for a different <i>purpose</i>; they barely overlap.</p>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 840 232" role="img" aria-label="Hermes state.db vs Context Graph — different memories">
+    <style>.bx{fill:#1b1f2a;stroke:#2c3346;rx:11}.t{fill:#e7ebf3;font:600 13px "Segoe UI"}.s{fill:#8a93a6;font:10.5px "Segoe UI"}
+    .tag{fill:#7b8499;font:italic 10.5px "SF Mono",monospace}</style>
+    <rect class="bx" x="24" y="24" width="360" height="160" stroke="#5b8def"/>
+    <text class="t" x="42" y="50" fill="#9cc0ff">Hermes · state.db</text>
+    <text class="s" x="42" y="76">· per-user · local (not replicated)</text>
+    <text class="s" x="42" y="96">· raw chat transcripts + FTS5 text search</text>
+    <text class="s" x="42" y="116">· async / cron / kanban bookkeeping</text>
+    <text class="s" x="42" y="136">· recall: "what did you &amp; Hermes discuss?"</text>
+    <text class="tag" x="42" y="166">your conversation memory</text>
+
+    <text x="404" y="112" fill="#7b8499" font-family="SF Mono,monospace" font-size="22">≠</text>
+
+    <rect class="bx" x="456" y="24" width="360" height="160" stroke="#22c3d6" fill="#12242a"/>
+    <text class="t" x="474" y="50" fill="#8fe6f2">Context Graph</text>
+    <text class="s" x="474" y="76">· team-shared · remote (one workspace)</text>
+    <text class="s" x="474" y="96">· curated TYPED graph + semantic/graph retrieval</text>
+    <text class="s" x="474" y="116">· governance: ontology · rules · provenance</text>
+    <text class="s" x="474" y="136">· recall: "what did the TEAM decide?"</text>
+    <text class="tag" x="474" y="166">the team's project knowledge</text>
+
+    <text class="s" x="24" y="210">Different subject · different scope · different shape — complementary, not duplicative.</text>
+  </svg>
+  </div></figure>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Axis</th><th>Hermes <code>state.db</code></th><th>Context Graph</th></tr></thead>
+    <tbody>
+      <tr><td>Whose / scope</td><td><i>one user's</i> conversations with Hermes</td><td>the <i>team's</i> project knowledge</td></tr>
+      <tr><td>Subject</td><td>what was <b>said</b> (a chat log)</td><td>what was <b>decided / learned</b></td></tr>
+      <tr><td>Shape</td><td>raw transcripts + FTS5 index</td><td>curated <b>typed graph</b> (Decision/Task/…/Insight + links + provenance)</td></tr>
+      <tr><td>Retrieval</td><td>keyword / full-text</td><td>graph traversal + semantic precedent + multi-hop (CGR3)</td></tr>
+      <tr><td>Topology</td><td><b>local, per-machine, not replicated</b></td><td><b>one shared remote workspace</b>, all agents read+write</td></tr>
+      <tr><td>Governance</td><td>none (it's a log)</td><td>ontology · rules · validity/supersession · RBAC</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout key"><div class="cl">The clincher</div>
+    The whole reason cohermes exists is that Hermes's memory is <b>per-user and local</b> — the Hermes source
+    itself states <i>"memory is NOT replicated across instances or machines."</i> It <b>structurally cannot be
+    a team brain.</b> CG fills exactly that gap; it doesn't duplicate it. And the async/cron/kanban
+    bookkeeping is Hermes's own <b>runtime job queue</b> — orthogonal to a shared knowledge graph, not
+    something CG re-does.</div>
+  <p class="small"><b>The analogy:</b> Hermes's <code>state.db</code> is <i>your private notes and chat log
+  with an assistant</i>; CG is <i>the team's engineering decision records + architecture graph</i>. One is
+  "what I discussed"; the other is "what the team knows." cohermes runs them side by side.</p>
 </section>
 
 <section id="example">
