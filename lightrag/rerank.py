@@ -513,6 +513,76 @@ async def ali_rerank(
     )
 
 
+async def bedrock_rerank(
+    query: str,
+    documents: List[str],
+    top_n: Optional[int] = None,
+    model: str = "cohere.rerank-v3-5:0",
+    region: Optional[str] = None,
+    api_key: Optional[str] = None,
+    max_chars_per_doc: int = 16000,
+    **kwargs: Any,
+) -> List[Dict[str, Any]]:
+    """
+    Rerank documents using Amazon Bedrock (Cohere Rerank 3.5 by default).
+
+    Calls ``bedrock-runtime`` ``InvokeModel`` — the endpoint that honors the
+    Bedrock **API key** (botocore reads ``AWS_BEARER_TOKEN_BEDROCK``). The
+    ``bedrock-agent-runtime`` Rerank API is deliberately NOT used: it requires
+    SigV4/IAM credentials and rejects the bearer key with NoCredentialsError.
+    boto3 runs in a thread (its response body is a plain sync stream). Pass
+    ``api_key`` to set the bearer token explicitly.
+
+    Requires the account to have granted model access to the rerank model
+    (AWS Marketplace subscription in the Bedrock console); otherwise Bedrock
+    returns AccessDeniedException.
+
+    Args:
+        query: The search query
+        documents: List of strings to rerank
+        top_n: Number of top results to return (defaults to all)
+        model: Bedrock model id or ARN (default: cohere.rerank-v3-5:0)
+        region: AWS region (default: BEDROCK_RERANK_REGION env, else us-east-1).
+            Cohere Rerank 3.5: us-east-1, us-west-2, ca-central-1, eu-central-1,
+            ap-northeast-1.
+        api_key: Bedrock API key; sets AWS_BEARER_TOKEN_BEDROCK if provided
+        max_chars_per_doc: Truncate each document before sending (Cohere Rerank
+            3.5 context window is 4K tokens)
+
+    Returns:
+        List of dictionary of ["index": int, "relevance_score": float]
+    """
+    if not documents:
+        return []
+
+    region = region or os.getenv("BEDROCK_RERANK_REGION") or "us-east-1"
+    if api_key:
+        os.environ.setdefault("AWS_BEARER_TOKEN_BEDROCK", api_key)
+
+    docs = [d[:max_chars_per_doc] for d in documents]
+    top_n = min(top_n or len(docs), len(docs))
+    body = {"query": query, "documents": docs, "top_n": top_n, "api_version": 2}
+
+    import asyncio
+    import json
+
+    def _invoke() -> Dict[str, Any]:
+        import boto3
+
+        client = boto3.client("bedrock-runtime", region_name=region)
+        resp = client.invoke_model(modelId=model, body=json.dumps(body))
+        return json.loads(resp["body"].read())
+
+    data = await asyncio.to_thread(_invoke)
+    out: List[Dict[str, Any]] = []
+    for r in data.get("results", []):
+        # Cohere's native InvokeModel output uses relevance_score; be tolerant
+        # of the Rerank-API camelCase form too.
+        score = r.get("relevance_score", r.get("relevanceScore"))
+        out.append({"index": r["index"], "relevance_score": score})
+    return out
+
+
 """Please run this test as a module:
 python -m lightrag.rerank
 """

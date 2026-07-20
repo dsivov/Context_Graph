@@ -254,7 +254,7 @@ def parse_args() -> argparse.Namespace:
         "--rerank-binding",
         type=str,
         default=get_env_value("RERANK_BINDING", DEFAULT_RERANK_BINDING),
-        choices=["null", "cohere", "jina", "aliyun"],
+        choices=["null", "cohere", "jina", "aliyun", "bedrock"],
         help=f"Rerank binding type (default: from env or {DEFAULT_RERANK_BINDING})",
     )
 
