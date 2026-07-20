@@ -776,6 +776,32 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     so projects are agent-ready; <code>cg/auth.py</code> now reads the real <code>claude auth status</code>
     JSON → "subscription (max)".)
   </div>
+
+  <h3>The team dimension — many developers, one brain <span class="pill win">✓</span></h3>
+  <p>The headline the poster promises, now demonstrated with <b>two real agents of distinct identity</b>.
+  Per-developer identity (D2's deferred half) is done pragmatically: since MCP carries no authenticated
+  principal, the preset bakes <i>"you act for developer X"</i> into each project's <code>CLAUDE.md</code>
+  (<code>cg.preset --developer</code>), so an agent stamps its writes with that name. Not authenticated auth —
+  attribution — but enough to make "who did what" real across the team.</p>
+  <div class="callout key">
+    <div class="clabel">Two agents, one coherent decision — the demo</div>
+    <b>Dev A (dima)'s</b> agent recorded a decision: <i>"Use OAuth 2.0 for the webhook connector"</i>.
+    <b>Dev B's pull-watcher</b> (baseline taken before A acted) then reported the change — awareness without a
+    push bus. <b>Dev B (sarah)'s</b> <i>separate</i> agent, tasked with token refresh, first
+    <code>search_precedents</code> → <b>found dima's decision, quoted it, and named dima as its author</b> —
+    then recorded a follow-on <i>(approved_by <b>sarah</b>)</i> whose rationale explicitly <b>"builds on the
+    team decision (approved_by dima) to use OAuth 2.0"</b>. Verified in the graph: two decisions, two authors,
+    one coherent thread. Sarah's agent didn't pick a divergent auth scheme — it <b>extended dima's</b>, kept
+    aligned <i>through the shared graph</i>. That is the whole point: a team of agents building one system,
+    not many.
+  </div>
+  <div class="callout info">
+    <div class="clabel">Honest edges</div>
+    The agents write via CG's MCP <code>record_decision</code> (edge-<i>trace</i> only), so their entries are
+    traces, not full <code>Decision</code> nodes (the watcher lists them as generic nodes). A cohermes MCP
+    tool doing the node+trace dual-write (D10) is the clean next refinement. And identity is attribution, not
+    authenticated per-user auth — that remains deferred.
+  </div>
 </section>
 
 <!-- log -->
