@@ -1049,13 +1049,15 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
   subscription-auth preflight and (2) <b>orients the agent from the shared brain</b> (read-from-brain) —
   the Hermes-native counterpart to the MCP tools.</p>
   <div class="callout ok">
-    <div class="clabel">Unit-tested in isolation (Hermes not installed here)</div>
-    Fired exactly as Hermes would (<code>agent:start</code>): auth → <b>"OK subscription (max)"</b>, and a
-    real <b>1769-char orient brief</b> written (prior decisions + learnings + architecture). Installer +
-    <code>HOOK.yaml</code> validated. Two honest limits, logged: Hermes hooks are <b>side-effect-only</b>
-    (returns discarded), so the brief is <i>delivered</i> (written to <code>$HERMES_HOME/cohermes/brief-&lt;session&gt;.md</code>)
-    rather than injected into the prompt — <b>automatic prompt-injection needs a change to Hermes's context
-    assembly</b> (invasive, deferred); and <b>live-firing needs a running Hermes</b>.
+    <div class="clabel">Smoke-tested through Hermes's real hook machinery</div>
+    We stood up a minimal Hermes locally and fired the hook through its <b>actual <code>HookRegistry</code></b>
+    — not a mock: it <b>discovered and loaded</b> the hook (<code>[hooks] Loaded hook 'cohermes' for events:
+    ['agent:start']</code>), and <code>registry.emit("agent:start", ctx)</code> ran our handler → auth
+    <b>"OK subscription (max)"</b> + a real <b>1769-char orient brief</b> written from the shared brain. So
+    Hermes discovers, loads, and fires cohermes exactly as it would in production. One honest limit remains:
+    Hermes hooks are <b>side-effect-only</b> (returns discarded), so the brief is <i>delivered</i> (to
+    <code>$HERMES_HOME/cohermes/brief-&lt;session&gt;.md</code>) rather than injected into the prompt —
+    <b>automatic prompt-injection would need a change to Hermes's context assembly</b> (invasive, deferred).
   </div>
   <div class="callout info">
     <div class="clabel">Next milestone — the real live test</div>
