@@ -1062,6 +1062,19 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     Build + install cohermes properly and run it <b>live</b>: Claude Code + Hermes, <b>two developers</b>,
     CLI and UI — the end-to-end proof that validates the hook (and the whole stack) in a real deployment.
   </div>
+
+  <h3>Live-test prep — packaging + runbook <span class="pill win">✓</span></h3>
+  <p>Two prerequisites for the live test, done:</p>
+  <div class="grid g2">
+    <div class="card"><b>Packaging</b><br><span class="small">the fork's <code>pyproject.toml</code> now packages <code>cg</code> and ships 5 console scripts (<code>cohermes-mcp/preset/backfill/ontology/install-hook</code>). One <code>pip install -e .</code> installs <b>Hermes + cohermes together</b>; <code>cg</code> imports with no PYTHONPATH (retires that friction). Verified in a clean venv: scripts run end-to-end from anywhere.</span></div>
+    <div class="card"><b>Runbook</b><br><span class="small"><code>cohermes/docs/LIVE_TEST.md</code> — the 2-developer procedure: install → point at the shared workspace → per-dev preset with identity → the CLI scenario (A decides, B orients + reuses) → the Hermes hook flow → the UI check (CG WebUI shows both devs' work in one graph) → success criteria.</span></div>
+  </div>
+  <div class="callout caveat">
+    <div class="clabel">What the live test still needs (real machines)</div>
+    A second developer's machine, and — for the Hermes-orchestrated flow — a configured Hermes (its own env
+    + a model provider). Both are real-deployment steps; the runbook lays them out. The Claude-Code-direct
+    flow (preset + cohermes MCP) is already proven and needs only the two devs.
+  </div>
 </section>
 
 <!-- log -->
