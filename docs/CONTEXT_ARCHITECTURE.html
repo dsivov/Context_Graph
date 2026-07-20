@@ -72,6 +72,7 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
   <li><a href="#flow">How results reach the model</a></li>
   <li><a href="#window">The finite window → curation</a></li>
   <li><a href="#pp">"-p" and the layers</a></li>
+  <li><a href="#history">Where history lives</a></li>
   <li><a href="#example">A worked example</a></li>
   <li><a href="#model">The mental model</a></li>
 </ol></nav>
@@ -262,6 +263,40 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     that <b>reconstitute A+B+C on every call</b>. So a fresh <code>-p</code> agent is never empty; it's
     freshly rebuilt from durable sources, plus a clean D for the task. Need D to survive? <code>--resume</code>.
     cohermes's way: promote D's durable bits to CG so they come back as A next time.</div>
+</section>
+
+<section id="history">
+  <div class="kick">a common misconception</div>
+  <h2>Where does conversation history actually live?</h2>
+  <p class="lead-p">It <b>is</b> stored on disk — just not by the model. Three distinct levels, and separating
+  them dissolves the confusion:</p>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 840 244" role="img" aria-label="Three levels: stateless LLM, harness transcript on disk, Hermes store">
+    <defs><marker id="ay" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22c3d6"/></marker></defs>
+    <style>.bx{fill:#1b1f2a;stroke:#2c3346;rx:9}.t{fill:#e7ebf3;font:600 12px "Segoe UI"}.s{fill:#8a93a6;font:10px "Segoe UI"}
+    .l{fill:#8fe6f2;font:italic 10px "SF Mono",monospace}.lc{stroke:#22c3d6;stroke-width:1.6;fill:none;marker-end:url(#ay)}</style>
+    <rect class="bx" x="24" y="88" width="180" height="72" stroke="#22c3d6" fill="#12242a"/>
+    <text class="t" x="38" y="112" fill="#8fe6f2">1 · the LLM (Claude)</text><text class="s" x="38" y="130">STATELESS — remembers nothing</text>
+    <text class="s" x="38" y="146">sees only what's sent this call</text>
+    <rect class="bx" x="330" y="60" width="230" height="60"/><text class="t" x="344" y="82">2 · Claude Code (harness)</text>
+    <text class="s" x="344" y="100">holds + persists the transcript</text><text class="s" x="344" y="114">re-sends it in full each turn</text>
+    <rect class="bx" x="600" y="52" width="216" height="40"/><text class="s" x="614" y="76">💾 session transcript on disk (~/.claude)</text>
+    <rect class="bx" x="600" y="128" width="216" height="40" stroke="#5b8def"/><text class="s" x="614" y="152">Hermes state.db — its OWN history</text>
+    <rect class="bx" x="330" y="150" width="230" height="46" stroke="#5b8def"/><text class="t" x="344" y="170">3 · Hermes</text><text class="s" x="344" y="186">separate user↔Hermes channel</text>
+
+    <path class="lc" d="M204,120 C 260,120 280,100 330,95"/><text class="l" x="222" y="98">full context each call</text>
+    <path class="lc" d="M560,82 L 600,74"/><text class="l" x="470" y="60">--resume reloads ↑</text>
+    <path class="lc" d="M560,173 L 600,150"/>
+  </svg>
+  </div><figcaption>The <b>model</b> stores nothing; the <b>harness</b> stores + re-sends the transcript
+  (persisted on disk, resumable); <b>Hermes</b> keeps its own. A fresh <code>-p</code> simply doesn't
+  <i>load</i> a prior transcript — it isn't that none exists.</figcaption></figure>
+
+  <div class="callout key"><div class="cl">The one-liner</div>
+    The <b>model is stateless</b>; <b>Claude Code</b> is what stores conversation history on disk and re-sends
+    it each turn; <b>Hermes</b> keeps its own. cohermes puts the knowledge that must <b>outlive and cross</b>
+    sessions (and machines) in <b>CG</b> — not in any transcript, which is local, per-agent, and transient.</div>
 </section>
 
 <section id="example">
