@@ -71,6 +71,8 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
   <li><a href="#who">Who calls the tools</a></li>
   <li><a href="#flow">How results reach the model</a></li>
   <li><a href="#window">The finite window → curation</a></li>
+  <li><a href="#pp">"-p" and the layers</a></li>
+  <li><a href="#example">A worked example</a></li>
   <li><a href="#model">The mental model</a></li>
 </ol></nav>
 
@@ -237,6 +239,74 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     It isn't just tidiness — it's what keeps the working agent's window high-signal. The design that follows
     from the constraint: a <b>curated brain</b> + a <b>focused orient brief</b> + <b>on-demand retrieval</b>
     (the agent pulls more via tools only when it needs it), rather than front-loading everything.</div>
+</section>
+
+<section id="pp">
+  <div class="kick">the subtlety</div>
+  <h2>Does <code>-p</code> start empty each task? No.</h2>
+  <p class="lead-p"><code>claude -p</code> starts a fresh <b>conversation</b> — but not an empty
+  <b>context</b>. And it is <b>not</b> Hermes that accumulates and feeds the layers.</p>
+  <p>On <b>every</b> <code>-p</code> call, the durable layers are re-established <i>from their own persistent
+  homes</i> — no session needed to carry them:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Layer</th><th>On each <code>-p</code> call…</th><th>from</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill a">B</span> operational</td><td><b>auto-loaded</b> by Claude Code at startup</td><td><code>CLAUDE.md</code> (git)</td></tr>
+      <tr><td><span class="pill ctrl">A</span> shared knowledge</td><td><b>injected</b> via <code>--append-system-prompt</code> (cohermes-agent)</td><td>CG (via <code>orient</code>)</td></tr>
+      <tr><td><span class="pill b">C</span> codebase</td><td><b>read on demand</b> via tools</td><td>git</td></tr>
+      <tr><td><span class="pill c">D</span> session state</td><td><b>resets</b> — the one thing that doesn't carry over</td><td>(the previous session — gone unless <code>--resume</code>)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout key"><div class="cl">Why statelessness is fine</div>
+    The important context doesn't live in the session — it lives in <b>durable stores</b> (CG, CLAUDE.md, git)
+    that <b>reconstitute A+B+C on every call</b>. So a fresh <code>-p</code> agent is never empty; it's
+    freshly rebuilt from durable sources, plus a clean D for the task. Need D to survive? <code>--resume</code>.
+    cohermes's way: promote D's durable bits to CG so they come back as A next time.</div>
+</section>
+
+<section id="example">
+  <div class="kick">concrete</div>
+  <h2>A worked example — one task through all four layers</h2>
+  <p><b>Bob</b> runs <code>cohermes-agent -p "implement webhook connector token refresh"</code> in repo-B.
+  Watch each layer contribute in a <i>single</i> <code>-p</code> call:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>What happens</th><th>Layer</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td><code>cohermes-agent</code> runs the auth preflight, then <code>orient("webhook token refresh")</code> → a focused brief</td><td><span class="pill ctrl">A</span> assembled</td></tr>
+      <tr><td>1</td><td><code>-p</code> starts fresh; Claude Code auto-loads <code>CLAUDE.md</code>: "server on :9621 · tests: <code>pytest</code> · connectors in <code>cg/connectors/</code>"</td><td><span class="pill a">B</span> loaded</td></tr>
+      <tr><td>2</td><td>the brief is in the system prompt: "OAuth 2.0 for webhook auth (alice) · refresh 5 min before expiry (sarah) · fixture-first (sarah)"</td><td><span class="pill ctrl">A</span> injected</td></tr>
+      <tr><td>3</td><td>the model <code>Read</code>s <code>cg/connectors/reviews.py</code> to follow the connector pattern, <code>Grep</code>s for existing auth</td><td><span class="pill b">C</span> on demand</td></tr>
+      <tr><td>4</td><td>writes <code>cg/connectors/auth_refresh.py</code> (5-min-pre-expiry, per A), runs <code>pytest</code> fixture-first (per A + B) — this thread accumulates <i>within the call</i></td><td><span class="pill c">D</span> accrues</td></tr>
+      <tr><td>5</td><td>records the decision via the cohermes MCP tool: <code>record_decision("refresh via background task, 5 min pre-expiry", …, bob)</code> → written to CG</td><td>→ <span class="pill ctrl">A</span> for next time</td></tr>
+      <tr><td>6</td><td>the <code>-p</code> call ends — <b>D is discarded</b></td><td><span class="pill c">D</span> gone</td></tr>
+    </tbody>
+  </table></div>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 840 268" role="img" aria-label="Two -p calls: D resets each time while A/B/C persist in durable stores">
+    <defs><marker id="ax" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22c3d6"/></marker></defs>
+    <style>.bx{fill:#1b1f2a;stroke:#2c3346;rx:9}.d{fill:#1b1f2a;stroke:#f0a73c;rx:9}.t{fill:#e7ebf3;font:600 12px "Segoe UI"}
+    .s{fill:#8a93a6;font:10px "Segoe UI"}.l{fill:#8fe6f2;font:italic 10px "SF Mono",monospace}.ll{fill:#7b8499;font:italic 10px "SF Mono",monospace}
+    .lc{stroke:#22c3d6;stroke-width:1.6;fill:none;marker-end:url(#ax)}</style>
+    <!-- two -p calls -->
+    <rect class="d" x="30" y="24" width="300" height="70"/><text class="t" x="46" y="46">-p call 1 · Bob implements refresh</text>
+    <text class="s" x="46" y="64">D: reads code, writes, tests (this thread)</text><text class="ll" x="46" y="82">discarded when the call ends ✗</text>
+    <rect class="d" x="510" y="24" width="300" height="70"/><text class="t" x="526" y="46">-p call 2 · later, a fresh task</text>
+    <text class="s" x="526" y="64">D: starts EMPTY — call 1's thread is gone</text><text class="ll" x="526" y="82">but the agent is not empty ↓</text>
+
+    <!-- durable band -->
+    <rect class="bx" x="30" y="150" width="780" height="86" stroke="#22c3d6" fill="#12242a"/>
+    <text class="t" x="46" y="174" fill="#8fe6f2">Durable layers — persist across every call</text>
+    <text class="s" x="46" y="196">A · Context Graph (decisions + learnings, incl. Bob's new one)   ·   B · CLAUDE.md (git)   ·   C · code (git)</text>
+    <text class="ll" x="46" y="216">each -p call reconstitutes A (orient) + B (auto-load) + C (tools) from here — the agent is never empty</text>
+
+    <!-- flows: call1 records into A; call2 orient pulls from A -->
+    <path class="lc" d="M180,94 L 180,150"/><text class="l" x="186" y="120">record_decision → A</text>
+    <path class="lc" d="M660,150 L 660,94"/><text class="l" x="560" y="120">orient re-injects A ↑</text>
+  </svg>
+  </div><figcaption>Bob's decision travels to call 2 <b>through Context Graph</b> (the durable A layer), not
+  through a retained session. <b>D resets; A/B/C reload.</b> That's why a stateless <code>-p</code> agent
+  starts fully oriented — and why the durable stores, not the session, are the memory.</figcaption></figure>
 </section>
 
 <section id="model">
