@@ -73,7 +73,8 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
   <li><a href="#window">The finite window → curation</a></li>
   <li><a href="#pp">"-p" and the layers</a></li>
   <li><a href="#history">Where history lives</a></li>
-  <li><a href="#example">A worked example</a></li>
+  <li><a href="#example">Worked example · -p</a></li>
+  <li><a href="#tmux">Worked example · tmux</a></li>
   <li><a href="#model">The mental model</a></li>
 </ol></nav>
 
@@ -342,6 +343,52 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
   </div><figcaption>Bob's decision travels to call 2 <b>through Context Graph</b> (the durable A layer), not
   through a retained session. <b>D resets; A/B/C reload.</b> That's why a stateless <code>-p</code> agent
   starts fully oriented — and why the durable stores, not the session, are the memory.</figcaption></figure>
+</section>
+
+<section id="tmux">
+  <div class="kick">concrete · the other mode</div>
+  <h2>Worked example — the same task in <code>tmux</code> (interactive)</h2>
+  <p>Now <b>Alice</b> works interactively: Hermes launches <b>one persistent</b> <code>claude</code> session in
+  a tmux pane and relays her messages. Here layer <b>D persists across turns</b> — the opposite of
+  <code>-p</code>'s per-task reset — while A/B/C behave the same.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Turn</th><th>What happens</th><th>Layer D</th></tr></thead>
+    <tbody>
+      <tr><td>start</td><td>Hermes launches <code>claude</code> (tmux); brief injected (<span class="pill ctrl">A</span>), <code>CLAUDE.md</code> auto-loaded (<span class="pill a">B</span>), MCP available</td><td>empty</td></tr>
+      <tr><td>1</td><td>Alice: "add OAuth to the webhook connector." Agent <code>Read</code>s the code (<span class="pill b">C</span>), proposes, edits</td><td>grows</td></tr>
+      <tr><td>2</td><td>Alice: "now add token refresh." The agent <b>still has turn 1</b> — same session, so the full transcript is re-sent — and builds on it</td><td><b>persists ↑</b></td></tr>
+      <tr><td>3</td><td>agent records the decisions via the cohermes MCP tool → written to CG</td><td>→ <span class="pill ctrl">A</span> for others</td></tr>
+      <tr><td>end</td><td>session ends; transcript saved to disk (resumable). Durable knowledge is already in CG</td><td>saved, not shared</td></tr>
+    </tbody>
+  </table></div>
+
+  <figure><div class="fig">
+  <svg viewBox="0 0 840 256" role="img" aria-label="tmux: one persistent session accumulates D across turns; Hermes relays; CG is durable">
+    <defs><marker id="az" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#7b8499"/></marker>
+    <marker id="az2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22c3d6"/></marker></defs>
+    <style>.bx{fill:#1b1f2a;stroke:#2c3346;rx:9}.d{fill:#1b1f2a;stroke:#f0a73c;rx:9}.t{fill:#e7ebf3;font:600 12px "Segoe UI"}
+    .s{fill:#8a93a6;font:10px "Segoe UI"}.l{fill:#8fe6f2;font:italic 10px "SF Mono",monospace}.ll{fill:#7b8499;font:italic 10px "SF Mono",monospace}
+    .ln{stroke:#3a4256;stroke-width:1.5;fill:none;marker-end:url(#az)}.lc{stroke:#22c3d6;stroke-width:1.6;fill:none;marker-end:url(#az2)}</style>
+    <rect class="bx" x="20" y="70" width="118" height="60" stroke="#5b8def"/><text class="t" x="34" y="94">Hermes</text><text class="s" x="34" y="112">send-keys /</text><text class="s" x="34" y="124">capture</text>
+    <!-- persistent session -->
+    <rect class="d" x="170" y="40" width="470" height="120"/><text class="t" x="186" y="62">one persistent claude session (tmux)</text>
+    <rect class="bx" x="188" y="76" width="130" height="66"/><text class="s" x="200" y="98">turn 1</text><text class="ll" x="200" y="114">D: OAuth</text>
+    <rect class="bx" x="330" y="76" width="130" height="66"/><text class="s" x="342" y="98">turn 2</text><text class="ll" x="342" y="114">D: + refresh</text>
+    <rect class="bx" x="472" y="76" width="150" height="66"/><text class="s" x="484" y="98">turn 3 …</text><text class="ll" x="484" y="114">D: + records</text>
+    <path class="ln" d="M318,109 L 330,109"/><path class="ln" d="M460,109 L 472,109"/>
+    <text class="ll" x="188" y="156">full transcript re-sent to the LLM each turn — D persists across the session</text>
+    <path class="ln" d="M138,100 L 168,100"/><text class="ll" x="118" y="60">each turn</text>
+    <!-- durable band -->
+    <rect class="bx" x="170" y="188" width="470" height="52" stroke="#22c3d6" fill="#12242a"/>
+    <text class="t" x="186" y="210" fill="#8fe6f2">Durable: A (CG · brief) · B (CLAUDE.md) · C (code)</text>
+    <text class="ll" x="186" y="228">brief injected at session start; tools promote decisions → CG during</text>
+    <path class="lc" d="M540,142 L 540,188"/><text class="l" x="546" y="170">record → CG</text>
+    <path class="lc" d="M300,188 L 260,142"/><text class="l" x="120" y="182" fill="#8fe6f2">orient @ start ↑</text>
+  </svg>
+  </div><figcaption><b>Difference from <code>-p</code>:</b> the persistent session carries D across many turns
+  (multi-turn continuity), so Hermes never re-sends history — the claude session holds it. <b>Same as
+  <code>-p</code>:</b> cross-session and cross-teammate durability still lives in <b>CG</b>, not the
+  transcript. Mode = interaction style; the brain = shared memory.</figcaption></figure>
 </section>
 
 <section id="model">
