@@ -802,6 +802,94 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     tool doing the node+trace dual-write (D10) is the clean next refinement. And identity is attribution, not
     authenticated per-user auth — that remains deferred.
   </div>
+
+  <h3>The two-layer brain — the cohermes MCP server <span class="pill win">✓</span></h3>
+  <p>A gap surfaced: the graph had <b>no chunks</b> — we'd only written structured nodes/edges, never ingested
+  prose. A decision-log is not a project memory. Fix: a self-contained <b>cohermes MCP server</b>
+  (<code>cohermes/cg/mcp_server.py</code>, a local stdio server the preset adds beside
+  <code>context-graph</code>) giving agents both layers:</p>
+  <div class="grid g2">
+    <div class="card"><b>Spine</b> — <code>record_decision</code> (node+trace, D10), <code>record_task/commit/review</code>, <code>link</code><br><span class="small">agents now build typed <b>Decision nodes</b> and the full chain themselves, not just traces</span></div>
+    <div class="card"><b>Flesh</b> — <code>ingest_context</code><br><span class="small">prose (architecture, design, status) → CG <b>chunks</b> + extracted entities → agents can <i>explain</i> the system</span></div>
+  </div>
+  <div class="callout ok">
+    <div class="clabel">Proven via a real agent</div>
+    An agent called cohermes <code>record_decision</code> → a real <code>Decision</code> node (by dima); and
+    <code>ingest_context</code> → the architecture note processed to <b>1 document + chunks</b> (index was
+    empty before). A follow-up query <i>"explain the architecture of cohermes"</i> now returns a <b>rich,
+    synthesized answer</b> (both layers, node types, edge semantics) where before there was nothing to
+    retrieve. The brain has depth now, not just a decision list.
+  </div>
+
+  <h4>What flows into the brain — curated, not everything (D11–D13)</h4>
+  <p>The brain is a <b>curated record</b>, not a data lake. High-value, durable, non-derivable knowledge is
+  promoted through a curation gate — each entry stamped with author, confidence, and validity. Raw code,
+  diffs, and unfiltered agent memory stay out: they're already in git, or they're noise that would dilute
+  retrieval.</p>
+  <figure><div class="fig">
+  <svg viewBox="0 0 840 392" role="img" aria-label="Curated data sources flowing through a curation gate into the two-layer brain">
+    <defs>
+      <marker id="cah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22c3d6"/></marker>
+    </defs>
+    <style>
+      .src{fill:#1b1f2a;stroke:#5b8def;rx:9}
+      .srchi{fill:#12242a;stroke:#22c3d6;rx:9}
+      .t{fill:#e7ebf3;font:600 12px "Segoe UI",system-ui}
+      .s{fill:#8a93a6;font:10.5px "Segoe UI",system-ui}
+      .lbl{fill:#7b8499;font:italic 10.5px "SF Mono",monospace}
+      .fin{stroke:#22c3d6;stroke-width:1.5;fill:none;marker-end:url(#cah);opacity:.85}
+      .gate{fill:rgba(169,116,240,.10);stroke:#a974f0;rx:12}
+      .brain{fill:#12151d;stroke:#22c3d6;rx:12}
+      .rej{fill:#181a20;stroke:#3a3140;rx:9;stroke-dasharray:4 3}
+      .rejln{stroke:#5b4a52;stroke-width:1.4;fill:none;stroke-dasharray:5 4}
+    </style>
+
+    <!-- sources -->
+    <text class="lbl" x="16" y="28">SOURCES — the "why / state / learnings"</text>
+    <g>
+      <rect class="src" x="16" y="40" width="196" height="38"/><text class="t" x="28" y="63">Design / architecture docs</text>
+      <rect class="src" x="16" y="86" width="196" height="38"/><text class="t" x="28" y="109">Decisions / ADRs · CR rationale</text>
+      <rect class="src" x="16" y="132" width="196" height="38"/><text class="t" x="28" y="155">Review threads (why / why-not)</text>
+      <rect class="src" x="16" y="178" width="196" height="38"/><text class="t" x="28" y="201">Commit messages → task/decision</text>
+      <rect class="srchi" x="16" y="224" width="196" height="38"/><text class="t" x="28" y="243" fill="#8fe6f2">Curated agent learnings</text><text class="s" x="28" y="256">the drift-killer</text>
+    </g>
+    <!-- arrows to gate -->
+    <path class="fin" d="M212,59 C 260,59 270,150 300,168"/>
+    <path class="fin" d="M212,105 C 262,105 274,155 300,172"/>
+    <path class="fin" d="M212,151 L 300,176"/>
+    <path class="fin" d="M212,197 C 262,197 274,195 300,182"/>
+    <path class="fin" d="M212,243 C 262,243 274,205 300,188"/>
+
+    <!-- curation gate -->
+    <path class="gate" d="M300,150 L 356,150 L 340,192 L 316,192 Z"/>
+    <text class="t" x="300" y="130" fill="#cdb1f7">CURATE</text>
+    <text class="s" x="284" y="212">durable · non-derivable · cross-cutting</text>
+
+    <!-- rejected -->
+    <rect class="rej" x="250" y="300" width="300" height="66"/>
+    <text class="lbl" x="262" y="320" fill="#8a7580">KEPT OUT — dilutes / duplicates</text>
+    <text class="s" x="262" y="338" fill="#8a7580">raw code &amp; diffs (already in git)</text>
+    <text class="s" x="262" y="353" fill="#8a7580">raw agent memory · transient chatter (noise)</text>
+    <path class="rejln" d="M330,300 L 330,196"/>
+    <text x="336" y="250" fill="#8a7580" font-family="SF Mono, monospace" font-size="16">✗</text>
+
+    <!-- the brain -->
+    <line class="fin" x1="356" y1="171" x2="470" y2="171"/>
+    <rect class="brain" x="472" y="70" width="352" height="212"/>
+    <text class="t" x="486" y="94" fill="#8fe6f2">The shared brain (Context Graph)</text>
+    <rect x="486" y="108" width="324" height="66" rx="8" fill="#161922" stroke="#2c3346"/>
+    <text class="t" x="498" y="130">Structured spine</text>
+    <text class="s" x="498" y="150">Decision · Task · Commit · Review</text>
+    <text class="s" x="498" y="165">+ motivates / implemented_by / reviewed_in / enacts</text>
+    <rect x="486" y="182" width="324" height="52" rx="8" fill="#161922" stroke="#2c3346"/>
+    <text class="t" x="498" y="203">Textual flesh</text>
+    <text class="s" x="498" y="221">ingested prose → chunks (architecture · design · status)</text>
+    <text class="lbl" x="486" y="256" fill="#8fe6f2">every entry: author · confidence · validity (supersedable)</text>
+  </svg>
+  </div><figcaption>Curated, high-value knowledge flows through the gate and is stamped with provenance;
+  raw code/diffs and unfiltered agent memory are kept out. The brain carries both a <b>structured spine</b>
+  (the traceable chain) and <b>textual flesh</b> (retrievable prose) — the reason an agent can both
+  <i>trace</i> a decision and <i>explain</i> the architecture.</figcaption></figure>
 </section>
 
 <!-- log -->
@@ -827,6 +915,9 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
       <tr><td>D7</td><td>2026-07-18</td><td>Environment (Q7)</td><td><b>Live CG + dedicated workspace</b> <code>team_agent_lab</code> on <code>10.0.0.80:9621</code>. Zero setup, per-workspace isolation, tests the real HTTP/MCP path (same pattern as the RAG lab). Private instance only later if a CG-side code change needs it.</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D8</td><td>2026-07-18</td><td>Review connector (Q8)</td><td><b>GitHub PR API first</b>, behind a thin <code>Review</code> boundary. Richest "why/why-not" (the discussion) = a real concept proof. Defer any generic multi-host adapter until a 2nd source exists (abstract from two concretes, not zero).</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D10</td><td>2026-07-19</td><td>M3 · decision model</td><td><b>A Decision is a node + a trace, written by one operation.</b> The node (type <code>Decision</code>, structured fields, chain anchor) gives cross-linking; the emitted decision-trace gives CG's built precedent search (<code>decisions_vdb</code>). <code>cg/decisions.py record()</code> owns the dual-write so they can't drift. Proven: record → a different session's precedent query retrieves it by rationale.</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D11</td><td>2026-07-20</td><td>Data · curation</td><td><b>Store durable, non-derivable, cross-cutting <i>why/state/learnings</i> — never a repo mirror or an all-data dump.</b> Curation beats volume (every chunk costs extraction + embedding and <i>dilutes</i> retrieval). Priority sources: decisions/ADRs, design/architecture docs, review threads, <b>curated agent learnings</b>, commit <i>messages</i> linked to tasks/decisions; raw code only for grounding (it's in git).</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D12</td><td>2026-07-20</td><td>Agent memory</td><td><b>Curated promotion, not raw sync.</b> Agents promote <i>confirmed, distilled</i> learnings via a <code>record_learning</code> tool (attributed + confidence-scored) — the antidote to semantic drift. Raw private memory stays scratch; auto-syncing whole memories is rejected (pollutes retrieval). Read-from-brain (hermes memory-swap) deferred.</td><td><span class="pill win">decided</span></td></tr>
+      <tr><td>D13</td><td>2026-07-20</td><td>Provenance</td><td><b>Agent-generated content carries author + confidence + a validity status</b> (active/superseded), so a teammate's agent knows "an agent asserted this" vs "a human decided this," and the brain can model <i>was true</i> vs <i>is true</i> (supersession). Converges with the RAG-security provenance/trust theme.</td><td><span class="pill win">decided</span></td></tr>
       <tr><td>D9</td><td>2026-07-18</td><td>Acceptance (Q9)</td><td><b>Traceable-chain demo + one lightweight reuse measurement.</b> Same task in a fresh vs populated workspace → turns/tokens to answer + did it cite the recorded decision. Makes "reused not re-derived" objective (the RAG project's measure-it habit) and catches false-looking reuse.</td><td><span class="pill win">decided</span></td></tr>
     </tbody>
   </table></div>
