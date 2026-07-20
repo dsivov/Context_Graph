@@ -1077,6 +1077,28 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     + a model provider). Both are real-deployment steps; the runbook lays them out. The Claude-Code-direct
     flow (preset + cohermes MCP) is already proven and needs only the two devs.
   </div>
+
+  <h3>cohermes-agent — automatic read-from-brain at launch <span class="pill win">✓</span></h3>
+  <p>Taking the Hermes smoke test one step further exposed a clean resolution to the "hooks can't inject
+  prompt context" limit: inject the brief at the <b>launch layer</b> via Claude Code's own
+  <code>--append-system-prompt</code> — no Hermes-internals change needed. Productized as
+  <code>cohermes-agent</code> (<code>cohermes/cg/run.py</code>): auth preflight → <code>orient(task)</code> →
+  launch Claude Code with the brief injected.</p>
+  <div class="callout key">
+    <div class="clabel">Proven — a no-tools agent, aligned automatically</div>
+    Given a project with <b>no MCP tools</b> and told <i>not to look anything up</i>, an agent launched via
+    <code>cohermes-agent</code> answered "how should we test a connector?" by <b>reusing the team's recorded
+    decisions verbatim</b> — fixture-first (sarah), OAuth 2.0 + 5-min refresh (dima/sarah), retry cap, local
+    stdio MCP. It <b>started aligned</b> purely from the injected brief — the read-from-brain payoff, now
+    automatic and Hermes-agnostic.
+  </div>
+  <div class="callout info">
+    <div class="clabel">Integration mode + setup guide</div>
+    Decided: <b><code>-p</code> (print) as the primary mode</b> — one call per task, brief injected at launch,
+    cross-task continuity via the brain (not Hermes-session-history, which cohermes deliberately doesn't
+    depend on); tmux optional for live multi-turn sessions. Full <b>setup guide</b> with the mode comparison
+    + context-flow diagram: <code>cohermes/docs/SETUP.html</code>.
+  </div>
 </section>
 
 <!-- log -->
