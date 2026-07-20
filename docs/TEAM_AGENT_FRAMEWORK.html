@@ -345,8 +345,9 @@ figcaption{font-size:13.5px;color:var(--ink-faint);margin-top:10px}
     <text class="lbl" x="30" y="68">ONE DEVELOPER'S ENVIRONMENT — local</text>
 
     <rect class="b" x="30" y="80" width="344" height="50" stroke="#5b8def"/>
-    <text class="t" x="42" y="102">Hermes → Claude Code agent</text>
-    <text class="s" x="42" y="118">runs on your Claude subscription (A2 preflight guard)</text>
+    <text class="t" x="42" y="100">Hermes → Claude Code agent</text>
+    <text class="s" x="42" y="115">on your subscription · cohermes hook @ agent:start:</text>
+    <text class="s" x="42" y="127">auth preflight + orient (read-from-brain)</text>
 
     <rect class="b" x="30" y="146" width="164" height="70"/>
     <text class="t" x="42" y="166">Project (preset)</text>
@@ -1038,6 +1039,28 @@ claude auth status <span class="cm"># must report subscription, NOT "API key: Co
     team's current understanding instead of re-deriving. That's the whole point of a shared brain: agents
     <i>start</i> aligned and <i>end</i> aligned. (Diagram updated: writes → brain, orient ← brain, backfill
     seeds it.)
+  </div>
+
+  <h3>Deeper Hermes integration — a native runtime hook <span class="pill win">✓</span></h3>
+  <p>So far agents reached the brain via the cohermes <b>MCP tools</b> (Claude-Code-level). This wires
+  cohermes into <b>Hermes's own agent lifecycle</b> via its designed extension point — an event hook
+  (<code>cohermes/cg/hermes/</code>: <code>HOOK.yaml</code> + <code>handler.py</code>, deployed to
+  <code>~/.hermes/hooks/cohermes/</code>). On <b><code>agent:start</code></b> it (1) runs the A2
+  subscription-auth preflight and (2) <b>orients the agent from the shared brain</b> (read-from-brain) —
+  the Hermes-native counterpart to the MCP tools.</p>
+  <div class="callout ok">
+    <div class="clabel">Unit-tested in isolation (Hermes not installed here)</div>
+    Fired exactly as Hermes would (<code>agent:start</code>): auth → <b>"OK subscription (max)"</b>, and a
+    real <b>1769-char orient brief</b> written (prior decisions + learnings + architecture). Installer +
+    <code>HOOK.yaml</code> validated. Two honest limits, logged: Hermes hooks are <b>side-effect-only</b>
+    (returns discarded), so the brief is <i>delivered</i> (written to <code>$HERMES_HOME/cohermes/brief-&lt;session&gt;.md</code>)
+    rather than injected into the prompt — <b>automatic prompt-injection needs a change to Hermes's context
+    assembly</b> (invasive, deferred); and <b>live-firing needs a running Hermes</b>.
+  </div>
+  <div class="callout info">
+    <div class="clabel">Next milestone — the real live test</div>
+    Build + install cohermes properly and run it <b>live</b>: Claude Code + Hermes, <b>two developers</b>,
+    CLI and UI — the end-to-end proof that validates the hook (and the whole stack) in a real deployment.
   </div>
 </section>
 
