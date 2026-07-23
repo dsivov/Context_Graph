@@ -5,8 +5,9 @@ duplicates, and helps pick a canonical **display name** for a merged cluster. Pu
 and deterministic — the cheap, auditable first line of dedup. The raw name is always
 preserved by the caller; this only derives the matching key.
 
-What the key collapses: case, surrounding/─inner punctuation, acronym dots
-(``I.B.M.`` → ``ibm``), and trailing legal/org suffixes (``Acme Inc.`` → ``acme``).
+What the key collapses: case, diacritics (``Málaga`` → ``malaga``), surrounding/─inner
+punctuation, acronym dots (``I.B.M.`` → ``ibm``), and trailing legal/org suffixes
+(``Acme Inc.`` → ``acme``).
 What it deliberately does **not** do: acronym↔expansion (``IBM`` vs ``International
 Business Machines``) or synonyms — those need embeddings (Layer B) or the LLM
 (Layer C). Singular/plural folding is intentionally omitted (too aggressive for a
@@ -32,6 +33,17 @@ _WS_RE = re.compile(r"\s+")
 _ALPHA_WORD_RE = re.compile(r"[A-Za-z]+")
 
 
+def _fold(name: str) -> str:
+    """Case- and diacritic-fold: NFKD-decompose, drop combining marks, casefold.
+
+    ``"Málaga"`` → ``"malaga"`` — accent variants of the same name are surface
+    variants (common in non-English corpora), same class as case differences.
+    """
+    s = unicodedata.normalize("NFKD", name)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return s.casefold()
+
+
 def canonicalize(name: str) -> str:
     """Return the canonical dedup key for *name* (may be empty for empty input).
 
@@ -40,7 +52,7 @@ def canonicalize(name: str) -> str:
     """
     if not name:
         return ""
-    s = unicodedata.normalize("NFKC", name).casefold()
+    s = _fold(name)
     # Collapse acronym dots first so "i.b.m." → "ibm" (not "i b m").
     s = s.replace(".", "")
     # Remaining punctuation (hyphens, slashes, quotes…) → spaces.
@@ -53,6 +65,27 @@ def canonicalize(name: str) -> str:
     while len(tokens) > 1 and tokens[-1] in _LEGAL_SUFFIXES:
         tokens.pop()
     return " ".join(tokens)
+
+
+def variant_key(name: str) -> str:
+    """A strict *surface-form* key: collapses only case, diacritics, punctuation,
+    acronym dots and whitespace — every token is kept (legal suffixes are NOT dropped).
+
+    Two names share a ``variant_key`` only when they are the same surface form up
+    to case/diacritics/punctuation/spacing: ``"Airport"``/``"airport"``,
+    ``"Málaga Airport"``/``"Malaga Airport"``, ``"E.U."``/``"EU"``,
+    ``"State-of-the-art"``/``"state of the art"``. Unlike :func:`canonicalize`,
+    ``"Apple Inc."`` and ``"Apple"`` do **not** collide here — a dropped legal
+    suffix is a *likely* duplicate for the embedding/LLM layers to confirm, not an
+    automatic one. This is the key the scan's name-normalization pass auto-merges
+    on: unambiguous and embedding-free.
+    """
+    if not name:
+        return ""
+    s = _fold(name)
+    s = s.replace(".", "")
+    s = _PUNCT_RE.sub(" ", s)
+    return _WS_RE.sub(" ", s).strip()
 
 
 # Representativeness weights (D5/D6): frequency dominates — the form people actually

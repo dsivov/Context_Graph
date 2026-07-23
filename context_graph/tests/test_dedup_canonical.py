@@ -6,6 +6,7 @@ import pytest
 
 from context_graph.dedup import (
     canonicalize, prefer_canonical_name, representativeness, is_acronym_of,
+    variant_key,
 )
 
 
@@ -22,6 +23,7 @@ from context_graph.dedup import (
     ("state-of-the-art", "state of the art"),
     ("  Sarah   Chen  ", "sarah chen"),
     ('"Quoted"', "quoted"),
+    ("Málaga Airport", "malaga airport"),
     ("", ""),
 ])
 def test_canonicalize(raw, key):
@@ -38,6 +40,34 @@ def test_canonicalize_never_empties_a_pure_suffix():
 @pytest.mark.offline
 def test_case_and_suffix_variants_share_a_key():
     assert canonicalize("Apple") == canonicalize("apple") == canonicalize("Apple Inc.")
+
+
+@pytest.mark.offline
+@pytest.mark.parametrize("raw,key", [
+    ("Airport", "airport"),
+    ("airport", "airport"),
+    ("E.U.", "eu"),
+    ("EU", "eu"),
+    ("State-of-the-art", "state of the art"),
+    ("  Sarah   Chen  ", "sarah chen"),
+    ("", ""),
+])
+def test_variant_key(raw, key):
+    assert variant_key(raw) == key
+
+
+@pytest.mark.offline
+def test_variant_key_merges_pure_case_variants():
+    # The scan's name-normalization pass keys on this: pure surface variants collide.
+    assert variant_key("Airport") == variant_key("airport")
+
+
+@pytest.mark.offline
+def test_variant_key_keeps_legal_suffix_distinct():
+    # Unlike canonicalize(), a dropped legal suffix does NOT collide here — it is a
+    # *likely* dupe for the embedding/LLM layers to confirm, not an auto-merge.
+    assert variant_key("Apple Inc.") != variant_key("Apple")
+    assert canonicalize("Apple Inc.") == canonicalize("Apple")  # contrast
 
 
 @pytest.mark.offline

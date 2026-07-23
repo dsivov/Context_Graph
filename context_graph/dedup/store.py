@@ -34,7 +34,7 @@ class MergeRecord:
     alias: str                 # the raw variant name that was merged away
     alias_key: str             # its canonical key (Layer A)
     into: str                  # canonical node id it now resolves to
-    method: str                # 'rule' | 'embedding' | 'llm' | 'manual'
+    method: str                # 'name' | 'rule' | 'embedding' | 'llm' | 'manual'
     score: Optional[float] = None
     ts: float = 0.0
     undone: bool = False

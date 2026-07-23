@@ -1499,12 +1499,27 @@ class ContextGraph(LightRAG):
     async def deduplicate_entities(self, *, apply: bool = True, limit: int = 5000) -> dict:
         """Layer E — scan existing entities for duplicates (conservative, type-aware).
 
-        For each entity, find its nearest neighbour in ``entities_vdb``; auto-merge
-        only above the HARD cosine threshold with compatible types and a name backstop
-        (recorded reversibly), and queue the gray band for :meth:`run_dedup_sweep`.
-        Backend-agnostic; runs off the ingest path. Returns a summary.
+        Two passes, cheapest first:
+
+        * **Name normalization** — group entities by :func:`variant_key` (case /
+          punctuation / whitespace only; legal suffixes kept). Any group with more
+          than one surface form is an unambiguous duplicate set (``"Airport"`` /
+          ``"airport"``) and is merged without needing embeddings.
+        * **Embedding neighbours** — for each remaining entity, scan *all* of its
+          top-k ``entities_vdb`` neighbours (not just the nearest): auto-merge the
+          first that clears the HARD cosine threshold with a compatible type and the
+          name backstop; else queue the first gray-band neighbour that still passes
+          the name backstop for :meth:`run_dedup_sweep`. Considering the whole
+          neighbourhood (not top-1) recovers a true duplicate an unrelated term
+          outranks; the name backstop on the queue keeps lexically-unrelated
+          embedding false-positives out of the LLM sweep.
+
+        All merges are recorded reversibly. Backend-agnostic; runs off the ingest
+        path. Returns a summary.
         """
-        from context_graph.dedup import canonicalize, prefer_canonical_name, type_ok, name_ok
+        from context_graph.dedup import (
+            canonicalize, prefer_canonical_name, type_ok, name_ok, variant_key,
+        )
 
         hard, gray = self._dedup_thresholds()
         graph = self.chunk_entity_relation_graph
@@ -1513,9 +1528,9 @@ class ContextGraph(LightRAG):
         merged_away: set[str] = set()
         summary = {"scanned": 0, "merged": 0, "queued": 0, "skipped": 0}
 
-        async def node_type(name: str):
-            node = await graph.get_node(name)
-            return (node or {}).get("entity_type")
+        async def node_type(name: str, node: dict = None):
+            node = node if node is not None else (await graph.get_node(name) or {})
+            return node.get("entity_type")
 
         async def mention_count(name: str, node: dict = None) -> int:
             # Frequency proxy: how many source chunks the entity appears in.
@@ -1523,6 +1538,47 @@ class ContextGraph(LightRAG):
             sid = node.get("source_id") or ""
             return len([c for c in sid.split(GRAPH_FIELD_SEP) if c]) or 1
 
+        async def do_merge(alias: str, survivor: str, canonical: str, *,
+                           method: str, score: float = None) -> None:
+            # apply=False is a pure preview: count, but touch neither graph nor store.
+            # merged_away is updated either way so a pair isn't counted from both ends.
+            if apply:
+                try:
+                    await self._apply_entity_merge(alias, survivor, canonical)
+                except Exception as e:  # pragma: no cover
+                    logger.warning(f"dedup merge {alias}->{survivor} failed: {e}")
+                    return
+                store.record_merge(
+                    self.workspace, alias=alias, alias_key=canonicalize(alias),
+                    into=survivor, method=method, score=score, canonical_name=canonical,
+                )
+            merged_away.add(alias)
+            summary["merged"] += 1
+
+        # ── Pass 1: name normalization — exact surface variants, embedding-free ──
+        groups: dict[str, list[str]] = {}
+        for name in labels:
+            key = variant_key(name)
+            if key:
+                groups.setdefault(key, []).append(name)
+        for variants in groups.values():
+            if len(variants) < 2:
+                continue
+            nodes = {v: (await graph.get_node(v) or {}) for v in variants}
+            counts = {v: await mention_count(v, nodes[v]) for v in variants}
+            canonical = prefer_canonical_name(variants, counts=counts)
+            survivor = next((v for v in variants if v.strip() == canonical.strip()),
+                            variants[0])
+            s_type = await node_type(survivor, nodes[survivor])
+            for alias in variants:
+                if alias == survivor or alias in merged_away:
+                    continue
+                # Only a KNOWN type conflict blocks (mirror the embedding pass / D4).
+                if not type_ok(await node_type(alias, nodes[alias]), s_type):
+                    continue
+                await do_merge(alias, survivor, canonical, method="name")
+
+        # ── Pass 2: embedding neighbours — scan the whole top-k neighbourhood ──
         for name in labels:
             summary["scanned"] += 1
             if name in merged_away:
@@ -1539,48 +1595,41 @@ class ContextGraph(LightRAG):
                 hits = await self.entities_vdb.query(query_text, top_k=5) or []
             except Exception:
                 hits = []
-            top = next(
-                (h for h in hits
-                 if (h.get("entity_name") or h.get("id")) not in (None, "", name)
-                 and (h.get("entity_name") or h.get("id")) not in merged_away),
-                None,
-            )
-            if top is None:
-                continue
-            cand = top.get("entity_name") or top.get("id")
-            # entities_vdb returns pgvector cosine DISTANCE (0 = identical); convert
-            # to a similarity score in [0,1]. Missing distance -> 0.0 (no match).
-            _dist = top.get("distance")
-            score = 1.0 - float(_dist) if _dist is not None else 0.0
-            ctype = top.get("entity_type")
-            if ctype is None:
-                ctype = await node_type(cand)
-            if score >= hard and type_ok(my_type, ctype) and name_ok(name, cand):
-                # apply=False is a pure preview: count, but touch neither graph nor store.
-                if apply:
-                    # Representative canonical name — frequency-weighted (the form used
-                    # most often usually wins); expands bare acronyms only near a tie.
+            for h in hits:
+                cand = h.get("entity_name") or h.get("id")
+                if cand in (None, "", name) or cand in merged_away:
+                    continue
+                # Every vdb backend puts a cosine SIMILARITY in "distance" (higher =
+                # closer); postgres_impl normalizes its raw pgvector distance to match.
+                # Missing/unscored hit -> 0.0 (no match).
+                score = float(h.get("distance") or 0.0)
+                if score < gray:
+                    break   # hits are ranked best-first — nothing below is worth it
+                ctype = h.get("entity_type")
+                if ctype is None:
+                    ctype = await node_type(cand)
+                # The name backstop guards BOTH merge and queue: a lexically-unrelated
+                # neighbour is an embedding false-positive, not a duplicate candidate.
+                if not (type_ok(my_type, ctype) and name_ok(name, cand)):
+                    continue          # keep looking down the neighbourhood
+                if score >= hard:
                     counts = {name: await mention_count(name, my_node),
                               cand: await mention_count(cand)}
                     canonical = prefer_canonical_name([name, cand], counts=counts)
-                    # The representative form SURVIVES as the node; the other folds in
-                    # — so the graph/UI shows "Kubernetes", not "kubernetes".
-                    survivor, alias = (name, cand) if canonical.strip() == name.strip() else (cand, name)
-                    try:
-                        await self._apply_entity_merge(alias, survivor, canonical)
-                    except Exception as e:  # pragma: no cover
-                        logger.warning(f"dedup merge {alias}->{survivor} failed: {e}")
+                    # The representative form SURVIVES; the other folds in — so the
+                    # graph/UI shows "Kubernetes", not "kubernetes".
+                    survivor, alias = ((name, cand) if canonical.strip() == name.strip()
+                                       else (cand, name))
+                    if survivor in merged_away:
                         continue
-                    store.record_merge(
-                        self.workspace, alias=alias, alias_key=canonicalize(alias),
-                        into=survivor, method="embedding", score=score, canonical_name=canonical,
-                    )
-                    merged_away.add(alias)
-                summary["merged"] += 1
-            elif score >= gray and type_ok(my_type, ctype):
-                if apply:
-                    store.enqueue_review(self.workspace, name=name, candidate=cand, score=score)
-                summary["queued"] += 1
+                    await do_merge(alias, survivor, canonical,
+                                   method="embedding", score=score)
+                else:  # gray band → queue for LLM adjudication
+                    if apply:
+                        store.enqueue_review(self.workspace, name=name,
+                                             candidate=cand, score=score)
+                    summary["queued"] += 1
+                break   # one action per entity per scan
 
         logger.info(f"deduplicate_entities: {summary}")
         return summary

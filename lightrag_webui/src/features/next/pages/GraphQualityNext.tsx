@@ -12,6 +12,16 @@ import {
 
 const errMsg = (e: any) => e?.response?.data?.detail || e?.message || String(e)
 
+// Make the sweep outcome legible: an LLM/parse failure leaves the batch queued
+// (errors > 0) and must NOT read like a clean "0 merges". Empty queue is its own case.
+const sweepMsg = (r: any) => {
+  const { adjudicated = 0, merged = 0, rejected = 0, errors = 0 } = r || {}
+  if (errors > 0)
+    return `⚠ Sweep incomplete — ${errors} pair(s) failed (LLM/parse error), left queued. Merged ${merged}, rejected ${rejected}.`
+  if (adjudicated === 0) return 'Review queue is empty — run a scan first.'
+  return `Sweep: merged ${merged}, rejected ${rejected} of ${adjudicated} adjudicated.`
+}
+
 export default function GraphQualityNext() {
   const workspace = useSettingsStore.use.workspace()
   const [busy, setBusy] = useState<string | null>(null)
@@ -108,15 +118,18 @@ export default function GraphQualityNext() {
             {review && <span className="sub">{review.summary?.pending_review ?? 0} pending</span>}
           </div>
           <div>
-            <Op title="Scan for duplicates" desc="Case / suffix / embedding, reversibly. Ambiguous pairs queue.">
+            <Op title="Scan for duplicates" desc="Name variants merge outright; ambiguous pairs queue for the sweep.">
               <button className="btn sm" disabled={off('dscanp')}
-                onClick={() => run('dscanp', () => dedupScan(false), (r) => `Preview: would merge ${r.merged}, queue ${r.queued}`)}>Preview</button>
+                onClick={() => run('dscanp', () => dedupScan(false), (r) => `Preview: would merge ${r.merged}, queue ${r.queued} (of ${r.scanned} scanned)`)}>Preview</button>
               <button className="btn sm primary" disabled={off('dscan')}
-                onClick={() => run('dscan', () => dedupScan(true), (r) => `Merged ${r.merged}, queued ${r.queued}`)}>Scan &amp; merge</button>
+                onClick={() => run('dscan', () => dedupScan(true), (r) =>
+                  r.merged || r.queued
+                    ? `Merged ${r.merged}, queued ${r.queued} for review`
+                    : `No duplicates found (${r.scanned} entities scanned)`)}>Scan &amp; merge</button>
             </Op>
             <Op title="Run LLM sweep" desc="Adjudicate the gray-band review queue.">
               <button className="btn sm" disabled={off('dsweep')}
-                onClick={() => run('dsweep', () => dedupSweep(), (r) => `Sweep: merged ${r.merged}, rejected ${r.rejected}`)}>Run sweep</button>
+                onClick={() => run('dsweep', () => dedupSweep(), (r) => sweepMsg(r))}>Run sweep</button>
             </Op>
             <Op title="Review &amp; audit" desc="Pending pairs and reversible merges.">
               <button className="btn sm ghost" disabled={off('drev')}

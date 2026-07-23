@@ -13,6 +13,7 @@ merge. Layers (see docs/GRAPH_QUALITY_VNEXT.html, D1–D7):
 from context_graph.dedup.canonical import (
     canonicalize,
     prefer_canonical_name,
+    variant_key,
     representativeness,
     is_acronym_of,
 )
@@ -38,6 +39,7 @@ from context_graph.dedup.sweep import DedupSweep
 __all__ = [
     "canonicalize",
     "prefer_canonical_name",
+    "variant_key",
     "representativeness",
     "is_acronym_of",
     "DedupStore",

@@ -940,6 +940,36 @@ class TestDedupWiring:
         r = await cg.deduplicate_entities()
         assert r["merged"] == 0                       # D4: known type conflict blocks
 
+    async def test_scan_name_pass_merges_pure_case_variant(self):
+        # Pass 1 (name normalization) must catch a pure case variant even when the
+        # embedding scan surfaces nothing — the recall gap behind the aena report.
+        async def q(text, top_k=5):
+            return []                                 # no embedding neighbours at all
+
+        cg = self._cg(["Airport", "airport"], q)
+        r = await cg.deduplicate_entities()
+        assert r["merged"] == 1                       # merged with zero embedding hits
+        cg.amerge_entities.assert_awaited()
+        recs = cg._dedup_store.list_merges("ws")
+        assert len(recs) == 1 and recs[0].method == "name"
+        assert recs[0].into == "Airport"              # capitalized form survives
+
+    async def test_scan_finds_dupe_below_top1_neighbour(self):
+        # A true dupe ranked #2 behind an unrelated #1 neighbour is still merged
+        # (top-k scan, not top-1). The pair only shares a canonical key (suffix
+        # differs), so the name pass skips it and the embedding pass must catch it.
+        async def q(text, top_k=5):
+            other = "Apple Corp." if text.startswith("Apple Inc.") else "Apple Inc."
+            return [
+                {"entity_name": "Belt 35", "distance": 0.98, "entity_type": "Organization"},
+                {"entity_name": other, "distance": 0.95, "entity_type": "Organization"},
+            ]
+
+        cg = self._cg(["Apple Inc.", "Apple Corp."], q)
+        r = await cg.deduplicate_entities()
+        assert r["merged"] == 1 and r["queued"] == 0  # #2 merged; unrelated #1 ignored
+        cg.amerge_entities.assert_awaited()
+
     async def test_apply_entity_merge_sets_canonical_name(self):
         cg = self._cg([], None)
         await cg._apply_entity_merge("IBM", "International Business Machines",
