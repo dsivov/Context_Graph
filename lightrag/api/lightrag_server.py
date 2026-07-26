@@ -504,6 +504,25 @@ def create_app(args):
         except Exception as e:  # pragma: no cover - never block server start
             logger.warning(f"Flow engine unavailable: {e}")
 
+    # Studio diff-engine (P3: propose → assess → apply over ontology/rule/flow/
+    # action, with a signed version ledger). Composes the services above.
+    studio_engine = None
+    if getattr(args, "use_context_graph", False):
+        try:
+            from context_graph.studio import DiffEngine, JsonStudioStore
+
+            studio_engine = DiffEngine(
+                studio_store=JsonStudioStore(os.path.join(str(args.working_dir), "studio")),
+                rules_service=rules_service,
+                ontology_service=ontology_service,
+                flow_store=flow_store,
+                action_service=action_service,
+                rag_resolver=lambda ws: rag,
+                llm_resolver=lambda ws: getattr(rag, "llm_model_func", None),
+            )
+        except Exception as e:  # pragma: no cover - never block server start
+            logger.warning(f"Studio engine unavailable: {e}")
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Lifespan context manager for startup and shutdown events"""
@@ -1435,6 +1454,12 @@ def create_app(args):
 
         app.include_router(create_flow_routes(
             rag, flow_store, flow_executor, api_key=api_key))
+
+    # Studio API (diff-and-approve authoring + signed version ledger).
+    if studio_engine is not None:
+        from lightrag.api.routers.studio_routes import create_studio_routes
+
+        app.include_router(create_studio_routes(rag, studio_engine, api_key=api_key))
 
     # Ontology API (manage the per-workspace typed schema).
     if ontology_service is not None:
