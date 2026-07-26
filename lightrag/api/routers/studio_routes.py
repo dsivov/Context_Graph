@@ -161,6 +161,13 @@ def create_studio_routes(rag, engine, *, api_key: Optional[str] = None,
         ws = _ws()
         return {"workspace": ws, "artifacts": engine.artifacts(ws)}
 
+    @router.get("/studio/graph", dependencies=[Depends(combined_auth)],
+                summary="Cross-artifact relationship map (flows↔actions↔rules↔ontology)")
+    async def graph():
+        _require_cg(rag)
+        ws = _ws()
+        return {"workspace": ws, **engine.component_graph(ws)}
+
     @router.get("/studio/history/{kind}/{artifact_id}",
                 dependencies=[Depends(combined_auth)],
                 summary="The signed version ledger for one artifact")

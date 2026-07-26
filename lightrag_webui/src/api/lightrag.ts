@@ -1469,6 +1469,11 @@ export const studioDraft = async (body: {
 export const studioArtifacts = async (): Promise<{ workspace: string; artifacts: StudioArtifactRow[] }> =>
   (await axiosInstance.get('/studio/artifacts')).data
 
+export type StudioGraphNode = { id: string; kind: 'flow' | 'action' | 'rule' | 'object'; label: string }
+export type StudioGraphEdge = { src: string; dst: string; rel: string }
+export const studioGraph = async (): Promise<{ workspace: string; nodes: StudioGraphNode[]; edges: StudioGraphEdge[] }> =>
+  (await axiosInstance.get('/studio/graph')).data
+
 export const studioHistory = async (
   kind: string, artifactId: string
 ): Promise<{ workspace: string; kind: string; artifact_id: string; history: StudioVersion[] }> =>

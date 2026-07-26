@@ -259,6 +259,79 @@ class DiffEngine:
     def artifacts(self, workspace: str) -> List[Dict[str, Any]]:
         return self._studio.artifacts(workspace)
 
+    def component_graph(self, workspace: str) -> Dict[str, Any]:
+        """A cross-artifact map: how flows wire to actions/rules and how actions
+        and flow state-nodes touch ontology object types.
+
+        Derived live from the current artifacts (not the Studio ledger), so it
+        reflects what is actually installed. Referenced-but-absent targets still
+        appear as nodes, surfacing dangling wiring.
+        """
+        nodes: Dict[str, Dict[str, Any]] = {}
+        edges: List[Dict[str, str]] = []
+
+        def add_node(nid: str, kind: str, label: str) -> None:
+            nodes.setdefault(nid, {"id": nid, "kind": kind, "label": label})
+
+        def add_edge(src: str, dst: str, rel: str) -> None:
+            edges.append({"src": src, "dst": dst, "rel": rel})
+
+        # ontology object types
+        if self._ontology is not None:
+            try:
+                o = self._ontology.store.load(workspace)
+                if o is not None:
+                    for ot in o.object_types.values():
+                        add_node(f"object:{ot.name}", "object", ot.name)
+            except Exception as e:  # pragma: no cover - defensive
+                logger.debug(f"component_graph ontology skipped: {e}")
+
+        # rules (one node per named rule in the policy)
+        if self._rules is not None:
+            try:
+                for r in self._rules.get_summary(workspace).get("rules", []):
+                    add_node(f"rule:{r['name']}", "rule", r["name"])
+            except Exception as e:  # pragma: no cover - defensive
+                logger.debug(f"component_graph rules skipped: {e}")
+
+        # actions → the object type they act on
+        if self._actions is not None:
+            try:
+                cat = self._actions.store.load(workspace)
+                if cat is not None:
+                    for a in cat.actions.values():
+                        add_node(f"action:{a.name}", "action", a.name)
+                        ot = getattr(a, "object_type", None)
+                        if ot:
+                            add_node(f"object:{ot}", "object", ot)
+                            add_edge(f"action:{a.name}", f"object:{ot}", "acts on")
+            except Exception as e:  # pragma: no cover - defensive
+                logger.debug(f"component_graph actions skipped: {e}")
+
+        # flows → the actions they invoke, rules they gate on, states they set
+        if self._flows is not None:
+            try:
+                for f in self._flows.list(workspace):
+                    fid = f"flow:{f.id}"
+                    add_node(fid, "flow", f.id)
+                    for n in f.nodes:
+                        if n.kind == "task" and n.ref:
+                            add_node(f"action:{n.ref}", "action", n.ref)
+                            add_edge(fid, f"action:{n.ref}", "invokes")
+                        elif n.kind == "gateway" and n.ref:
+                            add_node(f"rule:{n.ref}", "rule", n.ref)
+                            add_edge(fid, f"rule:{n.ref}", "gated by")
+                        elif n.kind == "state":
+                            ot = (n.config or {}).get("object_type")
+                            if ot:
+                                add_node(f"object:{ot}", "object", ot)
+                                add_edge(fid, f"object:{ot}", "transitions")
+            except Exception as e:  # pragma: no cover - defensive
+                logger.debug(f"component_graph flows skipped: {e}")
+
+        uniq = {(e["src"], e["dst"], e["rel"]): e for e in edges}
+        return {"nodes": list(nodes.values()), "edges": list(uniq.values())}
+
     # ── per-kind: load current ──────────────────────────────────────────────
 
     def _load_current(self, ws: str, kind: str, artifact_id: str) -> Optional[Dict[str, Any]]:

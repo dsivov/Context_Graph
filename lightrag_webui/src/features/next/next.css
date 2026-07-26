@@ -276,3 +276,51 @@
 .cgnext .chatempty{margin:auto;text-align:center;color:var(--muted);font-size:13px;padding:20px;max-width:320px}
 .cgnext .chatrow{display:flex;gap:8px;margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
 .cgnext .msgtools{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+
+/* ── Studio layout + docked assistant ────────────────────────────────────── */
+.cgnext .studio-shell{display:flex;gap:14px;align-items:flex-start}
+.cgnext .studio-work{flex:1;min-width:0}
+.cgnext .aichat-dock{flex:0 0 360px;width:360px;position:sticky;top:0;align-self:stretch;
+  height:calc(100vh - 150px);display:flex;flex-direction:column;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.cgnext .aichat-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;
+  padding:11px 13px;border-bottom:1px solid var(--line)}
+.cgnext .aichat-title{display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px}
+.cgnext .aichat-dock .chatlog{padding:12px 13px}
+.cgnext .aichat-dock .chatrow{padding:10px 13px;margin-top:0;border-top:1px solid var(--line)}
+.cgnext .msub{font-size:11.5px;color:var(--muted);margin-top:2px}
+@media (max-width:1100px){.cgnext .aichat-dock{flex-basis:300px;width:300px}}
+
+.cgnext .cgselect{padding:6px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--bg);color:var(--text);font-size:12.5px}
+
+/* ── Flow canvas (BPMN-lite editor) ──────────────────────────────────────── */
+.cgnext .flowcanvas{display:flex;flex-direction:column;gap:8px}
+.cgnext .fc-meta{display:grid;grid-template-columns:auto 1fr auto 1.4fr;align-items:center;gap:8px}
+.cgnext .fc-toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.cgnext .fc-surface{border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg);
+  height:320px;overflow:auto;position:relative}
+.cgnext .fc-edges{position:absolute;top:0;left:0;pointer-events:none}
+.cgnext .fc-elabel{fill:var(--text2);font-size:10px;font-weight:600}
+.cgnext .fc-node{position:absolute;background:var(--surface);border:1px solid var(--line2);border-radius:8px;
+  box-shadow:var(--shadow);cursor:grab;overflow:hidden;user-select:none}
+.cgnext .fc-node.sel{outline:2px solid var(--accent);outline-offset:1px}
+.cgnext .fc-node.from{outline:2px dashed var(--accent)}
+.cgnext .fc-nhead{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#fff;padding:2px 8px}
+.cgnext .fc-nbody{padding:5px 8px}
+.cgnext .fc-nid{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cgnext .fc-nref{font-size:10.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cgnext .fc-port{position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:11px;height:11px;
+  border-radius:50%;background:var(--accent);border:2px solid var(--surface);cursor:crosshair}
+.cgnext .fc-panels{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cgnext .fc-panel{border:1px solid var(--line);border-radius:var(--r-sm);padding:10px}
+.cgnext .fc-ptitle{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:8px}
+.cgnext .fc-erow{display:flex;align-items:center;gap:6px;justify-content:space-between}
+@media (max-width:820px){.cgnext .fc-panels{grid-template-columns:1fr}.cgnext .fc-meta{grid-template-columns:1fr}}
+
+/* ── Component map ───────────────────────────────────────────────────────── */
+.cgnext .mermaid-wrap{overflow:auto;padding:8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg)}
+.cgnext .mermaid-wrap svg{max-width:none}
+.cgnext .maplegend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--text2)}
+.cgnext .maplegend span{display:inline-flex;align-items:center;gap:5px}
+.cgnext .maplegend i{width:11px;height:11px;border-radius:3px;display:inline-block}

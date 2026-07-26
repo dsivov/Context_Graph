@@ -238,6 +238,32 @@ async def test_action_param_change_is_behavioural():
 
 @pytest.mark.offline
 @pytest.mark.asyncio
+async def test_component_graph_wires_flow_to_action_rule_object():
+    engine, _ = _engine()
+    # a flow that invokes an action, gates on a rule, and sets a state on an object
+    flow = FlowDefinition(
+        id="intake", on_event="e",
+        nodes=[FlowNode("in", "event"),
+               FlowNode("book", "task", ref="book_deal"),
+               FlowNode("decide", "gateway", ref="discount_threshold"),
+               FlowNode("done", "state", ref="booked", config={"object_type": "Deal"})],
+        edges=[FlowEdge("in", "book"), FlowEdge("book", "decide"), FlowEdge("decide", "done", when="else")],
+    ).to_dict()
+    d = await engine.propose("w", "flow", "intake", draft=flow)
+    engine.assess("w", d)
+    await engine.apply("w", d, approver="A", reason="init")
+
+    g = engine.component_graph("w")
+    ids = {n["id"] for n in g["nodes"]}
+    assert {"flow:intake", "action:book_deal", "rule:discount_threshold", "object:Deal"} <= ids
+    links = {(e["src"], e["dst"], e["rel"]) for e in g["edges"]}
+    assert ("flow:intake", "action:book_deal", "invokes") in links
+    assert ("flow:intake", "rule:discount_threshold", "gated by") in links
+    assert ("flow:intake", "object:Deal", "transitions") in links
+
+
+@pytest.mark.offline
+@pytest.mark.asyncio
 async def test_revert_reapplies_prior_snapshot():
     engine, _ = _engine()
     v1 = await engine.propose("w", "rule", "policy", draft=_rule_draft("0.20", "exceeds"))
