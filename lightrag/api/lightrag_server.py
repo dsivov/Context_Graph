@@ -480,6 +480,30 @@ def create_app(args):
         except Exception as e:  # pragma: no cover - never block server start
             logger.warning(f"Ingress service unavailable: {e}")
 
+    # Flow store + executor (P2 flow engine: event → task/gateway/state → run).
+    # Only in CG mode — composes the rules/actions/lifecycle services above.
+    flow_store = None
+    flow_executor = None
+    if getattr(args, "use_context_graph", False):
+        try:
+            from context_graph.flows import (
+                FlowExecutor,
+                JsonFlowStore,
+                JsonRunStore,
+            )
+
+            flow_store = JsonFlowStore(os.path.join(str(args.working_dir), "flows"))
+            flow_executor = FlowExecutor(
+                flow_store,
+                JsonRunStore(os.path.join(str(args.working_dir), "flows")),
+                rag_resolver=lambda ws: rag,
+                rules_service=rules_service,
+                action_service=action_service,
+                lifecycle_service=lifecycle_service,
+            )
+        except Exception as e:  # pragma: no cover - never block server start
+            logger.warning(f"Flow engine unavailable: {e}")
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Lifespan context manager for startup and shutdown events"""
@@ -1396,6 +1420,21 @@ def create_app(args):
         # workspace instance.
         ingress_service.bus.subscribe("*", DecisionSubscriber(lambda ws: rag))
         app.include_router(create_ingress_routes(rag, ingress_service, api_key=api_key))
+
+        # P2 flow trigger: every event also starts any flow subscribed to its
+        # type. The executor is idempotent on run_id, so a re-delivered event
+        # never double-starts. Runs after the DecisionSubscriber above.
+        if flow_executor is not None and flow_store is not None:
+            from context_graph.flows.trigger import FlowTrigger
+
+            ingress_service.bus.subscribe("*", FlowTrigger(flow_store, flow_executor))
+
+    # Flow engine API (author flows, inspect runs, replay).
+    if flow_executor is not None and flow_store is not None:
+        from lightrag.api.routers.flow_routes import create_flow_routes
+
+        app.include_router(create_flow_routes(
+            rag, flow_store, flow_executor, api_key=api_key))
 
     # Ontology API (manage the per-workspace typed schema).
     if ontology_service is not None:

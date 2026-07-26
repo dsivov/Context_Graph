@@ -17,10 +17,14 @@ from context_graph.flows.schema import (
     Run,
 )
 from context_graph.flows.store import (
+    FlowStore,
+    InMemoryFlowStore,
     InMemoryRunStore,
+    JsonFlowStore,
     JsonRunStore,
     RunStore,
 )
+from context_graph.flows.service import FlowExecutor, ReplayResult
 
 __all__ = [
     "NODE_KINDS",
@@ -32,4 +36,9 @@ __all__ = [
     "RunStore",
     "InMemoryRunStore",
     "JsonRunStore",
+    "FlowStore",
+    "InMemoryFlowStore",
+    "JsonFlowStore",
+    "FlowExecutor",
+    "ReplayResult",
 ]
