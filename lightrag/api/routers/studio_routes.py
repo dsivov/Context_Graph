@@ -57,6 +57,14 @@ class RevertRequest(BaseModel):
     role: Optional[str] = None
 
 
+class DraftRequest(BaseModel):
+    kind: str = Field(description="ontology | rule (kinds with an NL author)")
+    artifact_id: str
+    instruction: str = Field(description="The latest chat message.")
+    history: List[Dict[str, str]] = Field(
+        default_factory=list, description="Prior turns [{role, content}] — re-sent each turn.")
+
+
 def _require_cg(rag) -> None:
     if not hasattr(rag, "rules_gate"):
         raise HTTPException(
@@ -123,6 +131,17 @@ def create_studio_routes(rag, engine, *, api_key: Optional[str] = None,
             raise HTTPException(status_code=422, detail={
                 "status": "rejected", "outcome": "REJECT", "audit": e.decision.audit})
         return result
+
+    @router.post("/studio/draft", dependencies=[Depends(combined_auth)],
+                 summary="Conversationally author a diff from a chat (AI)")
+    async def draft(body: DraftRequest):
+        _require_cg(rag)
+        ws = _ws()
+        try:
+            return await engine.draft(
+                ws, body.kind, body.artifact_id, body.instruction, history=body.history)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     @router.post("/studio/revert", dependencies=[Depends(combined_auth)],
                  summary="Re-apply a prior version's snapshot as a new signed version")

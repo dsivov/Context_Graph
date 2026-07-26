@@ -1392,3 +1392,84 @@ export const communityList = async (): Promise<{ communities: any[]; summary: an
   (await axiosInstance.get('/graph/communities')).data
 export const communityQuery = async (query: string): Promise<{ response: string; communities: any[] }> =>
   (await axiosInstance.post('/graph/community/query', { query, top_k: 5 })).data
+
+// ── Studio (P3: diff-and-approve authoring) ─────────────────────────────────
+export type StudioKind = 'ontology' | 'rule' | 'flow' | 'action'
+
+export type ArtifactDiff = {
+  kind: StudioKind
+  artifact_id: string
+  to_version: number
+  from_version: number | null
+  delta: { before: any | null; after: any }
+  behaviour_changed: boolean
+  origin: string
+}
+
+export type StudioSignOff = { approver: string; reason: string; at: string; role: string | null }
+
+export type StudioApplyResult = {
+  kind: StudioKind
+  artifact_id: string
+  version: number
+  behaviour_changed: boolean
+  sign_off: StudioSignOff
+  decision_audit: any | null
+}
+
+export type StudioArtifactRow = { kind: StudioKind; artifact_id: string; version: number; revisions: number }
+
+export type StudioVersion = {
+  kind: StudioKind
+  artifact_id: string
+  version: number
+  snapshot: any
+  from_version: number | null
+  behaviour_changed: boolean
+  origin: string
+  sign_off: StudioSignOff | null
+  decision_audit: any | null
+}
+
+export type StudioProposeBody = {
+  kind: StudioKind
+  artifact_id: string
+  draft?: any
+  spec?: string
+  concepts?: Record<string, string[]>
+  origin?: string
+}
+
+export const studioPropose = async (body: StudioProposeBody): Promise<{ diff: ArtifactDiff }> =>
+  (await axiosInstance.post('/studio/propose', body)).data
+
+export const studioAssess = async (diff: ArtifactDiff): Promise<{ diff: ArtifactDiff }> =>
+  (await axiosInstance.post('/studio/assess', { diff })).data
+
+export const studioApply = async (
+  diff: ArtifactDiff,
+  signOff?: { approver?: string; reason?: string; role?: string }
+): Promise<StudioApplyResult> =>
+  (await axiosInstance.post('/studio/apply', { diff, ...(signOff || {}) })).data
+
+export const studioRevert = async (
+  kind: StudioKind, artifactId: string, toVersion: number,
+  approver: string, reason: string, role?: string
+): Promise<StudioApplyResult> =>
+  (await axiosInstance.post('/studio/revert', {
+    kind, artifact_id: artifactId, to_version: toVersion, approver, reason, role
+  })).data
+
+export const studioDraft = async (body: {
+  kind: StudioKind; artifact_id: string; instruction: string
+  history?: { role: string; content: string }[]
+}): Promise<{ reply: string; diff: ArtifactDiff }> =>
+  (await axiosInstance.post('/studio/draft', body)).data
+
+export const studioArtifacts = async (): Promise<{ workspace: string; artifacts: StudioArtifactRow[] }> =>
+  (await axiosInstance.get('/studio/artifacts')).data
+
+export const studioHistory = async (
+  kind: string, artifactId: string
+): Promise<{ workspace: string; kind: string; artifact_id: string; history: StudioVersion[] }> =>
+  (await axiosInstance.get(`/studio/history/${encodeURIComponent(kind)}/${encodeURIComponent(artifactId)}`)).data

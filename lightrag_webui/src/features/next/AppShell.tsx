@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import {
   LayoutDashboardIcon, ScaleIcon, FilesIcon, NetworkIcon, SearchIcon,
   GavelIcon, BoxesIcon, SparklesIcon, Code2Icon, RocketIcon,
-  BellIcon, SunIcon, MoonIcon, PanelLeftIcon, LayersIcon
+  BellIcon, SunIcon, MoonIcon, PanelLeftIcon, LayersIcon, PencilRulerIcon
 } from 'lucide-react'
 import { useSettingsStore } from '@/stores/settings'
 import { setUiMode } from '@/lib/uiMode'
@@ -14,6 +14,7 @@ import Decisions from '@/features/next/pages/Decisions'
 import GraphQualityNext from '@/features/next/pages/GraphQualityNext'
 import OntologyNext from '@/features/next/pages/OntologyNext'
 import RulesNext from '@/features/next/pages/RulesNext'
+import Studio from '@/features/next/pages/Studio'
 import DocumentsNext from '@/features/next/pages/DocumentsNext'
 import ChunkInspector from '@/features/next/pages/ChunkInspector'
 import GraphViewer from '@/features/GraphViewer'
@@ -23,7 +24,7 @@ import ApiSite from '@/features/ApiSite'
 
 type ViewId =
   | 'dashboard' | 'decisions' | 'documents' | 'graph' | 'retrieval' | 'chunks'
-  | 'rules' | 'ontology' | 'quality' | 'getstarted' | 'api'
+  | 'rules' | 'ontology' | 'quality' | 'studio' | 'getstarted' | 'api'
 
 type NavItem = {
   id: ViewId
@@ -44,6 +45,7 @@ const NAV: NavItem[] = [
   { id: 'rules', label: 'Rules', icon: GavelIcon, group: 'Governance' },
   { id: 'ontology', label: 'Ontology', icon: BoxesIcon, group: 'Governance' },
   { id: 'quality', label: 'Graph Quality', icon: SparklesIcon, group: 'Governance' },
+  { id: 'studio', label: 'Studio', icon: PencilRulerIcon, group: 'Governance' },
   { id: 'getstarted', label: 'Get Started', icon: RocketIcon, group: 'Setup' },
   { id: 'api', label: 'API', icon: Code2Icon, group: 'Setup' }
 ]
@@ -104,6 +106,7 @@ export default function AppShell() {
       case 'rules': return <RulesNext />
       case 'ontology': return <OntologyNext />
       case 'quality': return <GraphQualityNext />
+      case 'studio': return <Studio />
       case 'getstarted': return <GetStarted />
       case 'api': return <ApiSite />
       default: return null

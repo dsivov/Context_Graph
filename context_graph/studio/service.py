@@ -85,16 +85,51 @@ class DiffEngine:
         if draft is not None:
             after = dict(draft)
         elif spec is not None:
-            after = await self._author(workspace, kind, spec, concepts=concepts,
-                                       current=before)
+            after, _ = await self._author(workspace, kind, spec, concepts=concepts,
+                                          current=before)
         else:
             raise ValueError("propose needs either a draft or a spec")
 
-        to_version = int(from_version or 0) + 1
+        return self._make_diff(kind, artifact_id, before, after, from_version, origin)
+
+    async def draft(
+        self,
+        workspace: str,
+        kind: str,
+        artifact_id: str,
+        instruction: str,
+        *,
+        history: Optional[List[Dict[str, str]]] = None,
+        concepts: Optional[Dict[str, List[str]]] = None,
+    ) -> Dict[str, Any]:
+        """Conversational authoring: turn a chat (prior turns + a new
+        ``instruction``) into an assessed diff plus a natural-language ``reply``.
+
+        The one-shot author agents take a single spec, so the conversation's
+        user turns are composed into a cumulative spec — later turns refine
+        earlier intent. Returns ``{reply, diff}`` for the chat UI.
+        """
+        if kind not in DIFF_KINDS or kind == "app":
+            raise ValueError(f"studio cannot author kind '{kind}'")
+        spec = self._compose_spec(history, instruction)
+        before = self._load_current(workspace, kind, artifact_id)
+        after, explanation = await self._author(workspace, kind, spec,
+                                                concepts=concepts, current=before)
+        from_version = before.get("version") if before else None
+        diff = self._make_diff(kind, artifact_id, before, after, from_version, "authoring")
+        self.assess(workspace, diff)
+        return {
+            "reply": explanation or "Drafted a change from your description — review the diff.",
+            "diff": diff.to_dict(),
+        }
+
+    def _make_diff(self, kind: str, artifact_id: str, before: Optional[Dict[str, Any]],
+                   after: Dict[str, Any], from_version: Optional[int],
+                   origin: str) -> ArtifactDiff:
         diff = ArtifactDiff(
             kind=kind,
             artifact_id=artifact_id,
-            to_version=to_version,
+            to_version=int(from_version or 0) + 1,
             from_version=from_version,
             delta={"before": self._strip_version(before), "after": self._strip_version(after)},
             origin=origin,
@@ -103,6 +138,18 @@ class DiffEngine:
         if problems:
             raise ValueError("; ".join(problems))
         return diff
+
+    @staticmethod
+    def _compose_spec(history: Optional[List[Dict[str, str]]], instruction: str) -> str:
+        """Fold a chat's user turns + the latest instruction into one cumulative
+        spec for the one-shot author (later turns refine earlier intent)."""
+        prior = [m.get("content", "") for m in (history or [])
+                 if m.get("role") == "user" and m.get("content")]
+        # Drop an exact duplicate of the latest instruction if the caller already
+        # appended it to history before sending.
+        parts = [p for p in prior if p.strip() and p.strip() != instruction.strip()]
+        parts.append(instruction)
+        return "\n".join(parts).strip()
 
     # -- assess --------------------------------------------------------------
 
@@ -236,7 +283,9 @@ class DiffEngine:
 
     async def _author(self, ws: str, kind: str, spec: str, *,
                       concepts: Optional[Dict[str, List[str]]],
-                      current: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+                      current: Optional[Dict[str, Any]]) -> tuple[Dict[str, Any], str]:
+        """Route an NL spec to the kind's author agent. Returns
+        ``(artifact_dict, explanation)``."""
         llm = self._resolve_llm(ws) if self._resolve_llm else None
         if llm is None:
             raise ValueError(f"no LLM configured to author a {kind} from a spec")
@@ -249,8 +298,9 @@ class DiffEngine:
             result = await RuleAuthor(llm, gate_backend=backend).generate(spec, concepts=seed)
             if not result.valid:
                 raise ValueError(f"rule author failed: {'; '.join(result.errors) or 'invalid'}")
-            return {"dsl": result.dsl, "concepts": result.concepts,
-                    "enabled": True, "fixtures": result.fixtures}
+            after = {"dsl": result.dsl, "concepts": result.concepts,
+                     "enabled": True, "fixtures": result.fixtures}
+            return after, result.explanation
 
         if kind == "ontology":
             from context_graph.ontology.agent import OntologyAuthor
@@ -259,7 +309,7 @@ class DiffEngine:
             if not getattr(result, "valid", False):
                 raise ValueError(
                     f"ontology author failed: {'; '.join(getattr(result, 'errors', [])) or 'invalid'}")
-            return result.ontology
+            return result.ontology, getattr(result, "explanation", "")
 
         raise ValueError(f"kind '{kind}' has no NL author; supply a draft")
 

@@ -242,3 +242,37 @@
 .cgnext .st.good{color:var(--good)} .cgnext .st.comm{color:var(--comm)} .cgnext .st.accent{color:var(--accent)}
 .cgnext .st.warn{color:var(--warn)} .cgnext .st.crit{color:var(--crit)}
 .cgnext .st .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+/* ── Studio (P3) ─────────────────────────────────────────────────────────── */
+.cgnext .segmented{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden}
+.cgnext .seg{padding:6px 12px;font-size:12.5px;font-weight:600;background:var(--surface);color:var(--text2);
+  border:0;border-right:1px solid var(--line);cursor:pointer;text-transform:capitalize}
+.cgnext .seg:last-child{border-right:0}
+.cgnext .seg.on{background:var(--accent);color:#fff}
+.cgnext .fieldlabel{font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.cgnext .codearea{width:100%;box-sizing:border-box;font-family:var(--mono);font-size:12px;line-height:1.55;
+  padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg);color:var(--text);resize:vertical}
+.cgnext .codearea:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px}
+.cgnext .divider{height:1px;background:var(--line);margin:12px 0}
+.cgnext .diffgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cgnext .diffpane{border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;min-width:0}
+.cgnext .diffhead{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
+  padding:5px 9px;background:var(--surface2);border-bottom:1px solid var(--line)}
+.cgnext .diffhead.accent{color:var(--accent)}
+.cgnext .diffbody{margin:0;padding:9px;font-family:var(--mono);font-size:11.5px;line-height:1.5;color:var(--text2);
+  max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.cgnext .ledrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 4px;border-bottom:1px solid var(--line)}
+.cgnext .ledrow:last-child{border-bottom:0}
+.cgnext .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.cgnext .dot.good{background:var(--good)} .cgnext .dot.warn{background:var(--warn)}
+
+/* ── Reusable AI chat modal (history) ────────────────────────────────────── */
+.cgnext .chatlog{display:flex;flex-direction:column;gap:10px;min-height:220px;max-height:min(48vh,420px);
+  overflow-y:auto;padding:4px 2px}
+.cgnext .msg{padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.55;max-width:88%;white-space:pre-wrap;word-break:break-word}
+.cgnext .msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.cgnext .msg.assistant{align-self:flex-start;background:var(--surface2);color:var(--text);border-bottom-left-radius:4px}
+.cgnext .msg.assistant.err{background:var(--crit-dim);color:var(--crit)}
+.cgnext .chatempty{margin:auto;text-align:center;color:var(--muted);font-size:13px;padding:20px;max-width:320px}
+.cgnext .chatrow{display:flex;gap:8px;margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.cgnext .msgtools{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
