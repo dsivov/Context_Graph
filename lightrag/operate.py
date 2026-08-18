@@ -1935,6 +1935,20 @@ def _collect_relation_context(
             continue
         found_any = True
         for s in rc.get("supporting_sentences") or []:
+            if not s:
+                continue          # keep the original skip for empty/None
+            # `supporting_sentences` is specified as a list of strings, but the
+            # extraction model occasionally returns objects instead — and an
+            # unhashable element here aborts the merge stage for the WHOLE
+            # document, losing a 114-page manual over one malformed relation.
+            # Take the sentence out of the object when it is there, and fall
+            # back to a stable rendering rather than dropping evidence.
+            if isinstance(s, dict):
+                s = (s.get("text") or s.get("sentence") or s.get("content")
+                     or _json.dumps(s, sort_keys=True, ensure_ascii=False))
+            elif not isinstance(s, str):
+                s = str(s)
+            s = s.strip()
             if s and s not in seen_sentences:
                 seen_sentences.add(s)
                 all_sentences.append(s)
