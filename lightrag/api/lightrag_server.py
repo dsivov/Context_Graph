@@ -54,7 +54,6 @@ from lightrag.api.routers.document_routes import (
 from lightrag.api.routers.query_routes import create_query_routes
 from lightrag.api.routers.graph_routes import create_graph_routes
 from context_graph.api.routes import create_context_graph_routes
-from lightrag.api.mcp_server import create_mcp_server
 from lightrag.api.routers.ollama_api import OllamaAPI
 from lightrag.api.workspace_pool import (
     WorkspacePool,
@@ -1751,6 +1750,19 @@ def create_app(args):
     # MCP Server (embedded, same process) — mounted last so named mounts
     # (/webui, /static/swagger-ui) take precedence over the catch-all.
     if getattr(args, "enable_mcp", True):
+        # Imported here rather than at module scope: `mcp` is an [api] extra, and
+        # a server started with ENABLE_MCP=false should not require it. At module
+        # scope a missing `mcp` kills the whole server with a bare
+        # ModuleNotFoundError, including for users who disabled the feature.
+        try:
+            from lightrag.api.mcp_server import create_mcp_server
+        except ImportError as e:
+            raise ImportError(
+                "The embedded MCP server needs the 'mcp' package, which ships in "
+                "the [api] extra. Install it with `pip install -e '.[api]'`, or "
+                "start the server with ENABLE_MCP=false to run without it."
+            ) from e
+
         mcp_server, mcp_app = create_mcp_server(
             rag=rag,
             api_key=api_key,
