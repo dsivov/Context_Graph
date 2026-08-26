@@ -519,6 +519,18 @@ class PostgreSQLDB:
             asyncpg.exceptions.UniqueViolationError,
         ):
             pass
+        except asyncpg.exceptions.UndefinedFunctionError as e:
+            # create_graph() lives in ag_catalog and only exists once the AGE
+            # library is loaded. On a server that has the extension installed but
+            # not preloaded, the raw error is "function create_graph(unknown) does
+            # not exist", which points an operator at the wrong problem entirely.
+            raise RuntimeError(
+                "Apache AGE is installed but its functions are not available on "
+                "this connection. AGE must be loaded before use: add 'age' to "
+                "shared_preload_libraries in postgresql.conf and restart, or grant "
+                "the connecting role rights to run LOAD 'age'. "
+                f"Original error: {e}"
+            ) from e
 
     async def configure_vchordrq(self, connection: asyncpg.Connection) -> None:
         """Configure VCHORDRQ extension for vector similarity search.
