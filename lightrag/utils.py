@@ -548,6 +548,37 @@ def compute_args_hash(*args: Any) -> str:
         return md5(safe_bytes).hexdigest()
 
 
+def compute_history_hash(history_messages: list[dict[str, str]] | None) -> str:
+    """Compute a stable digest of conversation history for use in a cache key.
+
+    Conversation history is sent to the LLM as context, so two calls that share a
+    query but differ in history can have different correct answers. A cache key
+    that omits it therefore lets one conversation serve another conversation's
+    answer.
+
+    Returns an empty string when there is no history. This is deliberate:
+    ``compute_args_hash`` concatenates its arguments, so appending ``""`` leaves
+    the key byte-identical to one computed without this component. Single-turn
+    queries — the overwhelming majority — keep their existing cache entries, and
+    only multi-turn keys change.
+
+    Args:
+        history_messages: ``[{"role": ..., "content": ...}, ...]`` or None.
+    Returns:
+        str: md5 digest of the flattened history, or "" when there is none.
+    """
+    if not history_messages:
+        return ""
+
+    parts: list[str] = []
+    for message in history_messages:
+        if isinstance(message, dict):
+            parts.append(f"{message.get('role', '')}:{message.get('content', '')}")
+        else:
+            parts.append(str(message))
+    return compute_args_hash("\n".join(parts))
+
+
 def compute_mdhash_id(content: str, prefix: str = "") -> str:
     """
     Compute a unique ID for a given content string.

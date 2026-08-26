@@ -22,6 +22,7 @@ from lightrag.utils import (
     split_string_by_multi_markers,
     truncate_list_by_token_size,
     compute_args_hash,
+    compute_history_hash,
     handle_cache,
     save_to_cache,
     CacheData,
@@ -3309,6 +3310,9 @@ async def kg_query(
         query_param.user_prompt or "",
         query_param.enable_rerank,
         getattr(query_param, "context_format", "annotated"),
+        # History is sent to the LLM as context, so it can change the answer.
+        # Empty history hashes to "" and leaves single-turn keys unchanged.
+        compute_history_hash(query_param.conversation_history),
     )
 
     cached_result = await handle_cache(
@@ -5385,6 +5389,8 @@ async def naive_query(
         query_param.max_total_tokens,
         query_param.user_prompt or "",
         query_param.enable_rerank,
+        # See kg_query above: history changes the answer, so it belongs in the key.
+        compute_history_hash(query_param.conversation_history),
     )
     cached_result = await handle_cache(
         hashing_kv, args_hash, user_query, query_param.mode, cache_type="query"
