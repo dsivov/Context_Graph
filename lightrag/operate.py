@@ -559,42 +559,22 @@ async def _handle_single_relationship_extraction(
         return None
 
 
-async def rebuild_knowledge_from_chunks(
+async def _prepare_rebuild_from_chunks(
     entities_to_rebuild: dict[str, list[str]],
     relationships_to_rebuild: dict[tuple[str, str], list[str]],
-    knowledge_graph_inst: BaseGraphStorage,
-    entities_vdb: BaseVectorStorage,
-    relationships_vdb: BaseVectorStorage,
     text_chunks_storage: BaseKVStorage,
     llm_response_cache: BaseKVStorage,
     global_config: dict[str, str],
     pipeline_status: dict | None = None,
     pipeline_status_lock=None,
-    entity_chunks_storage: BaseKVStorage | None = None,
-    relation_chunks_storage: BaseKVStorage | None = None,
-) -> None:
-    """Rebuild entity and relationship descriptions from cached extraction results with parallel processing
+) -> tuple[dict, dict]:
+    """Validate survivor evidence before deletion mutates any storage.
 
-    This method uses cached LLM extraction results instead of calling LLM again,
-    following the same approach as the insert process. Now with parallel processing
-    controlled by llm_model_max_async and using get_storage_keyed_lock for data consistency.
-
-    Args:
-        entities_to_rebuild: Dict mapping entity_name -> list of remaining chunk_ids
-        relationships_to_rebuild: Dict mapping (src, tgt) -> list of remaining chunk_ids
-        knowledge_graph_inst: Knowledge graph storage
-        entities_vdb: Entity vector database
-        relationships_vdb: Relationship vector database
-        text_chunks_storage: Text chunks storage
-        llm_response_cache: LLM response cache
-        global_config: Global configuration containing llm_model_max_async
-        pipeline_status: Pipeline status dictionary
-        pipeline_status_lock: Lock for pipeline status
-        entity_chunks_storage: KV storage maintaining full chunk IDs per entity
-        relation_chunks_storage: KV storage maintaining full chunk IDs per relation
+    Missing evidence is a recoverable deletion failure, never permission to
+    reuse descriptions or source paths contributed by the deleted document.
     """
     if not entities_to_rebuild and not relationships_to_rebuild:
-        return
+        return {}, {}
 
     # Get all referenced chunk IDs
     all_referenced_chunk_ids = set()
@@ -618,14 +598,12 @@ async def rebuild_knowledge_from_chunks(
         text_chunks_storage=text_chunks_storage,
     )
 
-    if not cached_results:
-        status_message = "No cached extraction results found, cannot rebuild"
-        logger.warning(status_message)
-        if pipeline_status is not None and pipeline_status_lock is not None:
-            async with pipeline_status_lock:
-                pipeline_status["latest_message"] = status_message
-                pipeline_status["history_messages"].append(status_message)
-        return
+    missing = all_referenced_chunk_ids - cached_results.keys()
+    if missing:
+        raise ValueError(
+            f"Surviving extraction evidence unavailable for {len(missing)} chunks; "
+            "restore extraction cache before retrying deletion"
+        )
 
     # Process cached results to get entities and relationships for each chunk
     chunk_entities = {}  # chunk_id -> {entity_name: [entity_data]}
@@ -702,7 +680,57 @@ async def rebuild_knowledge_from_chunks(
                 async with pipeline_status_lock:
                     pipeline_status["latest_message"] = status_message
                     pipeline_status["history_messages"].append(status_message)
-            continue
+            raise ValueError(status_message) from e
+
+    # Insertion creates endpoint entities from relations even when the model
+    # emits no separate entity record. Rebuild those from surviving cached
+    # relations, not from the still-partially-deleted graph.
+    for chunk_id, relationships in chunk_relationships.items():
+        for (src, tgt), records in relationships.items():
+            for name in (src, tgt):
+                if not chunk_entities[chunk_id].get(name):
+                    chunk_entities[chunk_id][name] = [
+                        {**record, "entity_name": name, "entity_type": "UNKNOWN"}
+                        for record in records
+                    ]
+
+    limit_method = global_config.get("source_ids_limit_method") or SOURCE_IDS_LIMIT_METHOD_KEEP
+    for name, ids in entities_to_rebuild.items():
+        limited = apply_source_ids_limit(ids, global_config["max_source_ids_per_entity"], limit_method)
+        if not any(chunk_entities.get(cid, {}).get(name) for cid in limited):
+            raise ValueError(f"Surviving extraction evidence missing for entity `{name}`")
+    for (src, tgt), ids in relationships_to_rebuild.items():
+        limited = apply_source_ids_limit(ids, global_config["max_source_ids_per_relation"], limit_method)
+        if not any(chunk_relationships.get(cid, {}).get((src, tgt))
+                   or chunk_relationships.get(cid, {}).get((tgt, src)) for cid in limited):
+            raise ValueError(f"Surviving extraction evidence missing for relation `{src}`~`{tgt}`")
+    return chunk_entities, chunk_relationships
+
+
+async def rebuild_knowledge_from_chunks(
+    entities_to_rebuild: dict[str, list[str]],
+    relationships_to_rebuild: dict[tuple[str, str], list[str]],
+    knowledge_graph_inst: BaseGraphStorage,
+    entities_vdb: BaseVectorStorage,
+    relationships_vdb: BaseVectorStorage,
+    text_chunks_storage: BaseKVStorage,
+    llm_response_cache: BaseKVStorage,
+    global_config: dict[str, str],
+    pipeline_status: dict | None = None,
+    pipeline_status_lock=None,
+    entity_chunks_storage: BaseKVStorage | None = None,
+    relation_chunks_storage: BaseKVStorage | None = None,
+    prepared_extractions: tuple[dict, dict] | None = None,
+) -> None:
+    """Rebuild shared graph/vector records only from validated survivor evidence."""
+    if not entities_to_rebuild and not relationships_to_rebuild:
+        return
+    if prepared_extractions is None:
+        prepared_extractions = await _prepare_rebuild_from_chunks(
+            entities_to_rebuild, relationships_to_rebuild, text_chunks_storage,
+            llm_response_cache, global_config, pipeline_status, pipeline_status_lock,
+        )
+    chunk_entities, chunk_relationships = prepared_extractions
 
     # Get max async tasks limit from global_config for semaphore control
     graph_max_async = global_config.get("llm_model_max_async", 4) * 2
@@ -742,6 +770,7 @@ async def rebuild_knowledge_from_chunks(
                         async with pipeline_status_lock:
                             pipeline_status["latest_message"] = status_message
                             pipeline_status["history_messages"].append(status_message)
+                    raise
 
     async def _locked_rebuild_relationship(src, tgt, chunk_ids):
         nonlocal rebuilt_relationships_count, failed_relationships_count
@@ -780,6 +809,7 @@ async def rebuild_knowledge_from_chunks(
                         async with pipeline_status_lock:
                             pipeline_status["latest_message"] = status_message
                             pipeline_status["history_messages"].append(status_message)
+                    raise
 
     # Create tasks for parallel processing
     tasks = []
@@ -1085,6 +1115,24 @@ async def _rebuild_from_extraction_result(
         if chunk_data
         else "unknown_source"
     )
+
+    # ContextGraph's JSON extraction mode caches the model's JSON response,
+    # then uses its own parser during insertion. Rebuild must use that same
+    # parser or a surviving JSON-only chunk appears to have no evidence.
+    if (PROMPTS["DEFAULT_TUPLE_DELIMITER"] not in extraction_result
+            and any(key in extraction_result for key in (
+                '"entities"', '"relationships"', '"relations"'))):
+        from context_graph.core import _process_cg_json_result
+        from context_graph.jsonio import _extract_json_object
+
+        parsed = _extract_json_object(extraction_result)
+        if not isinstance(parsed, dict):
+            try:
+                import json_repair
+                parsed = json_repair.loads(extraction_result)
+            except Exception:
+                parsed = {}
+        return await _process_cg_json_result(parsed, chunk_id, timestamp, file_path)
 
     # Call the shared processing function
     return await _process_extraction_result(
@@ -1495,6 +1543,12 @@ async def _rebuild_single_relationship(
         else current_relationship.get("file_path", "unknown_source"),
         "truncate": truncation_info,
     }
+    # The existing edge may contain context contributed only by the document
+    # being deleted. Rebuild context exclusively from surviving cached edges.
+    updated_relationship_data.pop("relation_context", None)
+    surviving_context = _collect_relation_context(all_relationship_data, None)
+    if surviving_context is not None:
+        updated_relationship_data["relation_context"] = surviving_context
 
     # Ensure both endpoint nodes exist before writing the edge back
     # (certain storage backends require pre-existing nodes).

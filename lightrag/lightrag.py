@@ -93,6 +93,7 @@ from lightrag.operate import (
     kg_query,
     naive_query,
     rebuild_knowledge_from_chunks,
+    _prepare_rebuild_from_chunks,
 )
 from lightrag.constants import GRAPH_FIELD_SEP
 from lightrag.utils import (
@@ -101,6 +102,7 @@ from lightrag.utils import (
     EmbeddingFunc,
     always_get_an_event_loop,
     compute_mdhash_id,
+    merge_source_ids,
     lazy_external_import,
     priority_limit_async_func_call,
     get_content_summary,
@@ -1163,6 +1165,8 @@ class LightRAG:
         ids: str | list[str] | None = None,
         file_paths: str | list[str] | None = None,
         track_id: str | None = None,
+        prepared_chunks: list[str] | None = None,
+        prepared_index_graph: bool = True,
     ) -> str:
         """Async Insert documents with checkpoint support
 
@@ -1179,14 +1183,40 @@ class LightRAG:
         Returns:
             str: tracking ID for monitoring processing status
         """
+        # Explicit chunks are a single-document, source-preserving adapter API.
+        # Ownership is revision-scoped so identical text cannot overwrite another
+        # document's chunks. The caller must replay its durable plan after a crash.
+        prepared = None
+        if type(prepared_index_graph) is not bool or (not prepared_index_graph and prepared_chunks is None):
+            raise ValueError("Source-vector indexing requires explicit prepared chunks")
+        if prepared_chunks is not None:
+            doc_ids = [ids] if isinstance(ids, str) else ids
+            if (not isinstance(input, str) or not doc_ids or len(doc_ids) != 1
+                    or not isinstance(doc_ids[0], str) or not doc_ids[0].strip()
+                    or not prepared_chunks or any(
+                        not isinstance(c, str) or not c.strip() for c in prepared_chunks)):
+                raise ValueError("Prepared chunks require one explicit document id and nonempty text")
+            from .prepared_chunks import build_prepared_chunks
+            build_prepared_chunks(prepared_chunks, doc_ids[0], "", self.tokenizer,
+                                  self.chunk_token_size)
+            prepared = {doc_ids[0]: list(prepared_chunks)}
+
         # Generate track_id if not provided
         if track_id is None:
             track_id = generate_track_id("insert")
 
         await self.apipeline_enqueue_documents(input, ids, file_paths, track_id)
-        await self.apipeline_process_enqueue_documents(
-            split_by_character, split_by_character_only
-        )
+        if prepared is None:
+            await self.apipeline_process_enqueue_documents(
+                split_by_character, split_by_character_only
+            )
+        else:
+            options = {"prepared_chunks": prepared}
+            if not prepared_index_graph:
+                options["prepared_index_graph"] = False
+            await self.apipeline_process_enqueue_documents(
+                split_by_character, split_by_character_only, **options
+            )
 
         return track_id
 
@@ -1643,6 +1673,8 @@ class LightRAG:
         self,
         split_by_character: str | None = None,
         split_by_character_only: bool = False,
+        prepared_chunks: dict[str, list[str]] | None = None,
+        prepared_index_graph: bool = True,
     ) -> None:
         """
         Process pending documents by splitting them into chunks, processing
@@ -1845,7 +1877,7 @@ class LightRAG:
                             content = content_data["content"]
 
                             # Call chunking function, supporting both sync and async implementations
-                            chunking_result = self.chunking_func(
+                            chunking_result = [] if prepared_chunks is not None and doc_id in prepared_chunks else self.chunking_func(
                                 self.tokenizer,
                                 content,
                                 split_by_character,
@@ -1875,6 +1907,14 @@ class LightRAG:
                                 }
                                 for dp in chunking_result
                             }
+
+                            if prepared_chunks is not None and doc_id in prepared_chunks:
+                                from .prepared_chunks import build_prepared_chunks
+
+                                chunks = build_prepared_chunks(
+                                    prepared_chunks[doc_id], doc_id, file_path,
+                                    self.tokenizer, self.chunk_token_size,
+                                )
 
                             if not chunks:
                                 logger.warning("No document chunks to process")
@@ -1931,13 +1971,19 @@ class LightRAG:
                             # Execute first stage tasks
                             await asyncio.gather(*first_stage_tasks)
 
-                            # Stage 2: Process entity relation graph (after text_chunks are saved)
-                            entity_relation_task = asyncio.create_task(
-                                self._process_extract_entities(
-                                    chunks, pipeline_status, pipeline_status_lock
+                            # Only named prepared documents may use the source-vector lane.
+                            # Other pending documents keep normal graph processing.
+                            source_vectors_only = (prepared_chunks is not None
+                                and doc_id in prepared_chunks and not prepared_index_graph)
+                            if source_vectors_only:
+                                chunk_results = []
+                            else:
+                                entity_relation_task = asyncio.create_task(
+                                    self._process_extract_entities(
+                                        chunks, pipeline_status, pipeline_status_lock
+                                    )
                                 )
-                            )
-                            chunk_results = await entity_relation_task
+                                chunk_results = await entity_relation_task
                             file_extraction_stage_ok = True
 
                         except Exception as e:
@@ -2020,24 +2066,25 @@ class LightRAG:
                                         )
 
                                 # Use chunk_results from entity_relation_task
-                                await merge_nodes_and_edges(
-                                    chunk_results=chunk_results,  # result collected from entity_relation_task
-                                    knowledge_graph_inst=self.chunk_entity_relation_graph,
-                                    entity_vdb=self.entities_vdb,
-                                    relationships_vdb=self.relationships_vdb,
-                                    global_config=asdict(self),
-                                    full_entities_storage=self.full_entities,
-                                    full_relations_storage=self.full_relations,
-                                    doc_id=doc_id,
-                                    pipeline_status=pipeline_status,
-                                    pipeline_status_lock=pipeline_status_lock,
-                                    llm_response_cache=self.llm_response_cache,
-                                    entity_chunks_storage=self.entity_chunks,
-                                    relation_chunks_storage=self.relation_chunks,
-                                    current_file_number=current_file_number,
-                                    total_files=total_files,
-                                    file_path=file_path,
-                                )
+                                if not source_vectors_only:
+                                    await merge_nodes_and_edges(
+                                        chunk_results=chunk_results,
+                                        knowledge_graph_inst=self.chunk_entity_relation_graph,
+                                        entity_vdb=self.entities_vdb,
+                                        relationships_vdb=self.relationships_vdb,
+                                        global_config=asdict(self),
+                                        full_entities_storage=self.full_entities,
+                                        full_relations_storage=self.full_relations,
+                                        doc_id=doc_id,
+                                        pipeline_status=pipeline_status,
+                                        pipeline_status_lock=pipeline_status_lock,
+                                        llm_response_cache=self.llm_response_cache,
+                                        entity_chunks_storage=self.entity_chunks,
+                                        relation_chunks_storage=self.relation_chunks,
+                                        current_file_number=current_file_number,
+                                        total_files=total_files,
+                                        file_path=file_path,
+                                    )
 
                                 # Record processing end time
                                 processing_end_time = int(time.time())
@@ -2059,6 +2106,7 @@ class LightRAG:
                                             "metadata": {
                                                 "processing_start_time": processing_start_time,
                                                 "processing_end_time": processing_end_time,
+                                                "index_strategy": "source_vectors" if source_vectors_only else "graph",
                                             },
                                         }
                                     }
@@ -3300,14 +3348,16 @@ class LightRAG:
                                 if chunk_id
                             ]
 
-                    if not existing_sources and node_data.get("source_id"):
-                        existing_sources = [
+                    if node_data.get("source_id"):
+                        # A prior failed rebuild may already have shortened
+                        # tracking while the graph still carries old sources.
+                        existing_sources = merge_source_ids(existing_sources, [
                             chunk_id
                             for chunk_id in node_data["source_id"].split(
                                 GRAPH_FIELD_SEP
                             )
                             if chunk_id
-                        ]
+                        ])
 
                     if not existing_sources:
                         # No chunk references means this entity should be deleted
@@ -3361,14 +3411,14 @@ class LightRAG:
                                 if chunk_id
                             ]
 
-                    if not existing_sources:
-                        existing_sources = [
+                    if edge_data.get("source_id"):
+                        existing_sources = merge_source_ids(existing_sources, [
                             chunk_id
                             for chunk_id in edge_data["source_id"].split(
                                 GRAPH_FIELD_SEP
                             )
                             if chunk_id
-                        ]
+                        ])
 
                     if not existing_sources:
                         # No chunk references means this relationship should be deleted
@@ -3394,6 +3444,56 @@ class LightRAG:
                     logger.info(log_message)
                     pipeline_status["latest_message"] = log_message
                     pipeline_status["history_messages"].append(log_message)
+
+                # Old deletions can leave a graph source reference after its
+                # text chunk has already gone away. Such a reference cannot
+                # contribute surviving evidence and must not block cleanup of
+                # another document. Keep the strict cache preflight below for
+                # every chunk that actually still exists.
+                survivor_ids = set()
+                for sources in entities_to_rebuild.values():
+                    survivor_ids.update(sources)
+                for sources in relationships_to_rebuild.values():
+                    survivor_ids.update(sources)
+                if survivor_ids:
+                    survivor_order = sorted(survivor_ids)
+                    survivor_rows = await self.text_chunks.get_by_ids(survivor_order)
+                    if len(survivor_rows) != len(survivor_order):
+                        raise ValueError("Incomplete survivor chunk lookup")
+                    absent_ids = {
+                        chunk_id for chunk_id, row in zip(survivor_order, survivor_rows)
+                        if row is None
+                    }
+                    if absent_ids:
+                        logger.warning(
+                            "Pruning %d missing survivor chunk references before deletion",
+                            len(absent_ids),
+                        )
+                        for name, sources in list(entities_to_rebuild.items()):
+                            remaining = [item for item in sources if item not in absent_ids]
+                            entity_chunk_updates[name] = remaining
+                            if remaining:
+                                entities_to_rebuild[name] = remaining
+                            else:
+                                del entities_to_rebuild[name]
+                                entities_to_delete.add(name)
+                        for pair, sources in list(relationships_to_rebuild.items()):
+                            remaining = [item for item in sources if item not in absent_ids]
+                            relation_chunk_updates[pair] = remaining
+                            if remaining:
+                                relationships_to_rebuild[pair] = remaining
+                            else:
+                                del relationships_to_rebuild[pair]
+                                relationships_to_delete.add(pair)
+
+                # Fail before changing tracking, chunks, or graph records if
+                # survivor extraction evidence is unavailable. Reuse exactly
+                # this validated evidence under the held deletion lock.
+                prepared_extractions = await _prepare_rebuild_from_chunks(
+                    entities_to_rebuild, relationships_to_rebuild,
+                    self.text_chunks, self.llm_response_cache, asdict(self),
+                    pipeline_status, pipeline_status_lock,
+                )
 
                 current_time = int(time.time())
 
@@ -3603,6 +3703,7 @@ class LightRAG:
                         pipeline_status_lock=pipeline_status_lock,
                         entity_chunks_storage=self.entity_chunks,
                         relation_chunks_storage=self.relation_chunks,
+                        prepared_extractions=prepared_extractions,
                     )
 
                 except Exception as e:

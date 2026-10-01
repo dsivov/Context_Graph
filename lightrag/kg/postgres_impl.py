@@ -4321,20 +4321,38 @@ class PGGraphStorage(BaseGraphStorage):
         return None
 
     async def get_node_edges(self, source_node_id: str) -> list[tuple[str, str]] | None:
+        """Return incident neighbors, oriented from the requested node.
+
+        Resolve the vertex first, then use the indexed edge endpoint IDs. AGE's
+        undirected OPTIONAL MATCH can otherwise join every edge to every vertex
+        during deletion rebuilds. The inherited edge table includes all labels.
         """
-        Retrieves all edges (relationships) for a particular node identified by its label.
-        :return: list of dictionaries containing edge information
+        graph = '"' + self.graph_name.replace('"', '""') + '"'
+        query = f"""
+            WITH requested AS MATERIALIZED (
+                SELECT id FROM {graph}.base
+                WHERE ag_catalog.agtype_access_operator(
+                    VARIADIC ARRAY[properties, '"entity_id"'::agtype]
+                ) = (to_json($1::text)::text)::agtype
+            ), neighbors AS (
+                SELECT e.end_id AS id
+                FROM {graph}."_ag_label_edge" e
+                JOIN requested n ON e.start_id = n.id
+                UNION ALL
+                SELECT e.start_id AS id
+                FROM {graph}."_ag_label_edge" e
+                JOIN requested n ON e.end_id = n.id
+                WHERE e.start_id <> e.end_id
+            )
+            SELECT $1::text AS source_id,
+                ag_catalog.agtype_access_operator(
+                    VARIADIC ARRAY[b.properties, '"entity_id"'::agtype]
+                )::text AS connected_id
+            FROM neighbors JOIN {graph}.base b ON b.id = neighbors.id
         """
-        label = self._normalize_node_id(source_node_id)
-
-        # Build Cypher query with dynamic dollar-quoting to handle entity_id containing $ sequences
-        cypher_query = f"""MATCH (n:base {{entity_id: "{label}"}})
-                      OPTIONAL MATCH (n)-[]-(connected:base)
-                      RETURN n.entity_id AS source_id, connected.entity_id AS connected_id"""
-
-        query = f"SELECT * FROM cypher({_dollar_quote(self.graph_name)}, {_dollar_quote(cypher_query)}) AS (source_id text, connected_id text)"
-
-        results = await self._query(query)
+        results = await self._query(
+            query, params={"source_node_id": source_node_id}
+        )
         edges = []
         for record in results:
             source_id = record["source_id"]
